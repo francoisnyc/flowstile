@@ -73,6 +73,8 @@ The server owns state and UI. The worker runs inside the developer's Temporal wo
 | createdAt | timestamp | |
 | updatedAt | timestamp | |
 
+Multiple rows can share the same `code` — each published version is a separate immutable row. There is at most one row per code with `status = draft` (the working copy). Publishing a draft creates a new row with the next version number and `status = published`, then deletes the draft row.
+
 Forms are **first-class entities**, versioned independently from processes. A form can be reused across multiple task definitions. When a task is created, it locks to the currently published version of the form — in-flight tasks are never affected by subsequent edits.
 
 ### ProcessDefinition
