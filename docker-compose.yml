@@ -1,0 +1,46 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: flowstile
+      POSTGRES_USER: flowstile
+      POSTGRES_PASSWORD: flowstile
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  temporal:
+    image: temporalio/auto-setup:1.27
+    depends_on:
+      - postgres-temporal
+    environment:
+      DB: postgres12
+      DB_PORT: 5432
+      POSTGRES_USER: temporal
+      POSTGRES_PWD: temporal
+      POSTGRES_SEEDS: postgres-temporal
+    ports:
+      - "7233:7233"
+
+  postgres-temporal:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: temporal
+      POSTGRES_USER: temporal
+      POSTGRES_PASSWORD: temporal
+    volumes:
+      - pgdata-temporal:/var/lib/postgresql/data
+
+  temporal-ui:
+    image: temporalio/ui:2.34
+    depends_on:
+      - temporal
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+    ports:
+      - "8080:8080"
+
+volumes:
+  pgdata:
+  pgdata-temporal:
