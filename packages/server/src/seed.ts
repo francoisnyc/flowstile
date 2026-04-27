@@ -1,5 +1,6 @@
 import 'reflect-metadata';
 import 'dotenv/config';
+import bcrypt from 'bcrypt';
 import { DataSource } from 'typeorm';
 import { dataSourceOptions } from './config/database.js';
 import { User } from './entities/user.entity.js';
@@ -32,17 +33,18 @@ async function seed() {
   });
 
   // Users (password is "password" — dev only)
+  const devHash = await bcrypt.hash('password', 10);
   const alice = await db.getRepository(User).save({
     email: 'alice@example.com',
     displayName: 'Alice (Admin)',
-    passwordHash: '$2b$10$placeholder.hash.for.dev.only',
+    passwordHash: devHash,
     groups: [loanOfficers],
     roles: [adminRole, taskUserRole],
   });
   const bob = await db.getRepository(User).save({
     email: 'bob@example.com',
     displayName: 'Bob (Loan Officer)',
-    passwordHash: '$2b$10$placeholder.hash.for.dev.only',
+    passwordHash: devHash,
     groups: [loanOfficers],
     roles: [taskUserRole],
   });
