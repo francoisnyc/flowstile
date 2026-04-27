@@ -16,6 +16,7 @@
   "dependencies": {
     "@fastify/cookie": "^11.0.2",
     "@fastify/jwt": "^10.0.0",
+    "@temporalio/client": "^1.16.1",
     "bcrypt": "^6.0.0",
     "dotenv": "^16.4.0",
     "fastify": "^5.2.0",

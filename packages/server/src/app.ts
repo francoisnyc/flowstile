@@ -1,6 +1,7 @@
 import Fastify, { FastifyInstance } from 'fastify';
 import typeormPlugin from './plugins/typeorm.js';
 import authPlugin from './plugins/auth.js';
+import temporalPlugin from './plugins/temporal.js';
 import { healthRoutes } from './routes/health.js';
 import { authRoutes } from './routes/auth.js';
 import { userRoutes } from './routes/users.js';
@@ -16,6 +17,7 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   await app.register(typeormPlugin);
   await app.register(authPlugin);
+  await app.register(temporalPlugin);
 
   await app.register(healthRoutes);
   await app.register(authRoutes);

@@ -198,6 +198,20 @@ export async function taskRoutes(app: FastifyInstance) {
     if (data) task.submissionData = { ...task.submissionData, ...data };
     task.completedAt = new Date();
     await repo().save(task);
+
+    // Signal the waiting workflow if Temporal is configured
+    if (app.temporal && task.workflowId) {
+      const payload = { data: task.submissionData };
+      const signalName = `flowstile:task:completed:${task.id}`;
+      try {
+        await app.temporal
+          .workflow.getHandle(task.workflowId)
+          .signal(signalName, payload);
+      } catch (err) {
+        app.log.warn({ err, taskId: task.id }, 'Failed to send Temporal signal for completed task');
+      }
+    }
+
     return task;
   });
 
