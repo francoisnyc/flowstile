@@ -46,3 +46,15 @@ export async function requireAuth(request: FastifyRequest, reply: FastifyReply) 
     return reply.code(401).send({ error: 'Unauthorized' });
   }
 }
+
+export function requirePermission(permission: string) {
+  return async function (request: FastifyRequest, reply: FastifyReply) {
+    if (!request.currentUser) {
+      return reply.code(401).send({ error: 'Unauthorized' });
+    }
+    const granted = request.currentUser.roles.flatMap((r) => r.permissions);
+    if (!granted.includes(permission)) {
+      return reply.code(403).send({ error: 'Forbidden' });
+    }
+  };
+}

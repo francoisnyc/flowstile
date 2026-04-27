@@ -5,7 +5,8 @@ import { User } from '../entities/user.entity.js';
 import { Group } from '../entities/group.entity.js';
 import { Role } from '../entities/role.entity.js';
 import { UserStatus } from '../common/enums.js';
-import { requireAuth } from '../plugins/auth.js';
+import { requirePermission } from '../plugins/auth.js';
+import { Permissions } from '../common/permissions.js';
 
 function serialize(user: User) {
   return {
@@ -20,7 +21,7 @@ function serialize(user: User) {
 }
 
 export async function userRoutes(app: FastifyInstance) {
-  const pre = { preHandler: [requireAuth] };
+  const pre = { preHandler: [requirePermission(Permissions.USERS_MANAGE)] };
 
   app.get('/users', pre, async () => {
     const users = await app.db.getRepository(User).find({

@@ -5,14 +5,16 @@ import { FormDefinition } from '../entities/form-definition.entity.js';
 import { TaskStatus, FormDefinitionStatus, Priority } from '../common/enums.js';
 import { TaskStateMachine, InvalidTransitionError } from '../common/task-state-machine.js';
 import { filterFormSchemas, filterSubmissionData } from '../common/visibility.js';
-import { requireAuth } from '../plugins/auth.js';
+import { requirePermission } from '../plugins/auth.js';
+import { Permissions } from '../common/permissions.js';
 
 export async function taskRoutes(app: FastifyInstance) {
-  const pre = { preHandler: [requireAuth] };
+  const read = { preHandler: [requirePermission(Permissions.TASKS_READ)] };
+  const write = { preHandler: [requirePermission(Permissions.TASKS_WRITE)] };
   const repo = () => app.db.getRepository(Task);
 
   // GET /tasks — filterable by status, assigneeId, group membership
-  app.get('/tasks', pre, async (request) => {
+  app.get('/tasks', read, async (request) => {
     const { status, assigneeId, group } = request.query as {
       status?: TaskStatus;
       assigneeId?: string;
@@ -36,7 +38,7 @@ export async function taskRoutes(app: FastifyInstance) {
   });
 
   // POST /tasks — create a new task instance (called by SDK)
-  app.post('/tasks', pre, async (request, reply) => {
+  app.post('/tasks', write, async (request, reply) => {
     const {
       taskDefinitionId,
       workflowId,
@@ -93,7 +95,7 @@ export async function taskRoutes(app: FastifyInstance) {
   });
 
   // GET /tasks/:id — task detail + form schema (filtered by current user's roles/groups)
-  app.get('/tasks/:id', pre, async (request, reply) => {
+  app.get('/tasks/:id', read, async (request, reply) => {
     const { id } = request.params as { id: string };
     const user = request.currentUser!;
 
@@ -136,7 +138,7 @@ export async function taskRoutes(app: FastifyInstance) {
   });
 
   // POST /tasks/:id/claim
-  app.post('/tasks/:id/claim', pre, async (request, reply) => {
+  app.post('/tasks/:id/claim', write, async (request, reply) => {
     const { id } = request.params as { id: string };
     const user = request.currentUser!;
 
@@ -158,7 +160,7 @@ export async function taskRoutes(app: FastifyInstance) {
   });
 
   // POST /tasks/:id/unclaim
-  app.post('/tasks/:id/unclaim', pre, async (request, reply) => {
+  app.post('/tasks/:id/unclaim', write, async (request, reply) => {
     const { id } = request.params as { id: string };
 
     const task = await repo().findOne({ where: { id } });
@@ -179,7 +181,7 @@ export async function taskRoutes(app: FastifyInstance) {
   });
 
   // POST /tasks/:id/complete
-  app.post('/tasks/:id/complete', pre, async (request, reply) => {
+  app.post('/tasks/:id/complete', write, async (request, reply) => {
     const { id } = request.params as { id: string };
     const { data } = request.body as { data?: Record<string, unknown> };
 
@@ -216,7 +218,7 @@ export async function taskRoutes(app: FastifyInstance) {
   });
 
   // POST /tasks/:id/cancel
-  app.post('/tasks/:id/cancel', pre, async (request, reply) => {
+  app.post('/tasks/:id/cancel', write, async (request, reply) => {
     const { id } = request.params as { id: string };
 
     const task = await repo().findOne({ where: { id } });

@@ -2,7 +2,8 @@ import { FastifyInstance } from 'fastify';
 import { In } from 'typeorm';
 import { Group } from '../entities/group.entity.js';
 import { User } from '../entities/user.entity.js';
-import { requireAuth } from '../plugins/auth.js';
+import { requirePermission } from '../plugins/auth.js';
+import { Permissions } from '../common/permissions.js';
 
 function serialize(group: Group) {
   return {
@@ -13,7 +14,7 @@ function serialize(group: Group) {
 }
 
 export async function groupRoutes(app: FastifyInstance) {
-  const pre = { preHandler: [requireAuth] };
+  const pre = { preHandler: [requirePermission(Permissions.USERS_MANAGE)] };
 
   app.get('/groups', pre, async () => {
     const groups = await app.db.getRepository(Group).find({ relations: ['members'] });

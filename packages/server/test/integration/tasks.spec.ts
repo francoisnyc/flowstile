@@ -19,7 +19,7 @@ describe('Task routes', () => {
     app = await buildApp();
     await app.ready();
 
-    const user = await createTestUser(app);
+    const user = await createTestUser(app, { permissions: ['tasks:read', 'tasks:write'] });
     userId = user.id;
     cookie = await loginAs(app, user.email);
 

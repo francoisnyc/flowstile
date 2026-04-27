@@ -21,7 +21,7 @@ describe('Form routes', () => {
   beforeAll(async () => {
     app = await buildApp();
     await app.ready();
-    const user = await createTestUser(app);
+    const user = await createTestUser(app, { permissions: ['forms:write'] });
     cookie = await loginAs(app, user.email);
   });
 

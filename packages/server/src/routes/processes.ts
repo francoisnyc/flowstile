@@ -2,20 +2,22 @@ import { FastifyInstance } from 'fastify';
 import { ProcessDefinition } from '../entities/process-definition.entity.js';
 import { TaskDefinition } from '../entities/task-definition.entity.js';
 import { ProcessDefinitionStatus, Priority } from '../common/enums.js';
-import { requireAuth } from '../plugins/auth.js';
+import { requireAuth, requirePermission } from '../plugins/auth.js';
+import { Permissions } from '../common/permissions.js';
 
 export async function processRoutes(app: FastifyInstance) {
-  const pre = { preHandler: [requireAuth] };
+  const read = { preHandler: [requireAuth] };
+  const write = { preHandler: [requirePermission(Permissions.FORMS_WRITE)] };
   const pdRepo = () => app.db.getRepository(ProcessDefinition);
   const tdRepo = () => app.db.getRepository(TaskDefinition);
 
   // ── Process Definitions ──────────────────────────────────────────────────
 
-  app.get('/processes', pre, async () => {
+  app.get('/processes', read, async () => {
     return pdRepo().find({ order: { createdAt: 'ASC' } });
   });
 
-  app.post('/processes', pre, async (request, reply) => {
+  app.post('/processes', write, async (request, reply) => {
     const { name, status } = request.body as {
       name: string;
       status?: ProcessDefinitionStatus;
@@ -25,7 +27,7 @@ export async function processRoutes(app: FastifyInstance) {
     return reply.code(201).send(pd);
   });
 
-  app.get('/processes/:id', pre, async (request, reply) => {
+  app.get('/processes/:id', read, async (request, reply) => {
     const { id } = request.params as { id: string };
     const pd = await pdRepo().findOne({
       where: { id },
@@ -35,7 +37,7 @@ export async function processRoutes(app: FastifyInstance) {
     return pd;
   });
 
-  app.patch('/processes/:id', pre, async (request, reply) => {
+  app.patch('/processes/:id', write, async (request, reply) => {
     const { id } = request.params as { id: string };
     const { name, status } = request.body as {
       name?: string;
@@ -53,7 +55,7 @@ export async function processRoutes(app: FastifyInstance) {
 
   // ── Task Definitions ─────────────────────────────────────────────────────
 
-  app.get('/processes/:id/tasks', pre, async (request, reply) => {
+  app.get('/processes/:id/tasks', read, async (request, reply) => {
     const { id } = request.params as { id: string };
 
     const pd = await pdRepo().findOne({ where: { id } });
@@ -65,7 +67,7 @@ export async function processRoutes(app: FastifyInstance) {
     });
   });
 
-  app.post('/processes/:id/tasks', pre, async (request, reply) => {
+  app.post('/processes/:id/tasks', write, async (request, reply) => {
     const { id } = request.params as { id: string };
     const { code, formDefinitionCode, candidateGroups, candidateUsers, defaultPriority } =
       request.body as {
@@ -91,7 +93,7 @@ export async function processRoutes(app: FastifyInstance) {
     return reply.code(201).send(td);
   });
 
-  app.patch('/task-definitions/:id', pre, async (request, reply) => {
+  app.patch('/task-definitions/:id', write, async (request, reply) => {
     const { id } = request.params as { id: string };
     const { formDefinitionCode, candidateGroups, candidateUsers, defaultPriority } =
       request.body as {

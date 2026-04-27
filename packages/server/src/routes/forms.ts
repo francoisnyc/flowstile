@@ -1,14 +1,16 @@
 import { FastifyInstance } from 'fastify';
 import { FormDefinition } from '../entities/form-definition.entity.js';
 import { FormDefinitionStatus } from '../common/enums.js';
-import { requireAuth } from '../plugins/auth.js';
+import { requireAuth, requirePermission } from '../plugins/auth.js';
+import { Permissions } from '../common/permissions.js';
 
 export async function formRoutes(app: FastifyInstance) {
-  const pre = { preHandler: [requireAuth] };
+  const read = { preHandler: [requireAuth] };
+  const write = { preHandler: [requirePermission(Permissions.FORMS_WRITE)] };
   const repo = () => app.db.getRepository(FormDefinition);
 
   // List all form codes with their latest published version (+ draft flag)
-  app.get('/forms', pre, async () => {
+  app.get('/forms', read, async () => {
     const all = await repo().find({ order: { code: 'ASC', version: 'ASC' } });
 
     const byCode = new Map<string, { published: FormDefinition[]; draft: FormDefinition | null }>();
@@ -34,7 +36,7 @@ export async function formRoutes(app: FastifyInstance) {
   });
 
   // Create a new form (new code, starts as draft v1)
-  app.post('/forms', pre, async (request, reply) => {
+  app.post('/forms', write, async (request, reply) => {
     const { code, jsonSchema, uiSchema, visibilityRules, formMessages } = request.body as {
       code: string;
       jsonSchema: Record<string, unknown>;
@@ -60,7 +62,7 @@ export async function formRoutes(app: FastifyInstance) {
   });
 
   // Get the latest published version for a code
-  app.get('/forms/:code', pre, async (request, reply) => {
+  app.get('/forms/:code', read, async (request, reply) => {
     const { code } = request.params as { code: string };
 
     const forms = await repo().find({
@@ -73,7 +75,7 @@ export async function formRoutes(app: FastifyInstance) {
   });
 
   // List all versions for a code
-  app.get('/forms/:code/versions', pre, async (request, reply) => {
+  app.get('/forms/:code/versions', write, async (request, reply) => {
     const { code } = request.params as { code: string };
 
     const forms = await repo().find({
@@ -86,7 +88,7 @@ export async function formRoutes(app: FastifyInstance) {
   });
 
   // Upsert the draft for a code
-  app.put('/forms/:code/draft', pre, async (request, reply) => {
+  app.put('/forms/:code/draft', write, async (request, reply) => {
     const { code } = request.params as { code: string };
     const { jsonSchema, uiSchema, visibilityRules, formMessages } = request.body as {
       jsonSchema?: Record<string, unknown>;
@@ -130,7 +132,7 @@ export async function formRoutes(app: FastifyInstance) {
   });
 
   // Publish the current draft
-  app.post('/forms/:code/publish', pre, async (request, reply) => {
+  app.post('/forms/:code/publish', write, async (request, reply) => {
     const { code } = request.params as { code: string };
 
     const draft = await repo().findOne({
