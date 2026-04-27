@@ -1,4 +1,7 @@
 services:
+
+  # ── Infrastructure ────────────────────────────────────────────────────────
+
   postgres:
     image: postgres:16
     environment:
@@ -9,19 +12,11 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
-
-  temporal:
-    image: temporalio/auto-setup:1.27
-    depends_on:
-      - postgres-temporal
-    environment:
-      DB: postgres12
-      DB_PORT: 5432
-      POSTGRES_USER: temporal
-      POSTGRES_PWD: temporal
-      POSTGRES_SEEDS: postgres-temporal
-    ports:
-      - "7233:7233"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flowstile"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   postgres-temporal:
     image: postgres:16
@@ -31,6 +26,31 @@ services:
       POSTGRES_PASSWORD: temporal
     volumes:
       - pgdata-temporal:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U temporal"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  temporal:
+    image: temporalio/auto-setup:1.27
+    depends_on:
+      postgres-temporal:
+        condition: service_healthy
+    environment:
+      DB: postgres12
+      DB_PORT: 5432
+      POSTGRES_USER: temporal
+      POSTGRES_PWD: temporal
+      POSTGRES_SEEDS: postgres-temporal
+    ports:
+      - "7233:7233"
+    healthcheck:
+      test: ["CMD", "temporal", "workflow", "list", "--address", "localhost:7233"]
+      interval: 10s
+      timeout: 10s
+      retries: 15
+      start_period: 30s
 
   temporal-ui:
     image: temporalio/ui:2.34
@@ -40,6 +60,65 @@ services:
       TEMPORAL_ADDRESS: temporal:7233
     ports:
       - "8080:8080"
+
+  # ── Application ───────────────────────────────────────────────────────────
+
+  server:
+    build:
+      context: .
+      dockerfile: packages/server/Dockerfile
+      target: dev
+    depends_on:
+      postgres:
+        condition: service_healthy
+      temporal:
+        condition: service_healthy
+    environment:
+      NODE_ENV: development
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_NAME: flowstile
+      DATABASE_USER: flowstile
+      DATABASE_PASSWORD: flowstile
+      TEMPORAL_ADDRESS: temporal:7233
+      JWT_SECRET: ${JWT_SECRET:-flowstile-dev-jwt-secret-minimum-32-chars!!}
+      PORT: 3000
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./packages/server/src:/app/packages/server/src:ro
+
+  worker:
+    build:
+      context: .
+      dockerfile: packages/worker/Dockerfile
+      target: dev
+    depends_on:
+      server:
+        condition: service_started
+      temporal:
+        condition: service_healthy
+    environment:
+      FLOWSTILE_SERVER_URL: http://server:3000
+      TEMPORAL_ADDRESS: temporal:7233
+      TASK_QUEUE: ${TASK_QUEUE:-flowstile}
+    volumes:
+      - ./packages/worker/src:/app/packages/worker/src:ro
+      - ./packages/sdk/src:/app/packages/sdk/src:ro
+
+  ui:
+    build:
+      context: .
+      dockerfile: packages/ui/Dockerfile
+      target: dev
+    depends_on:
+      - server
+    environment:
+      VITE_API_BASE: ""
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./packages/ui/src:/app/packages/ui/src:ro
 
 volumes:
   pgdata:
