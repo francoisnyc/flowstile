@@ -1,0 +1,8 @@
+{
+  "name": "@flowstile/sdk",
+  "version": "0.0.1",
+  "scripts": {
+    "build": "echo 'placeholder — no build yet'",
+    "test": "echo 'placeholder — no tests yet'"
+  }
+}
