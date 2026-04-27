@@ -6,6 +6,7 @@ import { logout } from '../api/client.js';
 export default function Layout() {
   const { user, setUser } = useAuth();
   const navigate = useNavigate();
+  const canAdmin = user?.roles.some((r) => r.permissions.includes('users:manage')) ?? false;
 
   const handleLogout = async () => {
     await logout().catch(() => {});
@@ -20,6 +21,7 @@ export default function Layout() {
         <nav className="topnav-links">
           <NavLink to="/inbox">Inbox</NavLink>
           <NavLink to="/forms">Forms</NavLink>
+          {canAdmin && <NavLink to="/admin">Admin</NavLink>}
         </nav>
         <div className="topnav-user">
           <span>{user?.displayName}</span>

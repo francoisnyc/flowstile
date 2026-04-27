@@ -5,6 +5,7 @@ import Layout from './components/Layout.js';
 import LoginPage from './pages/LoginPage.js';
 import InboxPage from './pages/InboxPage.js';
 import FormDesignerPage from './pages/FormDesignerPage.js';
+import AdminPage from './pages/AdminPage.js';
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -35,6 +36,7 @@ export default function App() {
         <Route path="inbox" element={<InboxPage />} />
         <Route path="forms" element={<FormDesignerPage />} />
         <Route path="forms/:code" element={<FormDesignerPage />} />
+        <Route path="admin" element={<AdminPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/inbox" replace />} />
     </Routes>

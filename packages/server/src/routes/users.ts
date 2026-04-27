@@ -15,7 +15,7 @@ function serialize(user: User) {
     displayName: user.displayName,
     status: user.status,
     groups: user.groups?.map((g) => ({ id: g.id, name: g.name })) ?? [],
-    roles: user.roles?.map((r) => ({ id: r.id, name: r.name })) ?? [],
+    roles: user.roles?.map((r) => ({ id: r.id, name: r.name, permissions: r.permissions })) ?? [],
     createdAt: user.createdAt,
   };
 }
@@ -88,5 +88,12 @@ export async function userRoutes(app: FastifyInstance) {
 
     await repo.save(user);
     return serialize(user);
+  });
+
+  app.get('/roles', pre, async () => {
+    return app.db.getRepository(Role).find({
+      order: { name: 'ASC' },
+      select: ['id', 'name', 'permissions'],
+    });
   });
 }

@@ -77,6 +77,12 @@ export interface FormDefinition {
   updatedAt: string;
 }
 
+export interface Group {
+  id: string;
+  name: string;
+  members: UserRef[];
+}
+
 export interface FormSummary {
   code: string;
   latestPublishedVersion: number | null;
