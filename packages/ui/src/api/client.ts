@@ -1,0 +1,47 @@
+import type { Task, User, FormSummary, FormDefinition } from '../types.js';
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`/api${path}`, {
+    ...init,
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json', ...init?.headers },
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: res.statusText })) as { error?: string };
+    throw new Error(body.error ?? `HTTP ${res.status}`);
+  }
+  return res.json() as Promise<T>;
+}
+
+// Auth
+export const login = (email: string, password: string) =>
+  request<User>('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) });
+export const logout = () => request<void>('/auth/logout', { method: 'POST' });
+export const me = () => request<User>('/auth/me');
+
+// Tasks
+export const listTasks = (params?: Record<string, string>) => {
+  const qs = new URLSearchParams(params).toString();
+  return request<Task[]>(`/tasks${qs ? `?${qs}` : ''}`);
+};
+export const getTask = (id: string) => request<Task>(`/tasks/${id}`);
+export const claimTask = (id: string) =>
+  request<Task>(`/tasks/${id}/claim`, { method: 'POST' });
+export const unclaimTask = (id: string) =>
+  request<Task>(`/tasks/${id}/unclaim`, { method: 'POST' });
+export const completeTask = (id: string, data: Record<string, unknown>) =>
+  request<Task>(`/tasks/${id}/complete`, { method: 'POST', body: JSON.stringify({ data }) });
+
+// Forms
+export const listForms = () => request<FormSummary[]>('/forms');
+export const getFormVersions = (code: string) =>
+  request<FormDefinition[]>(`/forms/${code}/versions`);
+export const createForm = (body: {
+  code: string;
+  jsonSchema: Record<string, unknown>;
+  uiSchema?: Record<string, unknown>;
+}) => request<FormDefinition>('/forms', { method: 'POST', body: JSON.stringify(body) });
+export const updateDraft = (code: string, body: Partial<FormDefinition>) =>
+  request<FormDefinition>(`/forms/${code}/draft`, { method: 'PUT', body: JSON.stringify(body) });
+export const publishForm = (code: string) =>
+  request<FormDefinition>(`/forms/${code}/publish`, { method: 'POST' });
