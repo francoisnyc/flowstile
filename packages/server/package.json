@@ -1,0 +1,29 @@
+{
+  "name": "@flowstile/server",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/main.ts",
+    "start": "node dist/main.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "db:generate": "typeorm migration:generate -d src/config/database.ts",
+    "db:migrate": "typeorm migration:run -d src/config/database.ts",
+    "db:seed": "tsx src/seed.ts"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.0",
+    "fastify": "^5.2.0",
+    "pg": "^8.13.0",
+    "reflect-metadata": "^0.2.0",
+    "typeorm": "^0.3.20"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.8.0",
+    "vitest": "^3.0.0"
+  }
+}
