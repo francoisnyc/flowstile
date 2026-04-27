@@ -22,9 +22,11 @@
     "typeorm": "^0.3.20"
   },
   "devDependencies": {
+    "@swc/core": "^1.15.30",
     "@types/node": "^22.0.0",
     "tsx": "^4.19.0",
     "typescript": "^5.8.0",
+    "unplugin-swc": "^1.5.9",
     "vitest": "^3.0.0"
   }
 }
