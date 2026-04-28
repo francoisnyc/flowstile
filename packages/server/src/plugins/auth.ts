@@ -18,9 +18,14 @@ declare module '@fastify/jwt' {
 }
 
 export default fp(async (app: FastifyInstance) => {
+  const jwtSecret = process.env.JWT_SECRET;
+  if (!jwtSecret) {
+    throw new Error('JWT_SECRET env var must be set');
+  }
+
   await app.register(fastifyCookie);
   await app.register(fastifyJwt, {
-    secret: process.env.JWT_SECRET ?? 'flowstile-dev-jwt-secret-minimum-32-chars!!',
+    secret: jwtSecret,
     cookie: { cookieName: 'flowstile_token', signed: false },
   });
 
