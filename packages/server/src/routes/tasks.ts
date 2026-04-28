@@ -13,6 +13,9 @@ export async function taskRoutes(app: FastifyInstance) {
   const write = { preHandler: [requirePermission(Permissions.TASKS_WRITE)] };
   const repo = () => app.db.getRepository(Task);
 
+  const userHasPermission = (user: { roles: { permissions: string[] }[] }, perm: string) =>
+    user.roles.some((r) => r.permissions.includes(perm));
+
   // GET /tasks — filterable by status, assigneeId, group membership
   app.get('/tasks', read, async (request) => {
     const { status, assigneeId, group } = request.query as {
@@ -162,9 +165,14 @@ export async function taskRoutes(app: FastifyInstance) {
   // POST /tasks/:id/unclaim
   app.post('/tasks/:id/unclaim', write, async (request, reply) => {
     const { id } = request.params as { id: string };
+    const user = request.currentUser!;
 
     const task = await repo().findOne({ where: { id } });
     if (!task) return reply.code(404).send({ error: 'Task not found' });
+
+    if (task.assigneeId !== user.id && !userHasPermission(user, Permissions.TASKS_MANAGE)) {
+      return reply.code(403).send({ error: 'Only the assignee or a manager can unclaim this task' });
+    }
 
     try {
       task.status = TaskStateMachine.transition(task.status, 'unclaim');
@@ -220,9 +228,14 @@ export async function taskRoutes(app: FastifyInstance) {
   // POST /tasks/:id/cancel
   app.post('/tasks/:id/cancel', write, async (request, reply) => {
     const { id } = request.params as { id: string };
+    const user = request.currentUser!;
 
     const task = await repo().findOne({ where: { id } });
     if (!task) return reply.code(404).send({ error: 'Task not found' });
+
+    if (task.assigneeId !== user.id && !userHasPermission(user, Permissions.TASKS_MANAGE)) {
+      return reply.code(403).send({ error: 'Only the assignee or a manager can cancel this task' });
+    }
 
     try {
       task.status = TaskStateMachine.transition(task.status, 'cancel');

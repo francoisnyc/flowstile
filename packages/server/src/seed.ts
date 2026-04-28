@@ -25,7 +25,7 @@ async function seed() {
   // Roles
   const adminRole = await db.getRepository(Role).save({
     name: 'admin',
-    permissions: ['forms:write', 'tasks:read', 'tasks:write', 'users:manage'],
+    permissions: ['forms:write', 'tasks:read', 'tasks:write', 'tasks:manage', 'users:manage'],
   });
   const taskUserRole = await db.getRepository(Role).save({
     name: 'task-user',
