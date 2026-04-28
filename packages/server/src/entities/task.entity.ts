@@ -34,7 +34,7 @@ export class Task {
   workflowId: string;
 
   @Column({ type: 'varchar', nullable: true })
-  processInstanceId: string;
+  processInstanceId: string | null;
 
   @Column({
     type: 'enum',
