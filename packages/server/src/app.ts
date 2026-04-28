@@ -1,5 +1,6 @@
 import Fastify, { FastifyInstance } from 'fastify';
 import rateLimit from '@fastify/rate-limit';
+import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import typeormPlugin from './plugins/typeorm.js';
 import authPlugin from './plugins/auth.js';
 import temporalPlugin from './plugins/temporal.js';
@@ -15,6 +16,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
     logger: process.env.NODE_ENV !== 'test',
   });
+
+  app.setValidatorCompiler(validatorCompiler);
+  app.setSerializerCompiler(serializerCompiler);
 
   await app.register(rateLimit, { global: false });
   await app.register(typeormPlugin);

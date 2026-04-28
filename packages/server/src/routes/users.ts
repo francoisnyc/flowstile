@@ -1,4 +1,5 @@
-import { FastifyInstance } from 'fastify';
+import { z } from 'zod';
+import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import bcrypt from 'bcrypt';
 import { In } from 'typeorm';
 import { User } from '../entities/user.entity.js';
@@ -20,7 +21,24 @@ function serialize(user: User) {
   };
 }
 
-export async function userRoutes(app: FastifyInstance) {
+const UuidParam = z.object({ id: z.string().uuid() });
+
+const CreateUserBody = z.object({
+  email: z.string().email(),
+  displayName: z.string().min(1),
+  password: z.string().min(8),
+  groupIds: z.array(z.string().uuid()).optional(),
+  roleIds: z.array(z.string().uuid()).optional(),
+});
+
+const PatchUserBody = z.object({
+  displayName: z.string().min(1).optional(),
+  status: z.nativeEnum(UserStatus).optional(),
+  groupIds: z.array(z.string().uuid()).optional(),
+  roleIds: z.array(z.string().uuid()).optional(),
+});
+
+export const userRoutes: FastifyPluginAsyncZod = async (app) => {
   const pre = { preHandler: [requirePermission(Permissions.USERS_MANAGE)] };
 
   app.get('/users', pre, async () => {
@@ -31,14 +49,8 @@ export async function userRoutes(app: FastifyInstance) {
     return users.map(serialize);
   });
 
-  app.post('/users', pre, async (request, reply) => {
-    const { email, displayName, password, groupIds, roleIds } = request.body as {
-      email: string;
-      displayName: string;
-      password: string;
-      groupIds?: string[];
-      roleIds?: string[];
-    };
+  app.post('/users', { ...pre, schema: { body: CreateUserBody } }, async (request, reply) => {
+    const { email, displayName, password, groupIds, roleIds } = request.body;
 
     const passwordHash = await bcrypt.hash(password, 10);
 
@@ -60,35 +72,34 @@ export async function userRoutes(app: FastifyInstance) {
     return reply.code(201).send(serialize(user));
   });
 
-  app.patch('/users/:id', pre, async (request, reply) => {
-    const { id } = request.params as { id: string };
-    const { displayName, status, groupIds, roleIds } = request.body as {
-      displayName?: string;
-      status?: UserStatus;
-      groupIds?: string[];
-      roleIds?: string[];
-    };
+  app.patch(
+    '/users/:id',
+    { ...pre, schema: { params: UuidParam, body: PatchUserBody } },
+    async (request, reply) => {
+      const { id } = request.params;
+      const { displayName, status, groupIds, roleIds } = request.body;
 
-    const repo = app.db.getRepository(User);
-    const user = await repo.findOne({ where: { id }, relations: ['groups', 'roles'] });
-    if (!user) return reply.code(404).send({ error: 'User not found' });
+      const repo = app.db.getRepository(User);
+      const user = await repo.findOne({ where: { id }, relations: ['groups', 'roles'] });
+      if (!user) return reply.code(404).send({ error: 'User not found' });
 
-    if (displayName !== undefined) user.displayName = displayName;
-    if (status !== undefined) user.status = status;
-    if (groupIds !== undefined) {
-      user.groups = groupIds.length
-        ? await app.db.getRepository(Group).findBy({ id: In(groupIds) })
-        : [];
-    }
-    if (roleIds !== undefined) {
-      user.roles = roleIds.length
-        ? await app.db.getRepository(Role).findBy({ id: In(roleIds) })
-        : [];
-    }
+      if (displayName !== undefined) user.displayName = displayName;
+      if (status !== undefined) user.status = status;
+      if (groupIds !== undefined) {
+        user.groups = groupIds.length
+          ? await app.db.getRepository(Group).findBy({ id: In(groupIds) })
+          : [];
+      }
+      if (roleIds !== undefined) {
+        user.roles = roleIds.length
+          ? await app.db.getRepository(Role).findBy({ id: In(roleIds) })
+          : [];
+      }
 
-    await repo.save(user);
-    return serialize(user);
-  });
+      await repo.save(user);
+      return serialize(user);
+    },
+  );
 
   app.get('/roles', pre, async () => {
     return app.db.getRepository(Role).find({
@@ -96,4 +107,4 @@ export async function userRoutes(app: FastifyInstance) {
       select: ['id', 'name', 'permissions'],
     });
   });
-}
+};

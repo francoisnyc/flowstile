@@ -1,4 +1,5 @@
-import { FastifyInstance } from 'fastify';
+import { z } from 'zod';
+import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import bcrypt from 'bcrypt';
 import { User } from '../entities/user.entity.js';
 import { UserStatus } from '../common/enums.js';
@@ -15,10 +16,16 @@ function serializeUser(user: User) {
   };
 }
 
-export async function authRoutes(app: FastifyInstance) {
+const LoginBody = z.object({
+  email: z.string().email(),
+  password: z.string().min(1),
+});
+
+export const authRoutes: FastifyPluginAsyncZod = async (app) => {
   app.post(
     '/auth/login',
     {
+      schema: { body: LoginBody },
       config: {
         rateLimit: {
           max: 5,
@@ -28,7 +35,7 @@ export async function authRoutes(app: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      const { email, password } = request.body as { email: string; password: string };
+      const { email, password } = request.body;
 
       const user = await app.db.getRepository(User).findOne({
         where: { email },
@@ -63,4 +70,4 @@ export async function authRoutes(app: FastifyInstance) {
   app.get('/auth/me', { preHandler: [requireAuth] }, async (request) => {
     return serializeUser(request.currentUser!);
   });
-}
+};

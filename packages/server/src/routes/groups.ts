@@ -1,4 +1,5 @@
-import { FastifyInstance } from 'fastify';
+import { z } from 'zod';
+import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { In } from 'typeorm';
 import { Group } from '../entities/group.entity.js';
 import { User } from '../entities/user.entity.js';
@@ -13,7 +14,19 @@ function serialize(group: Group) {
   };
 }
 
-export async function groupRoutes(app: FastifyInstance) {
+const UuidParam = z.object({ id: z.string().uuid() });
+
+const CreateGroupBody = z.object({
+  name: z.string().min(1),
+  memberIds: z.array(z.string().uuid()).optional(),
+});
+
+const PatchGroupBody = z.object({
+  name: z.string().min(1).optional(),
+  memberIds: z.array(z.string().uuid()).optional(),
+});
+
+export const groupRoutes: FastifyPluginAsyncZod = async (app) => {
   const pre = { preHandler: [requirePermission(Permissions.USERS_MANAGE)] };
 
   app.get('/groups', pre, async () => {
@@ -21,8 +34,8 @@ export async function groupRoutes(app: FastifyInstance) {
     return groups.map(serialize);
   });
 
-  app.post('/groups', pre, async (request, reply) => {
-    const { name, memberIds } = request.body as { name: string; memberIds?: string[] };
+  app.post('/groups', { ...pre, schema: { body: CreateGroupBody } }, async (request, reply) => {
+    const { name, memberIds } = request.body;
 
     const members = memberIds?.length
       ? await app.db.getRepository(User).findBy({ id: In(memberIds) })
@@ -32,22 +45,26 @@ export async function groupRoutes(app: FastifyInstance) {
     return reply.code(201).send(serialize(group));
   });
 
-  app.patch('/groups/:id', pre, async (request, reply) => {
-    const { id } = request.params as { id: string };
-    const { name, memberIds } = request.body as { name?: string; memberIds?: string[] };
+  app.patch(
+    '/groups/:id',
+    { ...pre, schema: { params: UuidParam, body: PatchGroupBody } },
+    async (request, reply) => {
+      const { id } = request.params;
+      const { name, memberIds } = request.body;
 
-    const repo = app.db.getRepository(Group);
-    const group = await repo.findOne({ where: { id }, relations: ['members'] });
-    if (!group) return reply.code(404).send({ error: 'Group not found' });
+      const repo = app.db.getRepository(Group);
+      const group = await repo.findOne({ where: { id }, relations: ['members'] });
+      if (!group) return reply.code(404).send({ error: 'Group not found' });
 
-    if (name !== undefined) group.name = name;
-    if (memberIds !== undefined) {
-      group.members = memberIds.length
-        ? await app.db.getRepository(User).findBy({ id: In(memberIds) })
-        : [];
-    }
+      if (name !== undefined) group.name = name;
+      if (memberIds !== undefined) {
+        group.members = memberIds.length
+          ? await app.db.getRepository(User).findBy({ id: In(memberIds) })
+          : [];
+      }
 
-    await repo.save(group);
-    return serialize(group);
-  });
-}
+      await repo.save(group);
+      return serialize(group);
+    },
+  );
+};

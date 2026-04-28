@@ -1,15 +1,33 @@
-import { FastifyInstance } from 'fastify';
+import { z } from 'zod';
+import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { FormDefinition } from '../entities/form-definition.entity.js';
 import { FormDefinitionStatus } from '../common/enums.js';
 import { requireAuth, requirePermission } from '../plugins/auth.js';
 import { Permissions } from '../common/permissions.js';
 
-export async function formRoutes(app: FastifyInstance) {
+const CodeParam = z.object({ code: z.string().min(1) });
+const JsonObject = z.record(z.string(), z.unknown());
+
+const CreateFormBody = z.object({
+  code: z.string().min(1),
+  jsonSchema: JsonObject,
+  uiSchema: JsonObject.optional(),
+  visibilityRules: JsonObject.optional(),
+  formMessages: JsonObject.optional(),
+});
+
+const DraftFormBody = z.object({
+  jsonSchema: JsonObject.optional(),
+  uiSchema: JsonObject.optional(),
+  visibilityRules: JsonObject.optional(),
+  formMessages: JsonObject.optional(),
+});
+
+export const formRoutes: FastifyPluginAsyncZod = async (app) => {
   const read = { preHandler: [requireAuth] };
   const write = { preHandler: [requirePermission(Permissions.FORMS_WRITE)] };
   const repo = () => app.db.getRepository(FormDefinition);
 
-  // List all form codes with their latest published version (+ draft flag)
   app.get('/forms', read, async () => {
     const all = await repo().find({ order: { code: 'ASC', version: 'ASC' } });
 
@@ -35,15 +53,8 @@ export async function formRoutes(app: FastifyInstance) {
     });
   });
 
-  // Create a new form (new code, starts as draft v1)
-  app.post('/forms', write, async (request, reply) => {
-    const { code, jsonSchema, uiSchema, visibilityRules, formMessages } = request.body as {
-      code: string;
-      jsonSchema: Record<string, unknown>;
-      uiSchema?: Record<string, unknown>;
-      visibilityRules?: Record<string, unknown>;
-      formMessages?: Record<string, unknown>;
-    };
+  app.post('/forms', { ...write, schema: { body: CreateFormBody } }, async (request, reply) => {
+    const { code, jsonSchema, uiSchema, visibilityRules, formMessages } = request.body;
 
     const existing = await repo().findOne({ where: { code } });
     if (existing) return reply.code(409).send({ error: `Form code '${code}' already exists` });
@@ -61,109 +72,114 @@ export async function formRoutes(app: FastifyInstance) {
     return reply.code(201).send(form);
   });
 
-  // Get the latest published version for a code
-  app.get('/forms/:code', read, async (request, reply) => {
-    const { code } = request.params as { code: string };
+  app.get(
+    '/forms/:code',
+    { ...read, schema: { params: CodeParam } },
+    async (request, reply) => {
+      const { code } = request.params;
 
-    const forms = await repo().find({
-      where: { code, status: FormDefinitionStatus.PUBLISHED },
-      order: { version: 'DESC' },
-    });
-
-    if (!forms.length) return reply.code(404).send({ error: 'No published version found' });
-    return forms[0];
-  });
-
-  // List all versions for a code
-  app.get('/forms/:code/versions', write, async (request, reply) => {
-    const { code } = request.params as { code: string };
-
-    const forms = await repo().find({
-      where: { code },
-      order: { version: 'ASC' },
-    });
-
-    if (!forms.length) return reply.code(404).send({ error: 'Form not found' });
-    return forms;
-  });
-
-  // Upsert the draft for a code
-  app.put('/forms/:code/draft', write, async (request, reply) => {
-    const { code } = request.params as { code: string };
-    const { jsonSchema, uiSchema, visibilityRules, formMessages } = request.body as {
-      jsonSchema?: Record<string, unknown>;
-      uiSchema?: Record<string, unknown>;
-      visibilityRules?: Record<string, unknown>;
-      formMessages?: Record<string, unknown>;
-    };
-
-    let draft = await repo().findOne({
-      where: { code, status: FormDefinitionStatus.DRAFT },
-    });
-
-    if (draft) {
-      if (jsonSchema !== undefined) draft.jsonSchema = jsonSchema;
-      if (uiSchema !== undefined) draft.uiSchema = uiSchema;
-      if (visibilityRules !== undefined) draft.visibilityRules = visibilityRules;
-      if (formMessages !== undefined) draft.formMessages = formMessages;
-      await repo().save(draft);
-    } else {
-      // No draft exists — create one at the next version
-      const published = await repo().find({
+      const forms = await repo().find({
         where: { code, status: FormDefinitionStatus.PUBLISHED },
         order: { version: 'DESC' },
       });
-      if (!published.length) return reply.code(404).send({ error: 'Form not found' });
 
-      const nextVersion = published[0].version + 1;
-      draft = await repo().save({
-        code,
-        version: nextVersion,
-        jsonSchema: jsonSchema ?? published[0].jsonSchema,
-        uiSchema: uiSchema ?? published[0].uiSchema,
-        visibilityRules: visibilityRules ?? published[0].visibilityRules,
-        formMessages: formMessages ?? published[0].formMessages,
-        status: FormDefinitionStatus.DRAFT,
+      if (!forms.length) return reply.code(404).send({ error: 'No published version found' });
+      return forms[0];
+    },
+  );
+
+  app.get(
+    '/forms/:code/versions',
+    { ...write, schema: { params: CodeParam } },
+    async (request, reply) => {
+      const { code } = request.params;
+
+      const forms = await repo().find({
+        where: { code },
+        order: { version: 'ASC' },
       });
-      return reply.code(201).send(draft);
-    }
 
-    return draft;
-  });
+      if (!forms.length) return reply.code(404).send({ error: 'Form not found' });
+      return forms;
+    },
+  );
 
-  // Publish the current draft
-  app.post('/forms/:code/publish', write, async (request, reply) => {
-    const { code } = request.params as { code: string };
+  app.put(
+    '/forms/:code/draft',
+    { ...write, schema: { params: CodeParam, body: DraftFormBody } },
+    async (request, reply) => {
+      const { code } = request.params;
+      const { jsonSchema, uiSchema, visibilityRules, formMessages } = request.body;
 
-    const draft = await repo().findOne({
-      where: { code, status: FormDefinitionStatus.DRAFT },
-    });
-    if (!draft) return reply.code(404).send({ error: 'No draft found for this code' });
+      let draft = await repo().findOne({
+        where: { code, status: FormDefinitionStatus.DRAFT },
+      });
 
-    // Determine next version number
-    const result = await repo()
-      .createQueryBuilder('f')
-      .select('MAX(f.version)', 'max')
-      .where('f.code = :code AND f.status = :status', {
-        code,
+      if (draft) {
+        if (jsonSchema !== undefined) draft.jsonSchema = jsonSchema;
+        if (uiSchema !== undefined) draft.uiSchema = uiSchema;
+        if (visibilityRules !== undefined) draft.visibilityRules = visibilityRules;
+        if (formMessages !== undefined) draft.formMessages = formMessages;
+        await repo().save(draft);
+      } else {
+        const published = await repo().find({
+          where: { code, status: FormDefinitionStatus.PUBLISHED },
+          order: { version: 'DESC' },
+        });
+        if (!published.length) return reply.code(404).send({ error: 'Form not found' });
+
+        const nextVersion = published[0].version + 1;
+        draft = await repo().save({
+          code,
+          version: nextVersion,
+          jsonSchema: jsonSchema ?? published[0].jsonSchema,
+          uiSchema: uiSchema ?? published[0].uiSchema,
+          visibilityRules: visibilityRules ?? published[0].visibilityRules,
+          formMessages: formMessages ?? published[0].formMessages,
+          status: FormDefinitionStatus.DRAFT,
+        });
+        return reply.code(201).send(draft);
+      }
+
+      return draft;
+    },
+  );
+
+  app.post(
+    '/forms/:code/publish',
+    { ...write, schema: { params: CodeParam } },
+    async (request, reply) => {
+      const { code } = request.params;
+
+      const draft = await repo().findOne({
+        where: { code, status: FormDefinitionStatus.DRAFT },
+      });
+      if (!draft) return reply.code(404).send({ error: 'No draft found for this code' });
+
+      const result = await repo()
+        .createQueryBuilder('f')
+        .select('MAX(f.version)', 'max')
+        .where('f.code = :code AND f.status = :status', {
+          code,
+          status: FormDefinitionStatus.PUBLISHED,
+        })
+        .getRawOne<{ max: number | null }>();
+
+      const nextVersion = (result?.max ?? 0) + 1;
+
+      const published = await repo().save({
+        code: draft.code,
+        version: nextVersion,
+        jsonSchema: draft.jsonSchema,
+        uiSchema: draft.uiSchema,
+        visibilityRules: draft.visibilityRules,
+        formMessages: draft.formMessages,
         status: FormDefinitionStatus.PUBLISHED,
-      })
-      .getRawOne<{ max: number | null }>();
+      });
 
-    const nextVersion = (result?.max ?? 0) + 1;
+      await repo().delete(draft.id);
 
-    const published = await repo().save({
-      code: draft.code,
-      version: nextVersion,
-      jsonSchema: draft.jsonSchema,
-      uiSchema: draft.uiSchema,
-      visibilityRules: draft.visibilityRules,
-      formMessages: draft.formMessages,
-      status: FormDefinitionStatus.PUBLISHED,
-    });
-
-    await repo().delete(draft.id);
-
-    return reply.code(201).send(published);
-  });
-}
+      return reply.code(201).send(published);
+    },
+  );
+};
