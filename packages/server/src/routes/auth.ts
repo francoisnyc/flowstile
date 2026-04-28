@@ -15,29 +15,41 @@ function serializeUser(user: User) {
 }
 
 export async function authRoutes(app: FastifyInstance) {
-  app.post('/auth/login', async (request, reply) => {
-    const { email, password } = request.body as { email: string; password: string };
+  app.post(
+    '/auth/login',
+    {
+      config: {
+        rateLimit: {
+          max: 5,
+          timeWindow: '1 minute',
+          skip: () => process.env.NODE_ENV === 'test',
+        },
+      },
+    },
+    async (request, reply) => {
+      const { email, password } = request.body as { email: string; password: string };
 
-    const user = await app.db.getRepository(User).findOne({
-      where: { email },
-      relations: ['groups', 'roles'],
-    });
+      const user = await app.db.getRepository(User).findOne({
+        where: { email },
+        relations: ['groups', 'roles'],
+      });
 
-    if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
-      return reply.code(401).send({ error: 'Invalid credentials' });
-    }
+      if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+        return reply.code(401).send({ error: 'Invalid credentials' });
+      }
 
-    const token = app.jwt.sign({ userId: user.id }, { expiresIn: '7d' });
-    reply.setCookie('flowstile_token', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 7 * 24 * 60 * 60,
-    });
+      const token = app.jwt.sign({ userId: user.id }, { expiresIn: '7d' });
+      reply.setCookie('flowstile_token', token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 7 * 24 * 60 * 60,
+      });
 
-    return serializeUser(user);
-  });
+      return serializeUser(user);
+    },
+  );
 
   app.post('/auth/logout', { preHandler: [requireAuth] }, async (_, reply) => {
     reply.clearCookie('flowstile_token', { path: '/' });
