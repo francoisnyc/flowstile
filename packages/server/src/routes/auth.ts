@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import bcrypt from 'bcrypt';
 import { User } from '../entities/user.entity.js';
+import { UserStatus } from '../common/enums.js';
 import { requireAuth } from '../plugins/auth.js';
 
 function serializeUser(user: User) {
@@ -36,6 +37,9 @@ export async function authRoutes(app: FastifyInstance) {
 
       if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
         return reply.code(401).send({ error: 'Invalid credentials' });
+      }
+      if (user.status !== UserStatus.ACTIVE) {
+        return reply.code(403).send({ error: 'Account is inactive' });
       }
 
       const token = app.jwt.sign({ userId: user.id }, { expiresIn: '7d' });

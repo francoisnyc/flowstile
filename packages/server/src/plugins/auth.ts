@@ -3,6 +3,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import fastifyCookie from '@fastify/cookie';
 import fastifyJwt from '@fastify/jwt';
 import { User } from '../entities/user.entity.js';
+import { UserStatus } from '../common/enums.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -39,7 +40,9 @@ export default fp(async (app: FastifyInstance) => {
         where: { id: userId },
         relations: ['groups', 'roles'],
       });
-      if (user) request.currentUser = user;
+      if (user && user.status === UserStatus.ACTIVE) {
+        request.currentUser = user;
+      }
     } catch {
       // No valid token — currentUser stays null
     }
