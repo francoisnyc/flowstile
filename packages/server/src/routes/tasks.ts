@@ -31,10 +31,10 @@ export async function taskRoutes(app: FastifyInstance) {
       .orderBy('t.createdAt', 'DESC');
 
     if (status) qb.andWhere('t.status = :status', { status });
-    if (assigneeId) qb.andWhere('t.assignee_id = :assigneeId', { assigneeId });
+    if (assigneeId) qb.andWhere('t.assigneeId = :assigneeId', { assigneeId });
     if (group) {
       // Filter to tasks whose candidateGroups contains the given group name
-      qb.andWhere(':group = ANY(td.candidate_groups)', { group });
+      qb.andWhere(':group = ANY(td.candidateGroups)', { group });
     }
 
     return qb.getMany();
