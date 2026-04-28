@@ -17,8 +17,8 @@ export default function AdminPage() {
   const reload = useCallback(async () => {
     try {
       const [u, g, r] = await Promise.all([listUsers(), listGroups(), listRoles()]);
-      setUsers(u);
-      setGroups(g);
+      setUsers(u.items);
+      setGroups(g.items);
       setRoles(r);
     } catch (err) {
       console.error(err);

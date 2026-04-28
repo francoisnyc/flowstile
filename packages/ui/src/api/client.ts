@@ -1,4 +1,4 @@
-import type { Task, User, Group, RoleRef, FormSummary, FormDefinition } from '../types.js';
+import type { Task, User, Group, RoleRef, FormSummary, FormDefinition, Page } from '../types.js';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`/api${path}`, {
@@ -22,7 +22,7 @@ export const me = () => request<User>('/auth/me');
 // Tasks
 export const listTasks = (params?: Record<string, string>) => {
   const qs = new URLSearchParams(params).toString();
-  return request<Task[]>(`/tasks${qs ? `?${qs}` : ''}`);
+  return request<Page<Task>>(`/tasks${qs ? `?${qs}` : ''}`);
 };
 export const getTask = (id: string) => request<Task>(`/tasks/${id}`);
 export const claimTask = (id: string) =>
@@ -33,7 +33,7 @@ export const completeTask = (id: string, data: Record<string, unknown>) =>
   request<Task>(`/tasks/${id}/complete`, { method: 'POST', body: JSON.stringify({ data }) });
 
 // Admin — Users
-export const listUsers = () => request<User[]>('/users');
+export const listUsers = () => request<Page<User>>('/users');
 export const createUser = (body: {
   email: string;
   displayName: string;
@@ -49,7 +49,7 @@ export const updateUser = (id: string, body: {
 }) => request<User>(`/users/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
 
 // Admin — Groups
-export const listGroups = () => request<Group[]>('/groups');
+export const listGroups = () => request<Page<Group>>('/groups');
 export const createGroup = (body: { name: string; memberIds?: string[] }) =>
   request<Group>('/groups', { method: 'POST', body: JSON.stringify(body) });
 export const updateGroup = (id: string, body: { name?: string; memberIds?: string[] }) =>
@@ -59,7 +59,7 @@ export const updateGroup = (id: string, body: { name?: string; memberIds?: strin
 export const listRoles = () => request<RoleRef[]>('/roles');
 
 // Forms
-export const listForms = () => request<FormSummary[]>('/forms');
+export const listForms = () => request<Page<FormSummary>>('/forms');
 export const getFormVersions = (code: string) =>
   request<FormDefinition[]>(`/forms/${code}/versions`);
 export const createForm = (body: {

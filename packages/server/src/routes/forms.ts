@@ -4,6 +4,7 @@ import { FormDefinition } from '../entities/form-definition.entity.js';
 import { FormDefinitionStatus } from '../common/enums.js';
 import { requireAuth, requirePermission } from '../plugins/auth.js';
 import { Permissions } from '../common/permissions.js';
+import { PaginationQuery, paginate } from '../common/pagination.js';
 
 const CodeParam = z.object({ code: z.string().min(1) });
 const JsonObject = z.record(z.string(), z.unknown());
@@ -28,7 +29,8 @@ export const formRoutes: FastifyPluginAsyncZod = async (app) => {
   const write = { preHandler: [requirePermission(Permissions.FORMS_WRITE)] };
   const repo = () => app.db.getRepository(FormDefinition);
 
-  app.get('/forms', read, async () => {
+  app.get('/forms', { ...read, schema: { querystring: PaginationQuery } }, async (request) => {
+    const { limit, offset } = request.query;
     const all = await repo().find({ order: { code: 'ASC', version: 'ASC' } });
 
     const byCode = new Map<string, { published: FormDefinition[]; draft: FormDefinition | null }>();
@@ -42,7 +44,7 @@ export const formRoutes: FastifyPluginAsyncZod = async (app) => {
       }
     }
 
-    return [...byCode.entries()].map(([code, { published, draft }]) => {
+    const grouped = [...byCode.entries()].map(([code, { published, draft }]) => {
       const latest = published[published.length - 1] ?? null;
       return {
         code,
@@ -51,6 +53,8 @@ export const formRoutes: FastifyPluginAsyncZod = async (app) => {
         latestPublished: latest,
       };
     });
+
+    return paginate(grouped.slice(offset, offset + limit), grouped.length, limit, offset);
   });
 
   app.post('/forms', { ...write, schema: { body: CreateFormBody } }, async (request, reply) => {

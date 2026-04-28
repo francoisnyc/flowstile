@@ -8,10 +8,11 @@ import { TaskStateMachine, InvalidTransitionError } from '../common/task-state-m
 import { filterFormSchemas, filterSubmissionData } from '../common/visibility.js';
 import { requirePermission } from '../plugins/auth.js';
 import { Permissions } from '../common/permissions.js';
+import { PaginationQuery, paginate } from '../common/pagination.js';
 
 const UuidParam = z.object({ id: z.string().uuid() });
 
-const TasksQuery = z.object({
+const TasksQuery = PaginationQuery.extend({
   status: z.nativeEnum(TaskStatus).optional(),
   assigneeId: z.string().uuid().optional(),
   group: z.string().optional(),
@@ -42,13 +43,15 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
     user.roles.some((r) => r.permissions.includes(perm));
 
   app.get('/tasks', { ...read, schema: { querystring: TasksQuery } }, async (request) => {
-    const { status, assigneeId, group } = request.query;
+    const { status, assigneeId, group, limit, offset } = request.query;
 
     const qb = repo()
       .createQueryBuilder('t')
       .leftJoinAndSelect('t.taskDefinition', 'td')
       .leftJoinAndSelect('t.assignee', 'a')
-      .orderBy('t.createdAt', 'DESC');
+      .orderBy('t.createdAt', 'DESC')
+      .limit(limit)
+      .offset(offset);
 
     if (status) qb.andWhere('t.status = :status', { status });
     if (assigneeId) qb.andWhere('t.assigneeId = :assigneeId', { assigneeId });
@@ -57,7 +60,8 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
       qb.andWhere(':group = ANY(td.candidateGroups)', { group });
     }
 
-    return qb.getMany();
+    const [items, total] = await qb.getManyAndCount();
+    return paginate(items, total, limit, offset);
   });
 
   app.post('/tasks', { ...write, schema: { body: CreateTaskBody } }, async (request, reply) => {

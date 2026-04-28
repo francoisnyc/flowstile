@@ -18,7 +18,7 @@ export default function InboxPage() {
         listTasks({ status: 'created' }),
         listTasks({ status: 'claimed' }),
       ]);
-      setTasks([...created, ...claimed]);
+      setTasks([...created.items, ...claimed.items]);
     } catch (err) {
       console.error(err);
     } finally {

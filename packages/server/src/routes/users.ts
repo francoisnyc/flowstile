@@ -8,6 +8,7 @@ import { Role } from '../entities/role.entity.js';
 import { UserStatus } from '../common/enums.js';
 import { requirePermission } from '../plugins/auth.js';
 import { Permissions } from '../common/permissions.js';
+import { PaginationQuery, paginate } from '../common/pagination.js';
 
 function serialize(user: User) {
   return {
@@ -41,12 +42,15 @@ const PatchUserBody = z.object({
 export const userRoutes: FastifyPluginAsyncZod = async (app) => {
   const pre = { preHandler: [requirePermission(Permissions.USERS_MANAGE)] };
 
-  app.get('/users', pre, async () => {
-    const users = await app.db.getRepository(User).find({
+  app.get('/users', { ...pre, schema: { querystring: PaginationQuery } }, async (request) => {
+    const { limit, offset } = request.query;
+    const [users, total] = await app.db.getRepository(User).findAndCount({
       relations: ['groups', 'roles'],
       order: { createdAt: 'ASC' },
+      take: limit,
+      skip: offset,
     });
-    return users.map(serialize);
+    return paginate(users.map(serialize), total, limit, offset);
   });
 
   app.post('/users', { ...pre, schema: { body: CreateUserBody } }, async (request, reply) => {

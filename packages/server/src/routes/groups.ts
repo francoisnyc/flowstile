@@ -5,6 +5,7 @@ import { Group } from '../entities/group.entity.js';
 import { User } from '../entities/user.entity.js';
 import { requirePermission } from '../plugins/auth.js';
 import { Permissions } from '../common/permissions.js';
+import { PaginationQuery, paginate } from '../common/pagination.js';
 
 function serialize(group: Group) {
   return {
@@ -29,9 +30,14 @@ const PatchGroupBody = z.object({
 export const groupRoutes: FastifyPluginAsyncZod = async (app) => {
   const pre = { preHandler: [requirePermission(Permissions.USERS_MANAGE)] };
 
-  app.get('/groups', pre, async () => {
-    const groups = await app.db.getRepository(Group).find({ relations: ['members'] });
-    return groups.map(serialize);
+  app.get('/groups', { ...pre, schema: { querystring: PaginationQuery } }, async (request) => {
+    const { limit, offset } = request.query;
+    const [groups, total] = await app.db.getRepository(Group).findAndCount({
+      relations: ['members'],
+      take: limit,
+      skip: offset,
+    });
+    return paginate(groups.map(serialize), total, limit, offset);
   });
 
   app.post('/groups', { ...pre, schema: { body: CreateGroupBody } }, async (request, reply) => {

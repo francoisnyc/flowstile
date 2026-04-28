@@ -22,7 +22,7 @@ export default function FormDesignerPage() {
   const [error, setError] = useState<string | null>(null);
   const [newCode, setNewCode] = useState('');
 
-  const reloadForms = () => listForms().then(setForms).catch(console.error);
+  const reloadForms = () => listForms().then((p) => setForms(p.items)).catch(console.error);
 
   useEffect(() => { reloadForms(); }, []);
 

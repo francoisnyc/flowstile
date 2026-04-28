@@ -5,6 +5,7 @@ import { TaskDefinition } from '../entities/task-definition.entity.js';
 import { ProcessDefinitionStatus, Priority } from '../common/enums.js';
 import { requireAuth, requirePermission } from '../plugins/auth.js';
 import { Permissions } from '../common/permissions.js';
+import { PaginationQuery, paginate } from '../common/pagination.js';
 
 const UuidParam = z.object({ id: z.string().uuid() });
 
@@ -39,8 +40,14 @@ export const processRoutes: FastifyPluginAsyncZod = async (app) => {
   const pdRepo = () => app.db.getRepository(ProcessDefinition);
   const tdRepo = () => app.db.getRepository(TaskDefinition);
 
-  app.get('/processes', read, async () => {
-    return pdRepo().find({ order: { createdAt: 'ASC' } });
+  app.get('/processes', { ...read, schema: { querystring: PaginationQuery } }, async (request) => {
+    const { limit, offset } = request.query;
+    const [items, total] = await pdRepo().findAndCount({
+      order: { createdAt: 'ASC' },
+      take: limit,
+      skip: offset,
+    });
+    return paginate(items, total, limit, offset);
   });
 
   app.post(
@@ -86,17 +93,21 @@ export const processRoutes: FastifyPluginAsyncZod = async (app) => {
 
   app.get(
     '/processes/:id/tasks',
-    { ...read, schema: { params: UuidParam } },
+    { ...read, schema: { params: UuidParam, querystring: PaginationQuery } },
     async (request, reply) => {
       const { id } = request.params;
+      const { limit, offset } = request.query;
 
       const pd = await pdRepo().findOne({ where: { id } });
       if (!pd) return reply.code(404).send({ error: 'Process not found' });
 
-      return tdRepo().find({
+      const [items, total] = await tdRepo().findAndCount({
         where: { processDefinitionId: id },
         order: { createdAt: 'ASC' },
+        take: limit,
+        skip: offset,
       });
+      return paginate(items, total, limit, offset);
     },
   );
 
