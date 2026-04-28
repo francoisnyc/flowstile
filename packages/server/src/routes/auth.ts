@@ -39,7 +39,7 @@ export async function authRoutes(app: FastifyInstance) {
         return reply.code(401).send({ error: 'Invalid credentials' });
       }
       if (user.status !== UserStatus.ACTIVE) {
-        return reply.code(403).send({ error: 'Account is inactive' });
+        return reply.code(401).send({ error: 'Invalid credentials' });
       }
 
       const token = app.jwt.sign({ userId: user.id }, { expiresIn: '7d' });
