@@ -151,34 +151,45 @@ export const formRoutes: FastifyPluginAsyncZod = async (app) => {
     async (request, reply) => {
       const { code } = request.params;
 
-      const draft = await repo().findOne({
-        where: { code, status: FormDefinitionStatus.DRAFT },
-      });
-      if (!draft) return reply.code(404).send({ error: 'No draft found for this code' });
+      const published = await app.db.transaction(async (em) => {
+        const formRepo = em.getRepository(FormDefinition);
 
-      const result = await repo()
-        .createQueryBuilder('f')
-        .select('MAX(f.version)', 'max')
-        .where('f.code = :code AND f.status = :status', {
-          code,
+        // Pessimistic lock serializes concurrent publish requests:
+        // the second caller blocks here until the first commits/rolls back,
+        // then finds no draft and returns null (→ 404).
+        const draft = await formRepo.findOne({
+          where: { code, status: FormDefinitionStatus.DRAFT },
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (!draft) return null;
+
+        const result = await formRepo
+          .createQueryBuilder('f')
+          .select('MAX(f.version)', 'max')
+          .where('f.code = :code AND f.status = :status', {
+            code,
+            status: FormDefinitionStatus.PUBLISHED,
+          })
+          .getRawOne<{ max: number | null }>();
+
+        const nextVersion = (result?.max ?? 0) + 1;
+
+        const record = await formRepo.save({
+          code: draft.code,
+          version: nextVersion,
+          jsonSchema: draft.jsonSchema,
+          uiSchema: draft.uiSchema,
+          visibilityRules: draft.visibilityRules,
+          formMessages: draft.formMessages,
           status: FormDefinitionStatus.PUBLISHED,
-        })
-        .getRawOne<{ max: number | null }>();
+        });
 
-      const nextVersion = (result?.max ?? 0) + 1;
+        await formRepo.delete(draft.id);
 
-      const published = await repo().save({
-        code: draft.code,
-        version: nextVersion,
-        jsonSchema: draft.jsonSchema,
-        uiSchema: draft.uiSchema,
-        visibilityRules: draft.visibilityRules,
-        formMessages: draft.formMessages,
-        status: FormDefinitionStatus.PUBLISHED,
+        return record;
       });
 
-      await repo().delete(draft.id);
-
+      if (!published) return reply.code(404).send({ error: 'No draft found for this code' });
       return reply.code(201).send(published);
     },
   );
