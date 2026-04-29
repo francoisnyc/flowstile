@@ -36,7 +36,7 @@ const PatchTaskDefBody = z.object({
 
 export const processRoutes: FastifyPluginAsyncZod = async (app) => {
   const read = { preHandler: [requireAuth] };
-  const write = { preHandler: [requirePermission(Permissions.FORMS_WRITE)] };
+  const write = { preHandler: [requirePermission(Permissions.PROCESSES_WRITE)] };
   const pdRepo = () => app.db.getRepository(ProcessDefinition);
   const tdRepo = () => app.db.getRepository(TaskDefinition);
 
