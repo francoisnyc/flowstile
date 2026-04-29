@@ -10,6 +10,38 @@ import { requirePermission } from '../plugins/auth.js';
 import { Permissions } from '../common/permissions.js';
 import { PaginationQuery, paginate } from '../common/pagination.js';
 
+function serializeTask(task: Task) {
+  return {
+    id: task.id,
+    formDefinitionVersion: task.formDefinitionVersion,
+    workflowId: task.workflowId,
+    processInstanceId: task.processInstanceId ?? null,
+    status: task.status,
+    priority: task.priority,
+    dueDate: task.dueDate ?? null,
+    followUpDate: task.followUpDate ?? null,
+    inputData: task.inputData,
+    contextData: task.contextData,
+    submissionData: task.submissionData,
+    createdAt: task.createdAt,
+    updatedAt: task.updatedAt,
+    completedAt: task.completedAt ?? null,
+    taskDefinition: task.taskDefinition ? {
+      id: task.taskDefinition.id,
+      code: task.taskDefinition.code,
+      formDefinitionCode: task.taskDefinition.formDefinitionCode,
+      candidateGroups: task.taskDefinition.candidateGroups,
+      candidateUsers: task.taskDefinition.candidateUsers,
+      defaultPriority: task.taskDefinition.defaultPriority,
+    } : undefined,
+    assignee: task.assignee ? {
+      id: task.assignee.id,
+      email: task.assignee.email,
+      displayName: task.assignee.displayName,
+    } : null,
+  };
+}
+
 const UuidParam = z.object({ id: z.string().uuid() });
 
 const TasksQuery = PaginationQuery.extend({
@@ -61,7 +93,7 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
     }
 
     const [items, total] = await qb.getManyAndCount();
-    return paginate(items, total, limit, offset);
+    return paginate(items.map(serializeTask), total, limit, offset);
   });
 
   app.post('/tasks', { ...write, schema: { body: CreateTaskBody } }, async (request, reply) => {
@@ -106,7 +138,7 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
       submissionData: submissionData ?? {},
     });
 
-    return reply.code(201).send(task);
+    return reply.code(201).send(serializeTask(task));
   });
 
   app.get(
@@ -142,7 +174,7 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
       );
 
       return {
-        ...task,
+        ...serializeTask(task),
         form: {
           code: form.code,
           version: form.version,
@@ -176,7 +208,7 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
 
       task.assigneeId = user.id;
       await repo().save(task);
-      return task;
+      return serializeTask(task);
     },
   );
 
@@ -205,7 +237,7 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
 
       task.assigneeId = null;
       await repo().save(task);
-      return task;
+      return serializeTask(task);
     },
   );
 
@@ -230,7 +262,7 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
 
       if (data) task.submissionData = { ...task.submissionData, ...data };
       task.completedAt = new Date();
-      await repo().save(task);
+      const savedTask = await repo().save(task);
 
       if (app.temporal && task.workflowId) {
         const payload = { data: task.submissionData };
@@ -244,7 +276,7 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
         }
       }
 
-      return task;
+      return serializeTask(savedTask);
     },
   );
 
@@ -272,7 +304,7 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
       }
 
       await repo().save(task);
-      return task;
+      return serializeTask(task);
     },
   );
 };
