@@ -1,5 +1,5 @@
 import { FlowstileClient } from './client.js';
-import type { CreateTaskInput, Task } from './types.js';
+import type { CreateTaskInput, Task, FlowstileClientOptions } from './types.js';
 
 let _client: FlowstileClient | null = null;
 
@@ -8,16 +8,19 @@ let _client: FlowstileClient | null = null;
  *
  * Example:
  *   import { configureFlowstileActivities } from '@flowstile/sdk/activities';
- *   configureFlowstileActivities('http://flowstile-server:3000');
+ *   configureFlowstileActivities({
+ *     baseUrl: 'http://localhost:3000',
+ *     auth: { email: 'service@flowstile.local', password: 'password' },
+ *   });
  */
-export function configureFlowstileActivities(baseUrl: string): void {
-  _client = new FlowstileClient({ baseUrl });
+export function configureFlowstileActivities(options: FlowstileClientOptions): void {
+  _client = new FlowstileClient(options);
 }
 
 function client(): FlowstileClient {
   if (!_client) {
     throw new Error(
-      'Flowstile activities are not configured. Call configureFlowstileActivities(baseUrl) before starting your worker.',
+      'Flowstile activities are not configured. Call configureFlowstileActivities(options) before starting your worker.',
     );
   }
   return _client;

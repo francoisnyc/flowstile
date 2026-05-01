@@ -49,6 +49,7 @@ export interface TaskResult {
 
 export interface FlowstileClientOptions {
   baseUrl: string;
+  auth?: { email: string; password: string };
 }
 
 // Signal payload sent by the server when a task is completed
