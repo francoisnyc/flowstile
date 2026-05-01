@@ -55,6 +55,12 @@ async function seed() {
     groups: [loanOfficers],
     roles: [taskUserRole],
   });
+  const serviceUser = await db.getRepository(User).save({
+    email: 'service@flowstile.local',
+    displayName: 'Flowstile Service',
+    passwordHash: devHash,
+    roles: [taskUserRole],
+  });
 
   // Form: Loan Application
   const loanForm = await db.getRepository(FormDefinition).save({
@@ -135,7 +141,7 @@ async function seed() {
   console.log('Seed complete:');
   console.log('  2 groups: loan-officers, hr-team');
   console.log('  2 roles: admin, task-user');
-  console.log('  2 users: alice@example.com (admin), bob@example.com (loan officer)');
+  console.log('  3 users: alice (admin), bob (loan officer), service (worker)');
   console.log('  1 form: LOAN_APPLICATION v1');
   console.log('  1 process: Loan Processing');
   console.log('  1 task definition: REVIEW_LOAN');
