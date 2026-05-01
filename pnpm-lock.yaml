@@ -146,6 +146,9 @@ importers:
       '@flowstile/sdk':
         specifier: workspace:*
         version: link:../sdk
+      '@temporalio/client':
+        specifier: ^1.16.1
+        version: 1.16.1
       '@temporalio/worker':
         specifier: ^1.11.0
         version: 1.16.1(tslib@2.8.1)

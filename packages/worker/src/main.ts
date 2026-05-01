@@ -3,13 +3,18 @@ import { Worker, NativeConnection } from '@temporalio/worker';
 import * as allActivities from './activities.js';
 
 const FLOWSTILE_SERVER_URL = process.env.FLOWSTILE_SERVER_URL ?? 'http://localhost:3000';
+const FLOWSTILE_EMAIL = process.env.FLOWSTILE_EMAIL ?? 'service@flowstile.local';
+const FLOWSTILE_PASSWORD = process.env.FLOWSTILE_PASSWORD ?? 'password';
 const TEMPORAL_ADDRESS = process.env.TEMPORAL_ADDRESS ?? 'localhost:7233';
 const TASK_QUEUE = process.env.TASK_QUEUE ?? 'flowstile';
 
 async function run() {
   // Configure the REST client used by all Flowstile activities
   const { configureFlowstileActivities, ...activities } = allActivities;
-  configureFlowstileActivities(FLOWSTILE_SERVER_URL);
+  configureFlowstileActivities({
+    baseUrl: FLOWSTILE_SERVER_URL,
+    auth: { email: FLOWSTILE_EMAIL, password: FLOWSTILE_PASSWORD },
+  });
 
   const connection = await NativeConnection.connect({ address: TEMPORAL_ADDRESS });
 
