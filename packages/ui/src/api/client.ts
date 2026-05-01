@@ -1,10 +1,13 @@
 import type { Task, User, Group, RoleRef, FormSummary, FormDefinition, Page } from '../types.js';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers: Record<string, string> = { ...init?.headers as Record<string, string> };
+  if (init?.body) headers['Content-Type'] = 'application/json';
+
   const res = await fetch(`/api${path}`, {
     ...init,
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json', ...init?.headers },
+    headers,
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: res.statusText })) as { error?: string };
