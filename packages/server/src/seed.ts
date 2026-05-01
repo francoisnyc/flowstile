@@ -55,7 +55,7 @@ async function seed() {
     groups: [loanOfficers],
     roles: [taskUserRole],
   });
-  const serviceUser = await db.getRepository(User).save({
+  await db.getRepository(User).save({
     email: 'service@flowstile.local',
     displayName: 'Flowstile Service',
     passwordHash: devHash,
