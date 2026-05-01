@@ -28,9 +28,8 @@ export const authRoutes: FastifyPluginAsyncZod = async (app) => {
       schema: { body: LoginBody },
       config: {
         rateLimit: {
-          max: 5,
+          max: process.env.NODE_ENV === 'production' ? 5 : 1000,
           timeWindow: '1 minute',
-          skip: () => process.env.NODE_ENV === 'test',
         },
       },
     },

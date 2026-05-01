@@ -18,6 +18,13 @@ async function seed() {
 
   console.log('Seeding database...');
 
+  // Truncate all tables (cascade) so seed is idempotent
+  await db.query(`
+    TRUNCATE tasks, task_definitions, process_definitions, form_definitions,
+             group_members, user_roles, users, groups, roles
+    CASCADE
+  `);
+
   // Groups
   const loanOfficers = await db.getRepository(Group).save({ name: 'loan-officers' });
   const hrTeam = await db.getRepository(Group).save({ name: 'hr-team' });

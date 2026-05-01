@@ -28,9 +28,7 @@ test.describe('Flowstile UI smoke test', () => {
     await page.click('button[type="submit"]');
 
     // Wait for task list to load — look for loan-related content from seed data
-    await page.waitForTimeout(1000);
-    const body = await page.textContent('body');
-    expect(body).toContain('LN-2024');
+    await expect(page.locator('text=LN-2024').first()).toBeVisible({ timeout: 5000 });
   });
 
   test('alice can navigate to admin page', async ({ page }) => {
