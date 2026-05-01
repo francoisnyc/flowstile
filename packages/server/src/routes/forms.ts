@@ -178,19 +178,11 @@ export const formRoutes: FastifyPluginAsyncZod = async (app) => {
 
         const nextVersion = (result?.max ?? 0) + 1;
 
-        const record = await formRepo.save({
-          code: draft.code,
-          version: nextVersion,
-          jsonSchema: draft.jsonSchema,
-          uiSchema: draft.uiSchema,
-          visibilityRules: draft.visibilityRules,
-          formMessages: draft.formMessages,
-          status: FormDefinitionStatus.PUBLISHED,
-        });
-
-        await formRepo.delete(draft.id);
-
-        return record;
+        // Update the draft in-place to avoid unique constraint violation
+        // on (code, version) — can't INSERT before DELETE in same tx
+        draft.version = nextVersion;
+        draft.status = FormDefinitionStatus.PUBLISHED;
+        return formRepo.save(draft);
       });
 
       if (!published) return reply.code(404).send({ error: 'No draft found for this code' });

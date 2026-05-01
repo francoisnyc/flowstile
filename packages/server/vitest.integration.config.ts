@@ -21,5 +21,6 @@ export default defineConfig({
     root: './',
     include: ['test/integration/**/*.spec.ts'],
     setupFiles: ['test/integration/setup.ts'],
+    fileParallelism: false,
   },
 });

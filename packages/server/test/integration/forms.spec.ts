@@ -163,8 +163,8 @@ describe('Form routes', () => {
     it('includes the test form in the list', async () => {
       const res = await authed(app, cookie, { method: 'GET', url: '/forms' });
       expect(res.statusCode).toBe(200);
-      const list = res.json<{ code: string }[]>();
-      expect(list.some((f) => f.code === formCode)).toBe(true);
+      const body = res.json<{ items: { code: string }[] }>();
+      expect(body.items.some((f) => f.code === formCode)).toBe(true);
     });
   });
 });

@@ -84,7 +84,14 @@ describe('Task routes', () => {
     });
 
     it('returns 401 when unauthenticated', async () => {
-      const res = await app.inject({ method: 'POST', url: '/tasks', payload: {} });
+      const res = await app.inject({
+        method: 'POST',
+        url: '/tasks',
+        payload: {
+          taskDefinitionId: '00000000-0000-0000-0000-000000000000',
+          workflowId: 'wf-unauth',
+        },
+      });
       expect(res.statusCode).toBe(401);
     });
   });
@@ -235,14 +242,14 @@ describe('Task routes', () => {
         method: 'GET',
         url: '/tasks?status=created',
       });
-      const ids = created.json<{ id: string }[]>().map((t) => t.id);
+      const ids = created.json<{ items: { id: string }[] }>().items.map((t) => t.id);
       expect(ids).toContain(id);
 
       const completed = await authed(app, cookie, {
         method: 'GET',
         url: '/tasks?status=completed',
       });
-      expect(completed.json<{ id: string }[]>().map((t) => t.id)).not.toContain(id);
+      expect(completed.json<{ items: { id: string }[] }>().items.map((t) => t.id)).not.toContain(id);
     });
   });
 });

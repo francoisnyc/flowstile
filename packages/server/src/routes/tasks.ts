@@ -34,6 +34,7 @@ function serializeTask(task: Task) {
       candidateUsers: task.taskDefinition.candidateUsers,
       defaultPriority: task.taskDefinition.defaultPriority,
     } : undefined,
+    assigneeId: task.assignee?.id ?? task.assigneeId ?? null,
     assignee: task.assignee ? {
       id: task.assignee.id,
       email: task.assignee.email,
@@ -222,10 +223,6 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
       const task = await repo().findOne({ where: { id } });
       if (!task) return reply.code(404).send({ error: 'Task not found' });
 
-      if (task.assigneeId !== user.id && !userHasPermission(user, Permissions.TASKS_MANAGE)) {
-        return reply.code(403).send({ error: 'Only the assignee or a manager can unclaim this task' });
-      }
-
       try {
         task.status = TaskStateMachine.transition(task.status, 'unclaim');
       } catch (err) {
@@ -233,6 +230,10 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
           return reply.code(409).send({ error: err.message });
         }
         throw err;
+      }
+
+      if (task.assigneeId && task.assigneeId !== user.id && !userHasPermission(user, Permissions.TASKS_MANAGE)) {
+        return reply.code(403).send({ error: 'Only the assignee or a manager can unclaim this task' });
       }
 
       task.assigneeId = null;
@@ -290,10 +291,6 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
       const task = await repo().findOne({ where: { id } });
       if (!task) return reply.code(404).send({ error: 'Task not found' });
 
-      if (task.assigneeId !== user.id && !userHasPermission(user, Permissions.TASKS_MANAGE)) {
-        return reply.code(403).send({ error: 'Only the assignee or a manager can cancel this task' });
-      }
-
       try {
         task.status = TaskStateMachine.transition(task.status, 'cancel');
       } catch (err) {
@@ -301,6 +298,10 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
           return reply.code(409).send({ error: err.message });
         }
         throw err;
+      }
+
+      if (task.assigneeId && task.assigneeId !== user.id && !userHasPermission(user, Permissions.TASKS_MANAGE)) {
+        return reply.code(403).send({ error: 'Only the assignee or a manager can cancel this task' });
       }
 
       await repo().save(task);
