@@ -28,6 +28,14 @@ export default fp(async (app: FastifyInstance) => {
   await app.register(fastifyJwt, {
     secret: jwtSecret,
     cookie: { cookieName: 'flowstile_token', signed: false },
+    extractToken: (request: FastifyRequest) => {
+      // Cookie first (browser), then Authorization header (SDK/service)
+      const cookie = request.cookies?.flowstile_token;
+      if (cookie) return cookie;
+      const auth = request.headers.authorization;
+      if (auth?.startsWith('Bearer ')) return auth.slice(7);
+      return undefined;
+    },
   });
 
   app.decorateRequest('currentUser', null);
