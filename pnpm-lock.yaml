@@ -152,6 +152,9 @@ importers:
       '@temporalio/worker':
         specifier: ^1.11.0
         version: 1.16.1(tslib@2.8.1)
+      '@temporalio/workflow':
+        specifier: ^1.11.0
+        version: 1.16.1
       dotenv:
         specifier: ^16.4.0
         version: 16.6.1

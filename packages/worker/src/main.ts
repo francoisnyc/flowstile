@@ -22,7 +22,7 @@ async function run() {
     connection,
     taskQueue: TASK_QUEUE,
     // Temporal bundles this file's exports for the deterministic workflow sandbox
-    workflowsPath: new URL('./workflows.js', import.meta.url).href,
+    workflowsPath: new URL('./workflows.ts', import.meta.url).pathname,
     activities,
   });
 
