@@ -677,4 +677,21 @@ label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color:
   cursor: pointer;
   border-radius: var(--radius);
 }
+
+/* ── Visual Builder ── */
+.visual-builder {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+.drag-overlay-item {
+  background: var(--accent);
+  color: #fff;
+  padding: 6px 12px;
+  border-radius: var(--radius);
+  font-size: 12px;
+  font-weight: 500;
+  box-shadow: 0 4px 12px rgba(0,0,0,.3);
+  pointer-events: none;
+}
 .add-cond-btn:hover { border-color: var(--accent); color: var(--accent); }
