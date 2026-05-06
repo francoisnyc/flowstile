@@ -18,7 +18,11 @@ export default function TaskDetail({ task, onTaskUpdated }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setFormData(task?.submissionData ?? {});
+    setFormData({
+      ...(task?.contextData ?? {}),
+      ...(task?.inputData ?? {}),
+      ...(task?.submissionData ?? {}),
+    });
     setError(null);
   }, [task?.id]);
 
