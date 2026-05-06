@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   listForms, getFormVersions, createForm, updateDraft, publishForm,
@@ -6,14 +6,26 @@ import {
 import type { FormSummary, FormDefinition } from '../types.js';
 import FormEditor from '../components/FormEditor.js';
 import FormPreview from '../components/FormPreview.js';
+import DesignerToolbar from '../components/form-designer/DesignerToolbar.js';
+import type { DesignerTab } from '../components/form-designer/DesignerToolbar.js';
+import VisualBuilder from '../components/form-designer/VisualBuilder.js';
+import { useHistory } from '../components/form-designer/useHistory.js';
+import { toSchema } from '../components/form-designer/toSchema.js';
+import { fromSchema } from '../components/form-designer/fromSchema.js';
+import type { FieldDefinition } from '../components/form-designer/types.js';
 
-const EMPTY_SCHEMA: Record<string, unknown> = { type: 'object', properties: {} };
+const EMPTY_SCHEMA: Record<string, unknown> = {
+  type: 'object',
+  properties: {},
+  'x-flowstile-builder': true,
+};
 const EMPTY_UI: Record<string, unknown> = { type: 'VerticalLayout', elements: [] };
 
 export default function FormDesignerPage() {
   const { code: routeCode } = useParams<{ code?: string }>();
   const navigate = useNavigate();
 
+  // ── Form list / selection state ──────────────────────────────────────────
   const [forms, setForms] = useState<FormSummary[]>([]);
   const [selectedCode, setSelectedCode] = useState<string | null>(routeCode ?? null);
   const [draft, setDraft] = useState<FormDefinition | null>(null);
@@ -22,20 +34,104 @@ export default function FormDesignerPage() {
   const [error, setError] = useState<string | null>(null);
   const [newCode, setNewCode] = useState('');
 
+  // ── Designer state ───────────────────────────────────────────────────────
+  const [activeTab, setActiveTab] = useState<DesignerTab>('designer');
+  const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
+  const history = useHistory<FieldDefinition[]>([]);
+
+  // ── Form list ────────────────────────────────────────────────────────────
   const reloadForms = () => listForms().then((p) => setForms(p.items)).catch(console.error);
 
   useEffect(() => { reloadForms(); }, []);
 
+  // ── Load versions when selectedCode changes ──────────────────────────────
   useEffect(() => {
-    if (!selectedCode) { setDraft(null); setPublishedVersions([]); return; }
+    if (!selectedCode) {
+      setDraft(null);
+      setPublishedVersions([]);
+      history.reset([]);
+      return;
+    }
     getFormVersions(selectedCode).then((vs) => {
-      setPublishedVersions(vs.filter((v) => v.status === 'published'));
-      setDraft(vs.find((v) => v.status === 'draft') ?? null);
+      const published = vs.filter((v) => v.status === 'published');
+      const draftVersion = vs.find((v) => v.status === 'draft') ?? null;
+      setPublishedVersions(published);
+      setDraft(draftVersion);
+      if (draftVersion) {
+        const fields = fromSchema({
+          jsonSchema: draftVersion.jsonSchema,
+          uiSchema: draftVersion.uiSchema,
+          visibilityRules: draftVersion.visibilityRules ?? {},
+        });
+        history.reset(fields);
+      } else {
+        history.reset([]);
+      }
     }).catch(console.error);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCode]);
 
+  // ── Tab switching with schema sync ───────────────────────────────────────
+  const handleTabChange = useCallback((tab: DesignerTab) => {
+    if (tab === activeTab) return;
+
+    if (activeTab === 'designer') {
+      // Designer → anything: sync fields → draft
+      const schemaOut = toSchema(history.state);
+      setDraft((d) => d ? {
+        ...d,
+        jsonSchema: schemaOut.jsonSchema,
+        uiSchema: schemaOut.uiSchema,
+        visibilityRules: schemaOut.visibilityRules,
+      } : d);
+    }
+
+    if (tab === 'designer') {
+      // Anything → Designer: parse draft → fields
+      if (!draft) {
+        setActiveTab(tab);
+        return;
+      }
+      try {
+        const fields = fromSchema({
+          jsonSchema: draft.jsonSchema,
+          uiSchema: draft.uiSchema,
+          visibilityRules: draft.visibilityRules ?? {},
+        });
+        history.reset(fields);
+        setSelectedFieldId(null);
+      } catch {
+        setError('Cannot switch to Designer: invalid schema JSON.');
+        return;
+      }
+    }
+
+    setActiveTab(tab);
+  }, [activeTab, history, draft]);
+
+  // ── Keyboard shortcuts ───────────────────────────────────────────────────
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (activeTab !== 'designer') return;
+      const mod = e.ctrlKey || e.metaKey;
+      if (!mod) return;
+      if (e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        history.undo();
+      } else if ((e.key === 'z' && e.shiftKey) || e.key === 'Z') {
+        e.preventDefault();
+        history.redo();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeTab, history]);
+
+  // ── Sidebar actions ──────────────────────────────────────────────────────
   const handleSelect = (code: string) => {
     setSelectedCode(code);
+    setActiveTab('designer');
+    setSelectedFieldId(null);
     navigate(`/forms/${code}`);
   };
 
@@ -56,17 +152,28 @@ export default function FormDesignerPage() {
     }
   };
 
+  // ── Save / Publish ───────────────────────────────────────────────────────
   const handleSaveDraft = async () => {
     if (!selectedCode || !draft) return;
     setBusy(true);
     setError(null);
     try {
-      const saved = await updateDraft(selectedCode, {
-        jsonSchema: draft.jsonSchema,
-        uiSchema: draft.uiSchema,
-        visibilityRules: draft.visibilityRules,
-        formMessages: draft.formMessages,
-      });
+      // Sync visual builder state into draft before saving
+      const schemaOut = activeTab === 'designer' ? toSchema(history.state) : null;
+      const payload = schemaOut
+        ? {
+          jsonSchema: schemaOut.jsonSchema,
+          uiSchema: schemaOut.uiSchema,
+          visibilityRules: schemaOut.visibilityRules,
+          formMessages: draft.formMessages,
+        }
+        : {
+          jsonSchema: draft.jsonSchema,
+          uiSchema: draft.uiSchema,
+          visibilityRules: draft.visibilityRules,
+          formMessages: draft.formMessages,
+        };
+      const saved = await updateDraft(selectedCode, payload);
       setDraft(saved);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Save failed');
@@ -80,10 +187,13 @@ export default function FormDesignerPage() {
     setBusy(true);
     setError(null);
     try {
+      // Save draft first
+      await handleSaveDraft();
       await publishForm(selectedCode);
       const vs = await getFormVersions(selectedCode);
       setPublishedVersions(vs.filter((v) => v.status === 'published'));
       setDraft(null);
+      history.reset([]);
       await reloadForms();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Publish failed');
@@ -100,6 +210,7 @@ export default function FormDesignerPage() {
       const vs = await getFormVersions(selectedCode);
       setPublishedVersions(vs.filter((v) => v.status === 'published'));
       setDraft(saved);
+      history.reset([]);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed');
     } finally {
@@ -108,6 +219,9 @@ export default function FormDesignerPage() {
   };
 
   const latestPublished = publishedVersions[publishedVersions.length - 1];
+  const versionLabel = latestPublished
+    ? `v${latestPublished.version} published — editing draft`
+    : 'Draft (unpublished)';
 
   return (
     <div className="form-designer">
@@ -148,24 +262,42 @@ export default function FormDesignerPage() {
       {selectedCode && draft ? (
         <div className="form-workspace">
           {error && <div className="error-banner">{error}</div>}
-          <div className="form-toolbar">
-            <span className="form-code">{selectedCode}</span>
-            <span>
-              {latestPublished
-                ? `v${latestPublished.version} published — editing draft`
-                : 'Draft (unpublished)'}
-            </span>
-            <button disabled={busy} onClick={handleSaveDraft}>Save draft</button>
-            <button className="primary" disabled={busy} onClick={handlePublish}>
-              Publish
-            </button>
-          </div>
-          <div className="editor-preview-split">
-            <FormEditor
-              form={draft}
-              onChange={(updated) => setDraft((d) => d ? { ...d, ...updated } : d)}
-            />
-            <FormPreview form={draft} />
+          <DesignerToolbar
+            activeTab={activeTab}
+            onTabChange={handleTabChange}
+            formCode={selectedCode}
+            versionLabel={versionLabel}
+            busy={busy}
+            onSave={handleSaveDraft}
+            onPublish={handlePublish}
+            canUndo={history.canUndo}
+            canRedo={history.canRedo}
+            onUndo={history.undo}
+            onRedo={history.redo}
+          />
+          <div className="designer-content">
+            {activeTab === 'designer' && (
+              <VisualBuilder
+                fields={history.state}
+                onChange={history.push}
+                selectedId={selectedFieldId}
+                onSelect={setSelectedFieldId}
+                hasPublishedVersions={publishedVersions.length > 0}
+              />
+            )}
+            {activeTab === 'source' && (
+              <div className="editor-preview-split">
+                <FormEditor
+                  form={draft}
+                  onChange={(updated) => setDraft((d) => d ? { ...d, ...updated } : d)}
+                />
+              </div>
+            )}
+            {activeTab === 'preview' && (
+              <div className="preview-full">
+                <FormPreview form={draft} />
+              </div>
+            )}
           </div>
         </div>
       ) : selectedCode ? (

@@ -695,3 +695,8 @@ label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color:
   pointer-events: none;
 }
 .add-cond-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── Designer Content ── */
+.designer-content { flex: 1; display: flex; overflow: hidden; }
+.preview-full { flex: 1; display: flex; }
+.preview-full .form-preview { flex: 1; width: auto; }
