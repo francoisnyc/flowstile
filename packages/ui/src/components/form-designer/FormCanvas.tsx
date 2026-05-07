@@ -34,6 +34,7 @@ export default function FormCanvas({ fields, selectedId, onSelect, onDelete }: P
                 key={field.id}
                 field={field}
                 isSelected={field.id === selectedId}
+                selectedId={selectedId}
                 onSelect={onSelect}
                 onDelete={onDelete}
                 depth={0}

@@ -7,12 +7,13 @@ import { FIELD_TYPE_LABELS } from './types.js';
 interface Props {
   field: FieldDefinition;
   isSelected: boolean;
+  selectedId: string | null;
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
   depth: number;
 }
 
-export default function CanvasField({ field, isSelected, onSelect, onDelete, depth }: Props) {
+export default function CanvasField({ field, isSelected, selectedId, onSelect, onDelete, depth }: Props) {
   const {
     attributes, listeners, setNodeRef, transform, transition, isDragging,
   } = useSortable({ id: field.id, data: { source: 'canvas', field } });
@@ -53,7 +54,8 @@ export default function CanvasField({ field, isSelected, onSelect, onDelete, dep
               <CanvasField
                 key={child.id}
                 field={child}
-                isSelected={false}
+                isSelected={child.id === selectedId}
+                selectedId={selectedId}
                 onSelect={onSelect}
                 onDelete={onDelete}
                 depth={depth + 1}

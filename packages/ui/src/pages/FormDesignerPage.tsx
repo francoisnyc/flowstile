@@ -92,6 +92,15 @@ export default function FormDesignerPage() {
         setActiveTab(tab);
         return;
       }
+      // Warn if schema wasn't created by the builder
+      const schema = draft.jsonSchema as Record<string, unknown>;
+      if (!schema['x-flowstile-builder']) {
+        const ok = window.confirm(
+          'This schema may contain constructs the visual builder can\'t represent. ' +
+          'Switch anyway? Unsupported constructs will be preserved but not editable.'
+        );
+        if (!ok) return;
+      }
       try {
         const fields = fromSchema({
           jsonSchema: draft.jsonSchema,
@@ -114,18 +123,49 @@ export default function FormDesignerPage() {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (activeTab !== 'designer') return;
       const mod = e.ctrlKey || e.metaKey;
-      if (!mod) return;
-      if (e.key === 'z' && !e.shiftKey) {
+
+      // Undo/Redo
+      if (mod && e.key === 'z' && !e.shiftKey) {
         e.preventDefault();
         history.undo();
-      } else if ((e.key === 'z' && e.shiftKey) || e.key === 'Z') {
+        return;
+      }
+      if (mod && ((e.key === 'z' && e.shiftKey) || e.key === 'Z')) {
         e.preventDefault();
         history.redo();
+        return;
+      }
+
+      // Delete selected field
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedFieldId && !mod) {
+        // Don't intercept if user is typing in an input
+        const tag = (e.target as HTMLElement)?.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+        e.preventDefault();
+        const next = history.state.filter((f) => f.id !== selectedFieldId);
+        if (next.length !== history.state.length) {
+          history.push(next);
+          setSelectedFieldId(null);
+        }
+        return;
+      }
+
+      // Alt+Arrow to reorder selected field
+      if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && selectedFieldId) {
+        e.preventDefault();
+        const idx = history.state.findIndex((f) => f.id === selectedFieldId);
+        if (idx === -1) return;
+        const newIdx = e.key === 'ArrowUp' ? idx - 1 : idx + 1;
+        if (newIdx < 0 || newIdx >= history.state.length) return;
+        const reordered = [...history.state];
+        [reordered[idx], reordered[newIdx]] = [reordered[newIdx], reordered[idx]];
+        history.push(reordered);
+        return;
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeTab, history]);
+  }, [activeTab, history, selectedFieldId]);
 
   // ── Sidebar actions ──────────────────────────────────────────────────────
   const handleSelect = (code: string) => {

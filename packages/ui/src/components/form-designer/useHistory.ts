@@ -30,8 +30,8 @@ export function useHistory<T>(initialState: T): HistoryResult<T> {
   }, []);
 
   const undo = useCallback(() => {
-    if (past.current.length === 0) return;
     setState((current) => {
+      if (past.current.length === 0) return current;
       const previous = past.current[past.current.length - 1];
       past.current = past.current.slice(0, -1);
       future.current = [current, ...future.current];
@@ -42,8 +42,8 @@ export function useHistory<T>(initialState: T): HistoryResult<T> {
   }, []);
 
   const redo = useCallback(() => {
-    if (future.current.length === 0) return;
     setState((current) => {
+      if (future.current.length === 0) return current;
       const next = future.current[0];
       future.current = future.current.slice(1);
       past.current = [...past.current, current];
