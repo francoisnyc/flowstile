@@ -210,7 +210,12 @@ export default function FormDesignerPage() {
       const vs = await getFormVersions(selectedCode);
       setPublishedVersions(vs.filter((v) => v.status === 'published'));
       setDraft(saved);
-      history.reset([]);
+      const fields = fromSchema({
+        jsonSchema: saved.jsonSchema,
+        uiSchema: saved.uiSchema,
+        visibilityRules: saved.visibilityRules ?? {},
+      });
+      history.reset(fields);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed');
     } finally {
