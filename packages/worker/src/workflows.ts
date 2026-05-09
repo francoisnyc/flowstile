@@ -17,12 +17,19 @@ export interface LoanApprovalResult {
   notes: string | null;
   customerName: string;
   amount: number;
+  completedBy: string;
+  completedAt: string;
+}
+
+interface LoanDecision extends Record<string, unknown> {
+  DECISION: string;
+  NOTES: string;
 }
 
 export async function loanApprovalWorkflow(
   input: LoanApprovalInput,
 ): Promise<LoanApprovalResult> {
-  const result = await createTaskAndWait({
+  const result = await createTaskAndWait<LoanDecision>({
     taskDefinitionId: input.taskDefinitionId,
     processInstanceId: input.processInstanceId,
     priority: 'high',
@@ -36,9 +43,11 @@ export async function loanApprovalWorkflow(
   });
 
   return {
-    decision: result.data.DECISION as string,
-    notes: (result.data.NOTES as string) ?? null,
+    decision: result.data.DECISION,
+    notes: result.data.NOTES ?? null,
     customerName: input.customerName,
     amount: input.amount,
+    completedBy: result.completedBy.email,
+    completedAt: result.completedAt,
   };
 }
