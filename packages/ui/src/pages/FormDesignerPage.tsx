@@ -250,6 +250,7 @@ export default function FormDesignerPage() {
       const vs = await getFormVersions(selectedCode);
       setPublishedVersions(vs.filter((v) => v.status === 'published'));
       setDraft(saved);
+      await reloadForms();
       const fields = fromSchema({
         jsonSchema: saved.jsonSchema,
         uiSchema: saved.uiSchema,
