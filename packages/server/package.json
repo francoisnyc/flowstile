@@ -18,6 +18,8 @@
     "@fastify/jwt": "^10.0.0",
     "@fastify/rate-limit": "^10.3.0",
     "@temporalio/client": "^1.16.1",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
     "bcrypt": "^6.0.0",
     "dotenv": "^16.4.0",
     "fastify": "^5.2.0",
