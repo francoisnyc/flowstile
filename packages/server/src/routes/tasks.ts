@@ -268,18 +268,11 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
       });
       if (!task) return reply.code(404).send({ error: 'Task not found' });
 
-      try {
-        task.status = TaskStateMachine.transition(task.status, 'complete');
-      } catch (err) {
-        if (err instanceof InvalidTransitionError) {
-          return reply.code(409).send({ error: err.message });
-        }
-        throw err;
-      }
+      // Merge and validate submission data before mutating task state
+      const mergedSubmission = data
+        ? { ...task.submissionData, ...data }
+        : task.submissionData;
 
-      if (data) task.submissionData = { ...task.submissionData, ...data };
-
-      // Validate merged submissionData against the form's JSON Schema
       const form = await app.db.getRepository(FormDefinition).findOne({
         where: {
           code: task.taskDefinition.formDefinitionCode,
@@ -288,7 +281,7 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
       });
       if (form) {
         const validation = validateAgainstSchema(
-          task.submissionData,
+          mergedSubmission,
           form.jsonSchema as Record<string, unknown>,
         );
         if (!validation.valid) {
@@ -299,12 +292,22 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
         }
       }
 
+      try {
+        task.status = TaskStateMachine.transition(task.status, 'complete');
+      } catch (err) {
+        if (err instanceof InvalidTransitionError) {
+          return reply.code(409).send({ error: err.message });
+        }
+        throw err;
+      }
+
+      task.submissionData = mergedSubmission;
       task.completedAt = new Date();
       const savedTask = await repo().save(task);
 
       if (app.temporal && task.workflowId) {
         const user = request.currentUser!;
-        await deliverSignal({
+        const delivered = await deliverSignal({
           temporal: app.temporal,
           workflowId: task.workflowId,
           signalName: `flowstile:task:completed:${task.id}`,
@@ -320,6 +323,12 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
           },
           logger: request.log,
         });
+        if (!delivered) {
+          request.log.error(
+            { taskId: task.id, workflowId: task.workflowId },
+            'Completion signal was not delivered — workflow may be out of sync',
+          );
+        }
       }
 
       return serializeTask(savedTask);
@@ -352,13 +361,19 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
       await repo().save(task);
 
       if (app.temporal && task.workflowId) {
-        await deliverSignal({
+        const delivered = await deliverSignal({
           temporal: app.temporal,
           workflowId: task.workflowId,
           signalName: `flowstile:task:cancelled:${task.id}`,
           payload: undefined,
           logger: request.log,
         });
+        if (!delivered) {
+          request.log.error(
+            { taskId: task.id, workflowId: task.workflowId },
+            'Cancellation signal was not delivered — workflow may be out of sync',
+          );
+        }
       }
 
       return serializeTask(task);

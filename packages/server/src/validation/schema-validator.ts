@@ -1,18 +1,23 @@
 import Ajv from 'ajv';
 import addFormats from 'ajv-formats';
 
-const ajv = new Ajv({ allErrors: true, coerceTypes: false });
-addFormats(ajv);
-
 export interface ValidationResult {
   valid: boolean;
   errors?: Array<{ path: string; message: string }>;
+}
+
+function createAjv(): Ajv {
+  const ajv = new Ajv({ allErrors: true, coerceTypes: false });
+  addFormats(ajv);
+  return ajv;
 }
 
 export function validateAgainstSchema(
   data: Record<string, unknown>,
   jsonSchema: Record<string, unknown>,
 ): ValidationResult {
+  // Fresh instance per call to avoid cache pollution from dynamic schemas
+  const ajv = createAjv();
   const validate = ajv.compile(jsonSchema);
   const valid = validate(data);
   if (valid) return { valid: true };
