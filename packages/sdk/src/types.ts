@@ -40,11 +40,19 @@ export interface CreateTaskAndWaitInput {
   followUpDate?: string;
   inputData?: Record<string, unknown>;
   contextData?: Record<string, unknown>;
+  /** Timeout in milliseconds. If the task is not completed within this time,
+   *  a TaskTimeoutError is thrown and the task is cancelled (best-effort). */
+  timeoutMs?: number;
 }
 
-export interface TaskResult {
+export interface TaskResult<
+  TOutput extends Record<string, unknown> = Record<string, unknown>,
+> {
   taskId: string;
-  data: Record<string, unknown>;
+  data: TOutput;
+  completedBy: { id: string; email: string; displayName: string };
+  completedAt: string;
+  formVersion: number;
 }
 
 export interface FlowstileClientOptions {
@@ -55,9 +63,17 @@ export interface FlowstileClientOptions {
 // Signal payload sent by the server when a task is completed
 export interface TaskCompletedSignalPayload {
   data: Record<string, unknown>;
+  completedBy: { id: string; email: string; displayName: string };
+  completedAt: string; // ISO 8601
+  formVersion: number;
 }
 
 // Signal name convention: flowstile:task:completed:<taskId>
 export function taskCompletedSignalName(taskId: string): string {
   return `flowstile:task:completed:${taskId}`;
+}
+
+// Signal name convention: flowstile:task:cancelled:<taskId>
+export function taskCancelledSignalName(taskId: string): string {
+  return `flowstile:task:cancelled:${taskId}`;
 }

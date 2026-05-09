@@ -50,5 +50,11 @@ export async function createTaskAndWait(
 
   await condition(() => payload !== undefined);
 
-  return { taskId: task.id, data: payload!.data };
+  return {
+    taskId: task.id,
+    data: payload!.data,
+    completedBy: payload!.completedBy,
+    completedAt: payload!.completedAt,
+    formVersion: payload!.formVersion,
+  };
 }

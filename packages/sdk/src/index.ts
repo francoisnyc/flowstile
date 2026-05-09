@@ -9,5 +9,5 @@ export type {
   Priority,
   TaskStatus,
 } from './types.js';
-export { taskCompletedSignalName } from './types.js';
+export { taskCompletedSignalName, taskCancelledSignalName } from './types.js';
 export { TaskTimeoutError, TaskCancelledError, FlowstileApiError } from './errors.js';
