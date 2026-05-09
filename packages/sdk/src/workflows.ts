@@ -6,10 +6,18 @@ import {
   workflowInfo,
 } from '@temporalio/workflow';
 import type * as activities from './activities.js';
-import type { CreateTaskAndWaitInput, TaskResult, TaskCompletedSignalPayload } from './types.js';
-import { taskCompletedSignalName } from './types.js';
+import type {
+  CreateTaskAndWaitInput,
+  TaskResult,
+  TaskCompletedSignalPayload,
+} from './types.js';
+import { taskCompletedSignalName, taskCancelledSignalName } from './types.js';
+import { TaskTimeoutError, TaskCancelledError } from './errors.js';
 
-const { createFlowstileTask } = proxyActivities<typeof activities>({
+const {
+  createFlowstileTask,
+  cancelFlowstileTask,
+} = proxyActivities<typeof activities>({
   startToCloseTimeout: '10 minutes',
   retry: { maximumAttempts: 3 },
 });
@@ -23,16 +31,21 @@ const { createFlowstileTask } = proxyActivities<typeof activities>({
  *
  *   import { createTaskAndWait } from '@flowstile/sdk/workflows';
  *
- *   const result = await createTaskAndWait({
+ *   interface MyOutput { DECISION: 'approved' | 'rejected'; NOTES: string }
+ *   const result = await createTaskAndWait<MyOutput>({
  *     taskDefinitionId: 'my-task-def-uuid',
  *     inputData: { customerId },
  *     priority: 'high',
+ *     timeoutMs: 24 * 60 * 60 * 1000, // 24 hours
  *   });
- *   const decision = result.data.APPROVAL_DECISION;
+ *   // result.data.DECISION is typed
+ *   // result.completedBy.email, result.completedAt available
  */
-export async function createTaskAndWait(
+export async function createTaskAndWait<
+  TOutput extends Record<string, unknown> = Record<string, unknown>,
+>(
   input: CreateTaskAndWaitInput,
-): Promise<TaskResult> {
+): Promise<TaskResult<TOutput>> {
   const { workflowId } = workflowInfo();
 
   const task = await createFlowstileTask({
@@ -40,21 +53,47 @@ export async function createTaskAndWait(
     workflowId,
   });
 
-  const signalName = taskCompletedSignalName(task.id);
-  const completedSignal = defineSignal<[TaskCompletedSignalPayload]>(signalName);
+  const completedSignal = defineSignal<[TaskCompletedSignalPayload]>(
+    taskCompletedSignalName(task.id),
+  );
+  const cancelledSignal = defineSignal(
+    taskCancelledSignalName(task.id),
+  );
 
-  let payload: TaskCompletedSignalPayload | undefined;
+  let completionPayload: TaskCompletedSignalPayload | undefined;
+  let cancelled = false;
+
   setHandler(completedSignal, (p) => {
-    payload = p;
+    completionPayload = p;
+  });
+  setHandler(cancelledSignal, () => {
+    cancelled = true;
   });
 
-  await condition(() => payload !== undefined);
+  const resolved = await condition(
+    () => completionPayload !== undefined || cancelled,
+    input.timeoutMs,
+  );
+
+  if (!resolved) {
+    // Timed out — try to cancel the task so it doesn't sit in the inbox
+    try {
+      await cancelFlowstileTask(task.id);
+    } catch {
+      // Best effort — task may already be claimed/completed
+    }
+    throw new TaskTimeoutError(task.id, input.timeoutMs!);
+  }
+
+  if (cancelled) {
+    throw new TaskCancelledError(task.id);
+  }
 
   return {
     taskId: task.id,
-    data: payload!.data,
-    completedBy: payload!.completedBy,
-    completedAt: payload!.completedAt,
-    formVersion: payload!.formVersion,
+    data: completionPayload!.data as TOutput,
+    completedBy: completionPayload!.completedBy,
+    completedAt: completionPayload!.completedAt,
+    formVersion: completionPayload!.formVersion,
   };
 }
