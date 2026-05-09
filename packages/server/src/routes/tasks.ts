@@ -10,6 +10,7 @@ import { requirePermission } from '../plugins/auth.js';
 import { Permissions } from '../common/permissions.js';
 import { PaginationQuery, paginate } from '../common/pagination.js';
 import { validateAgainstSchema, validateInputData } from '../validation/schema-validator.js';
+import { deliverSignal } from '../signals/deliver-signal.js';
 
 function serializeTask(task: Task) {
   return {
@@ -302,15 +303,23 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
       const savedTask = await repo().save(task);
 
       if (app.temporal && task.workflowId) {
-        const payload = { data: task.submissionData };
-        const signalName = `flowstile:task:completed:${task.id}`;
-        try {
-          await app.temporal
-            .workflow.getHandle(task.workflowId)
-            .signal(signalName, payload);
-        } catch (err) {
-          app.log.warn({ err, taskId: task.id }, 'Failed to send Temporal signal for completed task');
-        }
+        const user = request.currentUser!;
+        await deliverSignal({
+          temporal: app.temporal,
+          workflowId: task.workflowId,
+          signalName: `flowstile:task:completed:${task.id}`,
+          payload: {
+            data: task.submissionData,
+            completedBy: {
+              id: user.id,
+              email: user.email,
+              displayName: user.displayName,
+            },
+            completedAt: savedTask.completedAt!.toISOString(),
+            formVersion: task.formDefinitionVersion,
+          },
+          logger: request.log,
+        });
       }
 
       return serializeTask(savedTask);
@@ -341,6 +350,17 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
       }
 
       await repo().save(task);
+
+      if (app.temporal && task.workflowId) {
+        await deliverSignal({
+          temporal: app.temporal,
+          workflowId: task.workflowId,
+          signalName: `flowstile:task:cancelled:${task.id}`,
+          payload: undefined,
+          logger: request.log,
+        });
+      }
+
       return serializeTask(task);
     },
   );
