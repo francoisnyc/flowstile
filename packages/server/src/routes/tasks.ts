@@ -9,6 +9,7 @@ import { filterFormSchemas, filterSubmissionData } from '../common/visibility.js
 import { requirePermission } from '../plugins/auth.js';
 import { Permissions } from '../common/permissions.js';
 import { PaginationQuery, paginate } from '../common/pagination.js';
+import { validateAgainstSchema, validateInputData } from '../validation/schema-validator.js';
 
 function serializeTask(task: Task) {
   return {
@@ -123,6 +124,17 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
       return reply.code(422).send({
         error: `No published form found for code '${td.formDefinitionCode}'`,
       });
+    }
+
+    // Validate inputData against the form's JSON Schema (lenient — no required enforcement)
+    if (inputData && Object.keys(inputData).length > 0) {
+      const validation = validateInputData(inputData, form.jsonSchema as Record<string, unknown>);
+      if (!validation.valid) {
+        return reply.code(422).send({
+          error: 'inputData validation failed',
+          details: validation.errors,
+        });
+      }
     }
 
     const task = await repo().save({
@@ -249,7 +261,10 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
       const { id } = request.params;
       const { data } = request.body;
 
-      const task = await repo().findOne({ where: { id } });
+      const task = await repo().findOne({
+        where: { id },
+        relations: ['taskDefinition'],
+      });
       if (!task) return reply.code(404).send({ error: 'Task not found' });
 
       try {
@@ -262,6 +277,27 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
       }
 
       if (data) task.submissionData = { ...task.submissionData, ...data };
+
+      // Validate merged submissionData against the form's JSON Schema
+      const form = await app.db.getRepository(FormDefinition).findOne({
+        where: {
+          code: task.taskDefinition.formDefinitionCode,
+          version: task.formDefinitionVersion,
+        },
+      });
+      if (form) {
+        const validation = validateAgainstSchema(
+          task.submissionData,
+          form.jsonSchema as Record<string, unknown>,
+        );
+        if (!validation.valid) {
+          return reply.code(422).send({
+            error: 'submissionData validation failed',
+            details: validation.errors,
+          });
+        }
+      }
+
       task.completedAt = new Date();
       const savedTask = await repo().save(task);
 
