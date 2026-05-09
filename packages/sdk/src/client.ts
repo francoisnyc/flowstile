@@ -1,3 +1,4 @@
+import { FlowstileApiError } from './errors.js';
 import type {
   FlowstileClientOptions,
   CreateTaskInput,
@@ -25,7 +26,7 @@ export class FlowstileClient {
 
     if (!response.ok) {
       const body = await response.text();
-      throw new Error(`Flowstile auth failed (${response.status}): ${body}`);
+      throw new FlowstileApiError(response.status, '/auth/login', body);
     }
 
     // Extract JWT from Set-Cookie header
@@ -55,7 +56,7 @@ export class FlowstileClient {
 
     if (!response.ok) {
       const body = await response.text();
-      throw new Error(`Flowstile API error ${response.status} on ${path}: ${body}`);
+      throw new FlowstileApiError(response.status, path, body);
     }
 
     return response.json() as Promise<T>;

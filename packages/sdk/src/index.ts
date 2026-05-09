@@ -10,3 +10,4 @@ export type {
   TaskStatus,
 } from './types.js';
 export { taskCompletedSignalName } from './types.js';
+export { TaskTimeoutError, TaskCancelledError, FlowstileApiError } from './errors.js';
