@@ -51,3 +51,5 @@ export async function loanApprovalWorkflow(
     completedAt: result.completedAt,
   };
 }
+
+export { orderFulfillmentWorkflow } from './order-fulfillment/workflow.js';
