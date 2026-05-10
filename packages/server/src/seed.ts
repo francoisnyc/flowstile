@@ -28,6 +28,9 @@ async function seed() {
   // Groups
   const loanOfficers = await db.getRepository(Group).save({ name: 'loan-officers' });
   const hrTeam = await db.getRepository(Group).save({ name: 'hr-team' });
+  const orderReviewers = await db.getRepository(Group).save({ name: 'order-reviewers' });
+  const warehouse = await db.getRepository(Group).save({ name: 'warehouse' });
+  const customerService = await db.getRepository(Group).save({ name: 'customer-service' });
 
   // Roles
   const adminRole = await db.getRepository(Role).save({
@@ -45,20 +48,27 @@ async function seed() {
     email: 'alice@example.com',
     displayName: 'Alice (Admin)',
     passwordHash: devHash,
-    groups: [loanOfficers],
+    groups: [loanOfficers, orderReviewers],
     roles: [adminRole, taskUserRole],
   });
   const bob = await db.getRepository(User).save({
     email: 'bob@example.com',
     displayName: 'Bob (Loan Officer)',
     passwordHash: devHash,
-    groups: [loanOfficers],
+    groups: [loanOfficers, warehouse],
     roles: [taskUserRole],
   });
   await db.getRepository(User).save({
     email: 'service@flowstile.local',
     displayName: 'Flowstile Service',
     passwordHash: devHash,
+    roles: [taskUserRole],
+  });
+  const carol = await db.getRepository(User).save({
+    email: 'carol@example.com',
+    displayName: 'Carol Davis',
+    passwordHash: devHash,
+    groups: [customerService],
     roles: [taskUserRole],
   });
 
@@ -88,6 +98,122 @@ async function seed() {
     status: FormDefinitionStatus.PUBLISHED,
   });
 
+  // Form: Order Approval
+  const orderApprovalForm = await db.getRepository(FormDefinition).save({
+    code: 'ORDER_APPROVAL',
+    version: 1,
+    jsonSchema: {
+      type: 'object',
+      properties: {
+        CUSTOMER_NAME: { type: 'string' },
+        ORDER_ID: { type: 'string' },
+        ORDER_ITEMS: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              quantity: { type: 'integer' },
+              price: { type: 'number' },
+            },
+          },
+        },
+        TOTAL: { type: 'number' },
+        DECISION: { type: 'string', enum: ['APPROVED', 'REJECTED'] },
+        REASON: { type: 'string' },
+      },
+      required: ['CUSTOMER_NAME', 'ORDER_ID', 'ORDER_ITEMS', 'TOTAL', 'DECISION'],
+    },
+    uiSchema: {
+      type: 'VerticalLayout',
+      elements: [
+        { type: 'Control', scope: '#/properties/ORDER_ID', options: { readonly: true } },
+        { type: 'Control', scope: '#/properties/CUSTOMER_NAME', options: { readonly: true } },
+        { type: 'Control', scope: '#/properties/ORDER_ITEMS', options: { readonly: true } },
+        { type: 'Control', scope: '#/properties/TOTAL', options: { readonly: true } },
+        { type: 'Control', scope: '#/properties/DECISION' },
+        { type: 'Control', scope: '#/properties/REASON', options: { multi: true } },
+      ],
+    },
+    status: FormDefinitionStatus.PUBLISHED,
+  });
+
+  // Form: Shipment Confirmation
+  const shipmentForm = await db.getRepository(FormDefinition).save({
+    code: 'SHIPMENT_CONFIRMATION',
+    version: 1,
+    jsonSchema: {
+      type: 'object',
+      properties: {
+        ORDER_ID: { type: 'string' },
+        CUSTOMER_NAME: { type: 'string' },
+        ORDER_ITEMS: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              quantity: { type: 'integer' },
+              price: { type: 'number' },
+            },
+          },
+        },
+        SHIPPING_ADDRESS: { type: 'string' },
+        TRANSACTION_ID: { type: 'string' },
+        DECISION: { type: 'string', enum: ['CONFIRMED', 'REJECTED'] },
+        REASON: { type: 'string' },
+        TRACKING_NUMBER: { type: 'string' },
+      },
+      required: ['ORDER_ID', 'ORDER_ITEMS', 'SHIPPING_ADDRESS', 'DECISION'],
+    },
+    uiSchema: {
+      type: 'VerticalLayout',
+      elements: [
+        { type: 'Control', scope: '#/properties/ORDER_ID', options: { readonly: true } },
+        { type: 'Control', scope: '#/properties/CUSTOMER_NAME', options: { readonly: true } },
+        { type: 'Control', scope: '#/properties/ORDER_ITEMS', options: { readonly: true } },
+        { type: 'Control', scope: '#/properties/SHIPPING_ADDRESS', options: { readonly: true } },
+        { type: 'Control', scope: '#/properties/TRANSACTION_ID', options: { readonly: true } },
+        { type: 'Control', scope: '#/properties/DECISION' },
+        { type: 'Control', scope: '#/properties/TRACKING_NUMBER' },
+        { type: 'Control', scope: '#/properties/REASON', options: { multi: true } },
+      ],
+    },
+    status: FormDefinitionStatus.PUBLISHED,
+  });
+
+  // Form: Order Exception
+  const exceptionForm = await db.getRepository(FormDefinition).save({
+    code: 'ORDER_EXCEPTION',
+    version: 1,
+    jsonSchema: {
+      type: 'object',
+      properties: {
+        ORDER_ID: { type: 'string' },
+        CUSTOMER_NAME: { type: 'string' },
+        CUSTOMER_EMAIL: { type: 'string' },
+        REASON: { type: 'string' },
+        REFUNDED: { type: 'boolean' },
+        RESOLUTION: { type: 'string', enum: ['CONTACTED', 'RESHIPPED', 'VOUCHER_ISSUED'] },
+        NOTES: { type: 'string' },
+      },
+      required: ['ORDER_ID', 'CUSTOMER_NAME', 'REASON', 'RESOLUTION'],
+    },
+    uiSchema: {
+      type: 'VerticalLayout',
+      elements: [
+        { type: 'Control', scope: '#/properties/ORDER_ID', options: { readonly: true } },
+        { type: 'Control', scope: '#/properties/CUSTOMER_NAME', options: { readonly: true } },
+        { type: 'Control', scope: '#/properties/CUSTOMER_EMAIL', options: { readonly: true } },
+        { type: 'Control', scope: '#/properties/REASON', options: { readonly: true } },
+        { type: 'Control', scope: '#/properties/REFUNDED', options: { readonly: true } },
+        { type: 'Control', scope: '#/properties/RESOLUTION' },
+        { type: 'Control', scope: '#/properties/NOTES', options: { multi: true } },
+      ],
+    },
+    status: FormDefinitionStatus.PUBLISHED,
+  });
+
   // Process: Loan Processing
   const loanProcess = await db.getRepository(ProcessDefinition).save({
     name: 'Loan Processing',
@@ -100,6 +226,38 @@ async function seed() {
     formDefinitionCode: loanForm.code,
     candidateGroups: ['loan-officers'],
     defaultPriority: Priority.HIGH,
+  });
+
+  // Process: Order Fulfillment
+  const orderProcess = await db.getRepository(ProcessDefinition).save({
+    name: 'Order Fulfillment',
+  });
+
+  // Task Definition: Approve Order
+  const approveOrder = await db.getRepository(TaskDefinition).save({
+    code: 'APPROVE_ORDER',
+    processDefinitionId: orderProcess.id,
+    formDefinitionCode: orderApprovalForm.code,
+    candidateGroups: ['order-reviewers'],
+    defaultPriority: Priority.HIGH,
+  });
+
+  // Task Definition: Confirm Shipment
+  const confirmShipment = await db.getRepository(TaskDefinition).save({
+    code: 'CONFIRM_SHIPMENT',
+    processDefinitionId: orderProcess.id,
+    formDefinitionCode: shipmentForm.code,
+    candidateGroups: ['warehouse'],
+    defaultPriority: Priority.NORMAL,
+  });
+
+  // Task Definition: Handle Exception
+  const handleException = await db.getRepository(TaskDefinition).save({
+    code: 'HANDLE_EXCEPTION',
+    processDefinitionId: orderProcess.id,
+    formDefinitionCode: exceptionForm.code,
+    candidateGroups: ['customer-service'],
+    defaultPriority: Priority.URGENT,
   });
 
   // Sample tasks
@@ -138,14 +296,63 @@ async function seed() {
     dueDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
   });
 
+  // Sample order tasks
+  await db.getRepository(Task).save({
+    taskDefinitionId: approveOrder.id,
+    formDefinitionVersion: orderApprovalForm.version,
+    workflowId: 'order-workflow-001',
+    processInstanceId: 'ORD-2024-1001',
+    status: TaskStatus.CREATED,
+    priority: Priority.HIGH,
+    inputData: {
+      ORDER_ITEMS: [
+        { name: 'Wireless Headphones', quantity: 1, price: 79.99 },
+        { name: 'USB-C Hub', quantity: 1, price: 45.00 },
+        { name: 'Phone Case', quantity: 1, price: 24.99 },
+      ],
+      TOTAL: 149.98,
+      CUSTOMER_EMAIL: 'mike.j@example.com',
+    },
+    contextData: {
+      ORDER_ID: 'ORD-2024-1001',
+      CUSTOMER_NAME: 'Mike Johnson',
+    },
+    submissionData: {},
+    dueDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
+  });
+
+  await db.getRepository(Task).save({
+    taskDefinitionId: confirmShipment.id,
+    formDefinitionVersion: shipmentForm.version,
+    workflowId: 'order-workflow-002',
+    processInstanceId: 'ORD-2024-1002',
+    status: TaskStatus.CLAIMED,
+    assigneeId: bob.id,
+    priority: Priority.NORMAL,
+    inputData: {
+      ORDER_ITEMS: [
+        { name: 'Laptop Stand', quantity: 1, price: 129.00 },
+        { name: 'Desk Lamp', quantity: 1, price: 59.99 },
+      ],
+      SHIPPING_ADDRESS: '456 Oak Avenue, Portland, OR 97201',
+    },
+    contextData: {
+      ORDER_ID: 'ORD-2024-1002',
+      CUSTOMER_NAME: 'Sarah Williams',
+      TRANSACTION_ID: 'TXN-abc123ef',
+    },
+    submissionData: {},
+    dueDate: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000),
+  });
+
   console.log('Seed complete:');
-  console.log('  2 groups: loan-officers, hr-team');
+  console.log('  5 groups: loan-officers, hr-team, order-reviewers, warehouse, customer-service');
   console.log('  2 roles: admin, task-user');
-  console.log('  3 users: alice (admin), bob (loan officer), service (worker)');
-  console.log('  1 form: LOAN_APPLICATION v1');
-  console.log('  1 process: Loan Processing');
-  console.log('  1 task definition: REVIEW_LOAN');
-  console.log('  2 tasks: one unassigned, one claimed by Bob');
+  console.log('  4 users: alice (admin), bob (loan officer + warehouse), carol (customer service), service (worker)');
+  console.log('  4 forms: LOAN_APPLICATION, ORDER_APPROVAL, SHIPMENT_CONFIRMATION, ORDER_EXCEPTION');
+  console.log('  2 processes: Loan Processing, Order Fulfillment');
+  console.log('  4 task definitions: REVIEW_LOAN, APPROVE_ORDER, CONFIRM_SHIPMENT, HANDLE_EXCEPTION');
+  console.log('  4 tasks: 2 loan tasks, 2 order tasks');
 
   await db.destroy();
 }
