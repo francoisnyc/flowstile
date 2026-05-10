@@ -6,3 +6,4 @@ export {
   getFlowstileTask,
   cancelFlowstileTask,
 } from '@flowstile/sdk/activities';
+export { processPayment, refundPayment, cancelShipment } from './order-fulfillment/activities.js';
