@@ -45,7 +45,7 @@ Order placed
   → Saga triggers:
       1. refundPayment() (automated, reverses payment)
       2. [customer-service] Handle Exception (human resolves with customer)
-  → Throw OrderRejectedError
+  → Return: { status: 'rejected', reason }
 ```
 
 ### Saga Implementation
@@ -70,19 +70,25 @@ try {
   compensations.push(() => cancelShipment(input.orderId));
   const shipment = await createTaskAndWait<ShipmentDecision>({ ... });
   if (shipment.data.DECISION === 'REJECTED') {
-    throw new OrderRejectedError(input.orderId, shipment.data.REASON);
+    // Run saga compensation, then return a completed result (not throw —
+    // business rejections are expected outcomes, not failures)
+    await CancellationScope.nonCancellable(async () => {
+      for (const compensate of compensations.reverse()) {
+        try { await compensate(); } catch (e) { log.warn('Compensation failed', { error: e }); }
+      }
+      // Route exception to customer service
+      await createTaskAndWait<ExceptionResolution>({ ... });
+    });
+    return { status: 'rejected', orderId: input.orderId, reason: shipment.data.REASON };
   }
 
   return { status: 'shipped', orderId: input.orderId, trackingNumber: shipment.data.TRACKING_NUMBER };
 } catch (err) {
+  // Unexpected errors (network failures, activity timeouts, workflow cancellation)
+  // still trigger compensation
   await CancellationScope.nonCancellable(async () => {
-    // Run compensations in reverse order
     for (const compensate of compensations.reverse()) {
       try { await compensate(); } catch (e) { log.warn('Compensation failed', { error: e }); }
-    }
-    // Route exception to customer service (only on warehouse rejection)
-    if (err instanceof OrderRejectedError) {
-      await createTaskAndWait<ExceptionResolution>({ ... });
     }
   });
   throw err;
@@ -91,6 +97,8 @@ try {
 
 Key points:
 - Compensation registered BEFORE each step (handles activity-completes-but-fails-to-return edge case)
+- Business rejections return a result (workflow status: Completed) — not throw (which would show as Failed in Temporal UI)
+- Unexpected errors still throw after compensation (workflow status: Failed — indicates a real problem)
 - Compensations run inside `CancellationScope.nonCancellable` (run even if workflow cancelled)
 - Compensation failures are logged but don't block other compensations
 - Handle Exception task fires inside nonCancellable so it always gets created
@@ -260,7 +268,7 @@ All activities use `proxyActivities` with `startToCloseTimeout: '1 minute'` and 
 ```
 packages/worker/src/
   order-fulfillment/
-    workflow.ts          — orderFulfillmentWorkflow, types, OrderRejectedError
+    workflow.ts          — orderFulfillmentWorkflow + types (OrderInput, OrderResult, etc.)
     activities.ts        — processPayment, refundPayment, cancelShipment
   start-order-workflow.ts — demo starter script
 ```
