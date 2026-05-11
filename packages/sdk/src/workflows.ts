@@ -70,19 +70,23 @@ export async function createTaskAndWait<
     cancelled = true;
   });
 
-  const resolved = await condition(
-    () => completionPayload !== undefined || cancelled,
-    input.timeoutMs,
-  );
+  if (input.timeoutMs !== undefined) {
+    const resolved = await condition(
+      () => completionPayload !== undefined || cancelled,
+      input.timeoutMs,
+    );
 
-  if (!resolved) {
-    // Timed out — try to cancel the task so it doesn't sit in the inbox
-    try {
-      await cancelFlowstileTask(task.id);
-    } catch {
-      // Best effort — task may already be claimed/completed
+    if (!resolved) {
+      // Timed out — try to cancel the task so it doesn't sit in the inbox
+      try {
+        await cancelFlowstileTask(task.id);
+      } catch {
+        // Best effort — task may already be claimed/completed
+      }
+      throw new TaskTimeoutError(task.id, input.timeoutMs);
     }
-    throw new TaskTimeoutError(task.id, input.timeoutMs!);
+  } else {
+    await condition(() => completionPayload !== undefined || cancelled);
   }
 
   if (cancelled) {

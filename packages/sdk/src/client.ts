@@ -41,18 +41,29 @@ export class FlowstileClient {
   private async request<T>(path: string, init?: RequestInit): Promise<T> {
     await this.ensureAuth();
 
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      ...init?.headers as Record<string, string>,
-    };
-    if (this.jwt) {
-      headers['Authorization'] = `Bearer ${this.jwt}`;
-    }
+    const doRequest = async () => {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...init?.headers as Record<string, string>,
+      };
+      if (this.jwt) {
+        headers['Authorization'] = `Bearer ${this.jwt}`;
+      }
 
-    const response = await fetch(`${this.baseUrl}${path}`, {
-      ...init,
-      headers,
-    });
+      return fetch(`${this.baseUrl}${path}`, {
+        ...init,
+        headers,
+      });
+    };
+
+    let response = await doRequest();
+
+    // Retry once on 401 — token may have expired or been invalidated
+    if (response.status === 401 && this.auth) {
+      this.jwt = null;
+      await this.ensureAuth();
+      response = await doRequest();
+    }
 
     if (!response.ok) {
       const body = await response.text();
