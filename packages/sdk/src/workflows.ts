@@ -4,6 +4,8 @@ import {
   setHandler,
   condition,
   workflowInfo,
+  CancellationScope,
+  isCancellation,
 } from '@temporalio/workflow';
 import type * as activities from './activities.js';
 import type {
@@ -70,23 +72,34 @@ export async function createTaskAndWait<
     cancelled = true;
   });
 
-  if (input.timeoutMs !== undefined) {
-    const resolved = await condition(
+  let resolved: boolean;
+  try {
+    resolved = await condition(
       () => completionPayload !== undefined || cancelled,
       input.timeoutMs,
     );
-
-    if (!resolved) {
-      // Timed out — try to cancel the task so it doesn't sit in the inbox
-      try {
-        await cancelFlowstileTask(task.id);
-      } catch {
-        // Best effort — task may already be claimed/completed
-      }
-      throw new TaskTimeoutError(task.id, input.timeoutMs);
+  } catch (err) {
+    if (isCancellation(err)) {
+      // Workflow itself was cancelled — clean up the task so it doesn't rot in the inbox
+      await CancellationScope.nonCancellable(async () => {
+        try {
+          await cancelFlowstileTask(task.id);
+        } catch {
+          // Best effort — task may already be completed
+        }
+      });
     }
-  } else {
-    await condition(() => completionPayload !== undefined || cancelled);
+    throw err;
+  }
+
+  if (!resolved) {
+    // Timed out — try to cancel the task so it doesn't sit in the inbox
+    try {
+      await cancelFlowstileTask(task.id);
+    } catch {
+      // Best effort — task may already be claimed/completed
+    }
+    throw new TaskTimeoutError(task.id, input.timeoutMs!);
   }
 
   if (cancelled) {

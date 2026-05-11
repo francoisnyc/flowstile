@@ -1,4 +1,5 @@
 import type { FastifyBaseLogger } from 'fastify';
+import { WorkflowNotFoundError } from '@temporalio/client';
 
 interface DeliverSignalOptions {
   temporal: {
@@ -30,7 +31,7 @@ export async function deliverSignal(
       return true;
     } catch (err) {
       // Don't retry if the workflow no longer exists
-      if (err instanceof Error && err.name === 'WorkflowNotFoundError') {
+      if (err instanceof WorkflowNotFoundError) {
         logger.warn(
           { signalName, workflowId },
           'Target workflow not found — may have already completed or been terminated',

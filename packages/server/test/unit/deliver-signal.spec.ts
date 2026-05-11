@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { WorkflowNotFoundError } from '@temporalio/client';
 import { deliverSignal } from '../../src/signals/deliver-signal.js';
 
 function createMockTemporal(signalFn: () => Promise<void>) {
@@ -88,13 +89,7 @@ describe('deliverSignal', () => {
   });
 
   it('does not retry WorkflowNotFoundError', async () => {
-    class WorkflowNotFoundError extends Error {
-      constructor() {
-        super('workflow not found');
-        this.name = 'WorkflowNotFoundError';
-      }
-    }
-    const signalFn = vi.fn().mockRejectedValue(new WorkflowNotFoundError());
+    const signalFn = vi.fn().mockRejectedValue(new WorkflowNotFoundError('workflow not found', 'wf-1', undefined));
     const logger = createMockLogger();
 
     const result = await deliverSignal({
