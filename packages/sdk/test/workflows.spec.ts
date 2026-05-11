@@ -7,6 +7,7 @@ const {
   mockDefineSignal,
   mockSetHandler,
   mockWorkflowInfo,
+  mockIsCancellation,
 } = vi.hoisted(() => ({
   mockCreateFlowstileTask: vi.fn(),
   mockCancelFlowstileTask: vi.fn(),
@@ -14,6 +15,7 @@ const {
   mockDefineSignal: vi.fn(),
   mockSetHandler: vi.fn(),
   mockWorkflowInfo: vi.fn(),
+  mockIsCancellation: vi.fn(),
 }));
 
 vi.mock('@temporalio/workflow', () => ({
@@ -25,6 +27,10 @@ vi.mock('@temporalio/workflow', () => ({
   setHandler: (...args: unknown[]) => mockSetHandler(...args),
   condition: (...args: unknown[]) => mockCondition(...args),
   workflowInfo: () => mockWorkflowInfo(),
+  isCancellation: (...args: unknown[]) => mockIsCancellation(...args),
+  CancellationScope: {
+    nonCancellable: (fn: () => Promise<void>) => fn(),
+  },
 }));
 
 import { createTaskAndWait } from '../src/workflows.js';
@@ -51,7 +57,7 @@ describe('createTaskAndWait', () => {
         ([signal]) => signal.name === 'flowstile:task:completed:task-123',
       );
       if (completedHandler) completedHandler[1](payload);
-      return Promise.resolve();
+      return Promise.resolve(true);
     });
 
     const result = await createTaskAndWait({
@@ -73,8 +79,8 @@ describe('createTaskAndWait', () => {
       workflowId: 'test-wf-1',
     });
 
-    // condition called without timeout argument (single arg)
-    expect(mockCondition).toHaveBeenCalledWith(expect.any(Function));
+    // condition called with undefined timeout (no timeoutMs provided)
+    expect(mockCondition).toHaveBeenCalledWith(expect.any(Function), undefined);
   });
 
   it('returns task result on successful completion (with timeout, before expiry)', async () => {
@@ -128,7 +134,7 @@ describe('createTaskAndWait', () => {
         ([signal]) => signal.name === 'flowstile:task:cancelled:task-123',
       );
       if (cancelHandler) cancelHandler[1]();
-      return Promise.resolve();
+      return Promise.resolve(true);
     });
 
     await expect(
@@ -163,7 +169,7 @@ describe('createTaskAndWait', () => {
           formVersion: 1,
         });
       }
-      return Promise.resolve();
+      return Promise.resolve(true);
     });
 
     await createTaskAndWait({ taskDefinitionId: 'td-1' });
@@ -171,5 +177,46 @@ describe('createTaskAndWait', () => {
     expect(mockDefineSignal).toHaveBeenCalledWith('flowstile:task:completed:task-123');
     expect(mockDefineSignal).toHaveBeenCalledWith('flowstile:task:cancelled:task-123');
     expect(mockSetHandler).toHaveBeenCalledTimes(2);
+  });
+
+  describe('workflow cancellation', () => {
+    it('cancels the Flowstile task when workflow is cancelled', async () => {
+      const cancellationError = new Error('Workflow cancelled');
+      mockCondition.mockRejectedValue(cancellationError);
+      mockIsCancellation.mockReturnValue(true);
+      mockCancelFlowstileTask.mockResolvedValue({ id: 'task-123', status: 'cancelled' });
+
+      await expect(
+        createTaskAndWait({ taskDefinitionId: 'td-1' }),
+      ).rejects.toThrow(cancellationError);
+
+      expect(mockIsCancellation).toHaveBeenCalledWith(cancellationError);
+      expect(mockCancelFlowstileTask).toHaveBeenCalledWith('task-123');
+    });
+
+    it('still throws if task cancel fails during workflow cancellation', async () => {
+      const cancellationError = new Error('Workflow cancelled');
+      mockCondition.mockRejectedValue(cancellationError);
+      mockIsCancellation.mockReturnValue(true);
+      mockCancelFlowstileTask.mockRejectedValue(new Error('already completed'));
+
+      await expect(
+        createTaskAndWait({ taskDefinitionId: 'td-1' }),
+      ).rejects.toThrow(cancellationError);
+
+      expect(mockCancelFlowstileTask).toHaveBeenCalledWith('task-123');
+    });
+
+    it('re-throws non-cancellation errors without cancelling task', async () => {
+      const unexpectedError = new Error('Something unexpected');
+      mockCondition.mockRejectedValue(unexpectedError);
+      mockIsCancellation.mockReturnValue(false);
+
+      await expect(
+        createTaskAndWait({ taskDefinitionId: 'td-1' }),
+      ).rejects.toThrow(unexpectedError);
+
+      expect(mockCancelFlowstileTask).not.toHaveBeenCalled();
+    });
   });
 });
