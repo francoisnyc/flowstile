@@ -2,46 +2,110 @@
 
 Open-source human-task inbox and form designer for [Temporal.io](https://temporal.io) workflows. Create forms, assign tasks to humans, and wire the results back into durable workflows via signals.
 
-**Status:** Foundation (in development)
+## What It Does
 
-## Quick Start
+Flowstile gives Temporal applications a durable way to pause for human input. A workflow calls `createTaskAndWait`, a task appears in an inbox, a person completes a form, and the workflow resumes with typed data.
 
-```bash
-# Prerequisites: Docker, Node.js 22+, corepack
-corepack enable
-git clone <repo-url> && cd flowstile
-cp .env.example .env
-pnpm install
-docker compose up -d postgres
-pnpm dev
+```ts
+import { createTaskAndWait } from '@flowstile/sdk/workflows';
+
+const result = await createTaskAndWait<{ DECISION: 'approved' | 'rejected' }>({
+  taskDefinitionId: approveOrderTaskDefId,
+  priority: 'high',
+  inputData: { ORDER_ITEMS: items, TOTAL: total },
+  contextData: { ORDER_ID: orderId, CUSTOMER_NAME: name },
+});
+
+if (result.data.DECISION === 'approved') {
+  // continue workflow...
+}
 ```
 
-Server starts at http://localhost:3000. Health check: `GET /health`.
+## Features
+
+- **Task inbox** — claim, complete, and manage human work
+- **Form designer** — JSON Schema + JSON Forms with visual editing
+- **SDK** — `createTaskAndWait` with typed generics, timeout, and cancellation
+- **Signal-based integration** — completion data delivered back to Temporal as signals
+- **Saga support** — compensation patterns with human exception handling
+- **Role-based visibility** — server-side field filtering based on user roles/groups
+- **Task state machine** — explicit lifecycle (created, claimed, completed, cancelled)
 
 ## Project Structure
 
 ```
 packages/
-  server/   — Fastify REST API + TypeORM (PostgreSQL)
-  worker/   — Temporal worker (placeholder)
-  sdk/      — @flowstile/sdk npm package (placeholder)
-  ui/       — React frontend (placeholder)
+  server/   Fastify REST API, TypeORM (PostgreSQL), auth, task lifecycle
+  worker/   Temporal worker with workflow definitions and activities
+  sdk/      @flowstile/sdk — client, workflow helpers, typed errors
+  ui/       React inbox and form designer (Vite + Tailwind)
+e2e/        Playwright end-to-end tests
+docs/       Developer documentation
 ```
+
+## Prerequisites
+
+- Node.js 22+
+- Docker (for PostgreSQL and Temporal)
+- corepack (`corepack enable`)
+
+## Quick Start
+
+```bash
+corepack enable
+git clone https://github.com/francoisnyc/flowstile.git && cd flowstile
+cp .env.example .env
+pnpm install
+docker compose up -d
+```
+
+Wait for services to be healthy, then seed and start:
+
+```bash
+pnpm build
+pnpm --filter @flowstile/server db:seed
+pnpm dev
+```
+
+- UI: http://localhost:5173
+- Server API: http://localhost:3000
+- Health check: `GET /health`
+
+Login with seeded users: `alice@example.com`, `bob@example.com`, or `carol@example.com` (password: `password`).
+
+## Running the Order Fulfillment Demo
+
+The included demo showcases a multi-step order workflow with human approvals, automated payment, warehouse confirmation, and saga compensation.
+
+```bash
+# Start the worker (in a separate terminal)
+pnpm --filter @flowstile/worker dev
+
+# Start a workflow instance
+pnpm --filter @flowstile/worker tsx src/start-order-workflow.ts
+```
+
+Then follow the on-screen instructions to approve/reject orders through the inbox as different users.
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
-| `pnpm dev` | Start server with hot reload |
-| `pnpm test` | Run unit tests (no DB needed) |
-| `pnpm --filter @flowstile/server test:integration` | Run integration tests (requires Docker PostgreSQL) |
+| `pnpm dev` | Start all packages in dev mode |
+| `pnpm build` | Build all packages |
+| `pnpm test` | Run all unit tests |
+| `pnpm --filter @flowstile/server test:integration` | Integration tests (requires Docker) |
 | `pnpm --filter @flowstile/server db:seed` | Seed sample data |
-| `docker compose up -d` | Start PostgreSQL + Temporal Server |
+| `pnpm --filter @flowstile/worker dev` | Start Temporal worker |
+| `docker compose up -d` | Start PostgreSQL + Temporal |
 | `docker compose down` | Stop all services |
 
-## Architecture
+## Documentation
 
-See [Design Spec](docs/superpowers/specs/2026-04-23-flowstile-design.md).
+- [Developer Guide](docs/developer-guide.md) — architecture, concepts, and integration
+- [Design Decisions](docs/design-decisions.md) — why the task model works the way it does
+- [Runtime Contract](docs/runtime-contract.md) — payload model, lifecycle, and access rules
+- [UI Direction](docs/ui-direction.md) — frontend stack and interaction principles
 
 ## License
 
