@@ -268,7 +268,17 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
       });
       if (!task) return reply.code(404).send({ error: 'Task not found' });
 
-      // Merge and validate submission data before mutating task state
+      // Check state machine first — no point validating data for a non-completable task
+      try {
+        task.status = TaskStateMachine.transition(task.status, 'complete');
+      } catch (err) {
+        if (err instanceof InvalidTransitionError) {
+          return reply.code(409).send({ error: err.message });
+        }
+        throw err;
+      }
+
+      // Merge and validate submission data
       const mergedSubmission = data
         ? { ...task.submissionData, ...data }
         : task.submissionData;
@@ -290,15 +300,6 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
             details: validation.errors,
           });
         }
-      }
-
-      try {
-        task.status = TaskStateMachine.transition(task.status, 'complete');
-      } catch (err) {
-        if (err instanceof InvalidTransitionError) {
-          return reply.code(409).send({ error: err.message });
-        }
-        throw err;
       }
 
       task.submissionData = mergedSubmission;
