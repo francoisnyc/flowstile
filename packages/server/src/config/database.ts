@@ -16,7 +16,7 @@ export const dataSourceOptions: DataSourceOptions = {
   password: process.env.DATABASE_PASSWORD ?? 'flowstile',
   entities: [User, Group, Role, FormDefinition, ProcessDefinition, TaskDefinition, Task],
   migrations: [],
-  synchronize: process.env.NODE_ENV === 'development',
+  synchronize: process.env.NODE_ENV !== 'production',
   logging: process.env.NODE_ENV !== 'production',
 };
 
