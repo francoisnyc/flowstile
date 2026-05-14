@@ -48,6 +48,14 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Check OpenAPI spec is up to date
+        run: |
+          pnpm --filter @flowstile/server openapi:generate
+          git diff --exit-code docs/openapi.yaml || {
+            echo "::error::OpenAPI spec is out of date. Run 'pnpm --filter @flowstile/server openapi:generate' and commit the result."
+            exit 1
+          }
+
       - name: Unit tests
         run: pnpm test
 
