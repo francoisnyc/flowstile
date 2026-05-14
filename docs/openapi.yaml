@@ -1,0 +1,1344 @@
+openapi: 3.1.0
+info:
+  title: Flowstile API
+  version: 0.1.0
+  description: |
+    Human-task inbox and form layer for Temporal.io workflows.
+
+    Authentication uses JWT tokens delivered as HttpOnly cookies (`flowstile_token`)
+    or as Bearer tokens in the Authorization header.
+  license:
+    name: Apache-2.0
+
+servers:
+  - url: http://localhost:3000
+    description: Local development
+
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: flowstile_token
+    bearerAuth:
+      type: http
+      scheme: bearer
+
+  schemas:
+    # ── Enums ──────────────────────────────────────────────────────────────
+    TaskStatus:
+      type: string
+      enum: [created, claimed, completed, cancelled]
+
+    Priority:
+      type: string
+      enum: [low, normal, high, urgent]
+
+    FormDefinitionStatus:
+      type: string
+      enum: [draft, published]
+
+    ProcessDefinitionStatus:
+      type: string
+      enum: [active, inactive]
+
+    UserStatus:
+      type: string
+      enum: [active, inactive]
+
+    # ── Shared ─────────────────────────────────────────────────────────────
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+        details:
+          type: array
+          items: {}
+
+    PaginationParams:
+      type: object
+      properties:
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 200
+          default: 50
+        offset:
+          type: integer
+          minimum: 0
+          default: 0
+
+    # ── Auth ───────────────────────────────────────────────────────────────
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 1
+
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+        displayName:
+          type: string
+        status:
+          $ref: '#/components/schemas/UserStatus'
+        roles:
+          type: array
+          items:
+            $ref: '#/components/schemas/Role'
+        groups:
+          type: array
+          items:
+            $ref: '#/components/schemas/GroupSummary'
+
+    # ── Users ──────────────────────────────────────────────────────────────
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+        displayName:
+          type: string
+        status:
+          $ref: '#/components/schemas/UserStatus'
+        groups:
+          type: array
+          items:
+            $ref: '#/components/schemas/GroupSummary'
+        roles:
+          type: array
+          items:
+            $ref: '#/components/schemas/Role'
+        createdAt:
+          type: string
+          format: date-time
+
+    CreateUserRequest:
+      type: object
+      required: [email, displayName, password]
+      properties:
+        email:
+          type: string
+          format: email
+        displayName:
+          type: string
+          minLength: 1
+        password:
+          type: string
+          minLength: 8
+        groupIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        roleIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+
+    UpdateUserRequest:
+      type: object
+      properties:
+        displayName:
+          type: string
+          minLength: 1
+        status:
+          $ref: '#/components/schemas/UserStatus'
+        groupIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        roleIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+
+    # ── Roles ──────────────────────────────────────────────────────────────
+    Role:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        permissions:
+          type: array
+          items:
+            type: string
+
+    # ── Groups ─────────────────────────────────────────────────────────────
+    GroupSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+
+    Group:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        members:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+              email:
+                type: string
+              displayName:
+                type: string
+
+    CreateGroupRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        memberIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+
+    UpdateGroupRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+        memberIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+
+    # ── Forms ──────────────────────────────────────────────────────────────
+    FormDefinition:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        version:
+          type: integer
+        jsonSchema:
+          type: object
+        uiSchema:
+          type: object
+        visibilityRules:
+          type: object
+        formMessages:
+          type: object
+        status:
+          $ref: '#/components/schemas/FormDefinitionStatus'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    FormSummary:
+      type: object
+      properties:
+        code:
+          type: string
+        latestPublishedVersion:
+          type: integer
+          nullable: true
+        hasDraft:
+          type: boolean
+        latestPublished:
+          $ref: '#/components/schemas/FormDefinition'
+
+    CreateFormRequest:
+      type: object
+      required: [code, jsonSchema]
+      properties:
+        code:
+          type: string
+          minLength: 1
+        jsonSchema:
+          type: object
+        uiSchema:
+          type: object
+        visibilityRules:
+          type: object
+        formMessages:
+          type: object
+
+    UpdateDraftRequest:
+      type: object
+      properties:
+        jsonSchema:
+          type: object
+        uiSchema:
+          type: object
+        visibilityRules:
+          type: object
+        formMessages:
+          type: object
+
+    # ── Processes ──────────────────────────────────────────────────────────
+    ProcessDefinition:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        version:
+          type: integer
+        status:
+          $ref: '#/components/schemas/ProcessDefinitionStatus'
+        taskDefinitions:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaskDefinition'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateProcessRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        status:
+          $ref: '#/components/schemas/ProcessDefinitionStatus'
+
+    UpdateProcessRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+        status:
+          $ref: '#/components/schemas/ProcessDefinitionStatus'
+
+    # ── Task Definitions ───────────────────────────────────────────────────
+    TaskDefinition:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        processDefinitionId:
+          type: string
+          format: uuid
+        formDefinitionCode:
+          type: string
+        candidateGroups:
+          type: array
+          items:
+            type: string
+        candidateUsers:
+          type: array
+          items:
+            type: string
+        defaultPriority:
+          $ref: '#/components/schemas/Priority'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateTaskDefinitionRequest:
+      type: object
+      required: [code, formDefinitionCode]
+      properties:
+        code:
+          type: string
+          minLength: 1
+        formDefinitionCode:
+          type: string
+          minLength: 1
+        candidateGroups:
+          type: array
+          items:
+            type: string
+          default: []
+        candidateUsers:
+          type: array
+          items:
+            type: string
+          default: []
+        defaultPriority:
+          $ref: '#/components/schemas/Priority'
+
+    UpdateTaskDefinitionRequest:
+      type: object
+      properties:
+        formDefinitionCode:
+          type: string
+          minLength: 1
+        candidateGroups:
+          type: array
+          items:
+            type: string
+        candidateUsers:
+          type: array
+          items:
+            type: string
+        defaultPriority:
+          $ref: '#/components/schemas/Priority'
+
+    # ── Tasks ──────────────────────────────────────────────────────────────
+    Task:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        formDefinitionVersion:
+          type: integer
+        workflowId:
+          type: string
+        processInstanceId:
+          type: string
+          nullable: true
+        status:
+          $ref: '#/components/schemas/TaskStatus'
+        priority:
+          $ref: '#/components/schemas/Priority'
+        dueDate:
+          type: string
+          format: date-time
+          nullable: true
+        followUpDate:
+          type: string
+          format: date-time
+          nullable: true
+        inputData:
+          type: object
+        contextData:
+          type: object
+        submissionData:
+          type: object
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+        assigneeId:
+          type: string
+          format: uuid
+          nullable: true
+        assignee:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: string
+              format: uuid
+            email:
+              type: string
+            displayName:
+              type: string
+        taskDefinition:
+          $ref: '#/components/schemas/TaskDefinition'
+
+    TaskDetail:
+      description: Task with resolved form schema (visibility-filtered for the requesting user)
+      allOf:
+        - $ref: '#/components/schemas/Task'
+        - type: object
+          properties:
+            form:
+              type: object
+              properties:
+                code:
+                  type: string
+                version:
+                  type: integer
+                jsonSchema:
+                  type: object
+                uiSchema:
+                  type: object
+                formMessages:
+                  type: object
+
+    CreateTaskRequest:
+      type: object
+      required: [taskDefinitionId, workflowId]
+      properties:
+        taskDefinitionId:
+          type: string
+          format: uuid
+        workflowId:
+          type: string
+          minLength: 1
+        processInstanceId:
+          type: string
+          minLength: 1
+        priority:
+          $ref: '#/components/schemas/Priority'
+        dueDate:
+          type: string
+          format: date-time
+        followUpDate:
+          type: string
+          format: date-time
+        inputData:
+          type: object
+        contextData:
+          type: object
+        submissionData:
+          type: object
+
+    CompleteTaskRequest:
+      type: object
+      properties:
+        data:
+          type: object
+
+    # ── Signal Payload (Temporal) ──────────────────────────────────────────
+    TaskCompletedSignalPayload:
+      description: Sent as a Temporal signal to the workflow on task completion
+      type: object
+      properties:
+        data:
+          type: object
+        completedBy:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            email:
+              type: string
+            displayName:
+              type: string
+        completedAt:
+          type: string
+          format: date-time
+        formVersion:
+          type: integer
+
+security:
+  - cookieAuth: []
+  - bearerAuth: []
+
+paths:
+  # ── Health ─────────────────────────────────────────────────────────────
+  /health:
+    get:
+      summary: Health check
+      security: []
+      tags: [Health]
+      responses:
+        '200':
+          description: Server status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [ok, error]
+                  database:
+                    type: string
+                    enum: [connected, disconnected]
+
+  # ── Auth ───────────────────────────────────────────────────────────────
+  /auth/login:
+    post:
+      summary: Login with email and password
+      security: []
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful (sets flowstile_token cookie)
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+                example: flowstile_token=eyJ...; Path=/; HttpOnly; SameSite=Lax
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '401':
+          description: Invalid credentials or inactive user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/logout:
+    post:
+      summary: Logout (clears cookie)
+      tags: [Auth]
+      responses:
+        '204':
+          description: Logged out
+        '401':
+          description: Not authenticated
+
+  /auth/me:
+    get:
+      summary: Get current user profile
+      tags: [Auth]
+      responses:
+        '200':
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '401':
+          description: Not authenticated
+
+  # ── Users ──────────────────────────────────────────────────────────────
+  /users:
+    get:
+      summary: List users
+      tags: [Users]
+      description: Requires `users:manage` permission.
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        '200':
+          description: Paginated user list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/User'
+                  total: { type: integer }
+                  limit: { type: integer }
+                  offset: { type: integer }
+    post:
+      summary: Create user
+      tags: [Users]
+      description: Requires `users:manage` permission.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+      responses:
+        '201':
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+
+  /users/{id}:
+    patch:
+      summary: Update user
+      tags: [Users]
+      description: Requires `users:manage` permission.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+      responses:
+        '200':
+          description: User updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '404':
+          description: User not found
+
+  # ── Roles ──────────────────────────────────────────────────────────────
+  /roles:
+    get:
+      summary: List all roles (not paginated)
+      tags: [Users]
+      description: Requires `users:manage` permission.
+      responses:
+        '200':
+          description: All roles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Role'
+
+  # ── Groups ─────────────────────────────────────────────────────────────
+  /groups:
+    get:
+      summary: List groups
+      tags: [Groups]
+      description: Requires `users:manage` permission.
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        '200':
+          description: Paginated group list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Group'
+                  total: { type: integer }
+                  limit: { type: integer }
+                  offset: { type: integer }
+    post:
+      summary: Create group
+      tags: [Groups]
+      description: Requires `users:manage` permission.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateGroupRequest'
+      responses:
+        '201':
+          description: Group created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Group'
+
+  /groups/{id}:
+    patch:
+      summary: Update group
+      tags: [Groups]
+      description: Requires `users:manage` permission.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateGroupRequest'
+      responses:
+        '200':
+          description: Group updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Group'
+        '404':
+          description: Group not found
+
+  # ── Forms ──────────────────────────────────────────────────────────────
+  /forms:
+    get:
+      summary: List forms (grouped by code)
+      tags: [Forms]
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        '200':
+          description: Paginated form summary list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/FormSummary'
+                  total: { type: integer }
+                  limit: { type: integer }
+                  offset: { type: integer }
+    post:
+      summary: Create form (draft v1)
+      tags: [Forms]
+      description: Requires `forms:write` permission. Creates version 1 in draft status.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateFormRequest'
+      responses:
+        '201':
+          description: Form created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FormDefinition'
+        '409':
+          description: Form code already exists
+
+  /forms/{code}:
+    get:
+      summary: Get latest published form by code
+      tags: [Forms]
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Latest published form
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FormDefinition'
+        '404':
+          description: No published version found
+
+  /forms/{code}/versions:
+    get:
+      summary: List all versions of a form
+      tags: [Forms]
+      description: Requires `forms:write` permission.
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: All versions (ascending)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FormDefinition'
+        '404':
+          description: Form code not found
+
+  /forms/{code}/draft:
+    put:
+      summary: Create or update draft
+      tags: [Forms]
+      description: |
+        Requires `forms:write` permission.
+        Returns 200 if updating existing draft, 201 if creating a new draft.
+        New drafts inherit unspecified fields from the latest published version.
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateDraftRequest'
+      responses:
+        '200':
+          description: Draft updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FormDefinition'
+        '201':
+          description: New draft created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FormDefinition'
+        '404':
+          description: Form code not found
+
+  /forms/{code}/publish:
+    post:
+      summary: Publish draft
+      tags: [Forms]
+      description: Requires `forms:write` permission. Promotes the current draft to published.
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '201':
+          description: Form published
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FormDefinition'
+        '404':
+          description: No draft found
+
+  # ── Processes ──────────────────────────────────────────────────────────
+  /processes:
+    get:
+      summary: List processes
+      tags: [Processes]
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        '200':
+          description: Paginated process list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ProcessDefinition'
+                  total: { type: integer }
+                  limit: { type: integer }
+                  offset: { type: integer }
+    post:
+      summary: Create process
+      tags: [Processes]
+      description: Requires `processes:write` permission.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProcessRequest'
+      responses:
+        '201':
+          description: Process created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessDefinition'
+
+  /processes/{id}:
+    get:
+      summary: Get process with task definitions
+      tags: [Processes]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Process with task definitions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessDefinition'
+        '404':
+          description: Process not found
+    patch:
+      summary: Update process
+      tags: [Processes]
+      description: Requires `processes:write` permission.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProcessRequest'
+      responses:
+        '200':
+          description: Process updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessDefinition'
+        '404':
+          description: Process not found
+
+  /processes/{id}/tasks:
+    get:
+      summary: List task definitions for a process
+      tags: [Processes]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        '200':
+          description: Paginated task definition list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TaskDefinition'
+                  total: { type: integer }
+                  limit: { type: integer }
+                  offset: { type: integer }
+        '404':
+          description: Process not found
+    post:
+      summary: Create task definition
+      tags: [Processes]
+      description: Requires `processes:write` permission.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTaskDefinitionRequest'
+      responses:
+        '201':
+          description: Task definition created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskDefinition'
+        '404':
+          description: Process not found
+
+  # ── Task Definitions ───────────────────────────────────────────────────
+  /task-definitions/{id}:
+    patch:
+      summary: Update task definition
+      tags: [Processes]
+      description: Requires `processes:write` permission.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTaskDefinitionRequest'
+      responses:
+        '200':
+          description: Task definition updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskDefinition'
+        '404':
+          description: Task definition not found
+
+  # ── Tasks ──────────────────────────────────────────────────────────────
+  /tasks:
+    get:
+      summary: List tasks
+      tags: [Tasks]
+      description: Requires `tasks:read` permission.
+      parameters:
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/TaskStatus'
+        - name: assigneeId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: group
+          in: query
+          description: Filter by candidate group name
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        '200':
+          description: Paginated task list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Task'
+                  total: { type: integer }
+                  limit: { type: integer }
+                  offset: { type: integer }
+    post:
+      summary: Create task
+      tags: [Tasks]
+      description: |
+        Requires `tasks:write` permission.
+        Resolves the task definition, locks to the latest published form version,
+        and validates inputData against the form schema.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTaskRequest'
+      responses:
+        '201':
+          description: Task created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '404':
+          description: Task definition not found
+        '422':
+          description: No published form or inputData validation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /tasks/{id}:
+    get:
+      summary: Get task with form (visibility-filtered)
+      tags: [Tasks]
+      description: |
+        Requires `tasks:read` permission.
+        Returns the task with its locked form schema filtered by the
+        requesting user's roles and groups. submissionData fields are
+        also filtered by visibility rules.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Task with filtered form
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskDetail'
+        '404':
+          description: Task not found
+
+  /tasks/{id}/claim:
+    post:
+      summary: Claim task
+      tags: [Tasks]
+      description: |
+        Requires `tasks:write` permission.
+        Transitions created → claimed. Sets assignee to the current user.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Task claimed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '404':
+          description: Task not found
+        '409':
+          description: Invalid state transition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /tasks/{id}/unclaim:
+    post:
+      summary: Unclaim task
+      tags: [Tasks]
+      description: |
+        Requires `tasks:write` permission.
+        Transitions claimed → created. Clears assignee.
+        Unclaiming another user's task requires `tasks:manage`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Task unclaimed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '403':
+          description: Not the assignee and missing tasks:manage
+        '404':
+          description: Task not found
+        '409':
+          description: Invalid state transition
+
+  /tasks/{id}/complete:
+    post:
+      summary: Complete task
+      tags: [Tasks]
+      description: |
+        Requires `tasks:write` permission.
+        Transitions claimed → completed. Merges submitted data onto
+        existing submissionData and validates against the locked form schema.
+
+        On success, fires a Temporal signal `flowstile:task:completed:{taskId}`
+        to the associated workflow (fire-and-forget — delivery failure does not
+        affect the HTTP response).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompleteTaskRequest'
+      responses:
+        '200':
+          description: Task completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '404':
+          description: Task not found
+        '409':
+          description: Invalid state transition (e.g. task not claimed)
+        '422':
+          description: Submission data validation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /tasks/{id}/cancel:
+    post:
+      summary: Cancel task
+      tags: [Tasks]
+      description: |
+        Requires `tasks:write` permission.
+        Transitions created → cancelled or claimed → cancelled.
+        Cancelling another user's claimed task requires `tasks:manage`.
+
+        On success, fires a Temporal signal `flowstile:task:cancelled:{taskId}`
+        to the associated workflow (fire-and-forget).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Task cancelled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '403':
+          description: Not the assignee and missing tasks:manage
+        '404':
+          description: Task not found
+        '409':
+          description: Invalid state transition
+
+tags:
+  - name: Health
+  - name: Auth
+  - name: Users
+  - name: Groups
+  - name: Forms
+  - name: Processes
+  - name: Tasks
