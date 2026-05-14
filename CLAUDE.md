@@ -76,6 +76,7 @@ pnpm dev                    # starts server + ui + worker
 ```
 
 - Server: http://localhost:3000
+- API docs: http://localhost:3000/docs (Swagger UI, auto-generated from route schemas)
 - UI: http://localhost:5173
 - Seeded users: alice/bob/carol@example.com (password: `password`)
 
@@ -93,7 +94,7 @@ npx playwright test                                 # e2e (requires running stac
 - `docs/design-decisions.md` — why the task data model is split
 - `docs/runtime-contract.md` — detailed payload, lifecycle, and access rules
 - `docs/ui-direction.md` — frontend stack and visual principles
-- `docs/openapi.yaml` — complete API specification
+- `docs/openapi.yaml` — auto-generated OpenAPI 3.1 spec (regenerate with `pnpm --filter @flowstile/server openapi:generate`)
 
 ## For Rewriting in Another Stack
 
