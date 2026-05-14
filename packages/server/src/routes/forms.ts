@@ -29,7 +29,7 @@ export const formRoutes: FastifyPluginAsyncZod = async (app) => {
   const write = { preHandler: [requirePermission(Permissions.FORMS_WRITE)] };
   const repo = () => app.db.getRepository(FormDefinition);
 
-  app.get('/forms', { ...read, schema: { querystring: PaginationQuery } }, async (request) => {
+  app.get('/forms', { ...read, schema: { querystring: PaginationQuery, tags: ['Forms'] } }, async (request) => {
     const { limit, offset } = request.query;
     const all = await repo().find({ order: { code: 'ASC', version: 'ASC' } });
 
@@ -57,7 +57,7 @@ export const formRoutes: FastifyPluginAsyncZod = async (app) => {
     return paginate(grouped.slice(offset, offset + limit), grouped.length, limit, offset);
   });
 
-  app.post('/forms', { ...write, schema: { body: CreateFormBody } }, async (request, reply) => {
+  app.post('/forms', { ...write, schema: { body: CreateFormBody, tags: ['Forms'] } }, async (request, reply) => {
     const { code, jsonSchema, uiSchema, visibilityRules, formMessages } = request.body;
 
     const existing = await repo().findOne({ where: { code } });
@@ -78,7 +78,7 @@ export const formRoutes: FastifyPluginAsyncZod = async (app) => {
 
   app.get(
     '/forms/:code',
-    { ...read, schema: { params: CodeParam } },
+    { ...read, schema: { params: CodeParam, tags: ['Forms'] } },
     async (request, reply) => {
       const { code } = request.params;
 
@@ -94,7 +94,7 @@ export const formRoutes: FastifyPluginAsyncZod = async (app) => {
 
   app.get(
     '/forms/:code/versions',
-    { ...write, schema: { params: CodeParam } },
+    { ...write, schema: { params: CodeParam, tags: ['Forms'] } },
     async (request, reply) => {
       const { code } = request.params;
 
@@ -110,7 +110,7 @@ export const formRoutes: FastifyPluginAsyncZod = async (app) => {
 
   app.put(
     '/forms/:code/draft',
-    { ...write, schema: { params: CodeParam, body: DraftFormBody } },
+    { ...write, schema: { params: CodeParam, body: DraftFormBody, tags: ['Forms'] } },
     async (request, reply) => {
       const { code } = request.params;
       const { jsonSchema, uiSchema, visibilityRules, formMessages } = request.body;
@@ -151,7 +151,7 @@ export const formRoutes: FastifyPluginAsyncZod = async (app) => {
 
   app.post(
     '/forms/:code/publish',
-    { ...write, schema: { params: CodeParam } },
+    { ...write, schema: { params: CodeParam, tags: ['Forms'] } },
     async (request, reply) => {
       const { code } = request.params;
 

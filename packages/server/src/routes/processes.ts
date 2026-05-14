@@ -40,7 +40,7 @@ export const processRoutes: FastifyPluginAsyncZod = async (app) => {
   const pdRepo = () => app.db.getRepository(ProcessDefinition);
   const tdRepo = () => app.db.getRepository(TaskDefinition);
 
-  app.get('/processes', { ...read, schema: { querystring: PaginationQuery } }, async (request) => {
+  app.get('/processes', { ...read, schema: { querystring: PaginationQuery, tags: ['Processes'] } }, async (request) => {
     const { limit, offset } = request.query;
     const [items, total] = await pdRepo().findAndCount({
       order: { createdAt: 'ASC' },
@@ -52,7 +52,7 @@ export const processRoutes: FastifyPluginAsyncZod = async (app) => {
 
   app.post(
     '/processes',
-    { ...write, schema: { body: CreateProcessBody } },
+    { ...write, schema: { body: CreateProcessBody, tags: ['Processes'] } },
     async (request, reply) => {
       const { name, status } = request.body;
       const pd = await pdRepo().save({ name, status: status ?? ProcessDefinitionStatus.ACTIVE });
@@ -62,7 +62,7 @@ export const processRoutes: FastifyPluginAsyncZod = async (app) => {
 
   app.get(
     '/processes/:id',
-    { ...read, schema: { params: UuidParam } },
+    { ...read, schema: { params: UuidParam, tags: ['Processes'] } },
     async (request, reply) => {
       const { id } = request.params;
       const pd = await pdRepo().findOne({
@@ -76,7 +76,7 @@ export const processRoutes: FastifyPluginAsyncZod = async (app) => {
 
   app.patch(
     '/processes/:id',
-    { ...write, schema: { params: UuidParam, body: PatchProcessBody } },
+    { ...write, schema: { params: UuidParam, body: PatchProcessBody, tags: ['Processes'] } },
     async (request, reply) => {
       const { id } = request.params;
       const { name, status } = request.body;
@@ -93,7 +93,7 @@ export const processRoutes: FastifyPluginAsyncZod = async (app) => {
 
   app.get(
     '/processes/:id/tasks',
-    { ...read, schema: { params: UuidParam, querystring: PaginationQuery } },
+    { ...read, schema: { params: UuidParam, querystring: PaginationQuery, tags: ['Processes'] } },
     async (request, reply) => {
       const { id } = request.params;
       const { limit, offset } = request.query;
@@ -113,7 +113,7 @@ export const processRoutes: FastifyPluginAsyncZod = async (app) => {
 
   app.post(
     '/processes/:id/tasks',
-    { ...write, schema: { params: UuidParam, body: CreateTaskDefBody } },
+    { ...write, schema: { params: UuidParam, body: CreateTaskDefBody, tags: ['Processes'] } },
     async (request, reply) => {
       const { id } = request.params;
       const { code, formDefinitionCode, candidateGroups, candidateUsers, defaultPriority } =
@@ -137,7 +137,7 @@ export const processRoutes: FastifyPluginAsyncZod = async (app) => {
 
   app.patch(
     '/task-definitions/:id',
-    { ...write, schema: { params: UuidParam, body: PatchTaskDefBody } },
+    { ...write, schema: { params: UuidParam, body: PatchTaskDefBody, tags: ['Processes'] } },
     async (request, reply) => {
       const { id } = request.params;
       const { formDefinitionCode, candidateGroups, candidateUsers, defaultPriority } =

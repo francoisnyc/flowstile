@@ -25,7 +25,7 @@ export const authRoutes: FastifyPluginAsyncZod = async (app) => {
   app.post(
     '/auth/login',
     {
-      schema: { body: LoginBody },
+      schema: { body: LoginBody, tags: ['Auth'] },
       config: {
         rateLimit: {
           max: process.env.NODE_ENV === 'production' ? 5 : 1000,
@@ -61,12 +61,12 @@ export const authRoutes: FastifyPluginAsyncZod = async (app) => {
     },
   );
 
-  app.post('/auth/logout', { preHandler: [requireAuth] }, async (_, reply) => {
+  app.post('/auth/logout', { preHandler: [requireAuth], schema: { tags: ['Auth'] } }, async (_, reply) => {
     reply.clearCookie('flowstile_token', { path: '/' });
     return reply.code(204).send();
   });
 
-  app.get('/auth/me', { preHandler: [requireAuth] }, async (request) => {
+  app.get('/auth/me', { preHandler: [requireAuth], schema: { tags: ['Auth'] } }, async (request) => {
     return serializeUser(request.currentUser!);
   });
 };

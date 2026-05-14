@@ -42,7 +42,7 @@ const PatchUserBody = z.object({
 export const userRoutes: FastifyPluginAsyncZod = async (app) => {
   const pre = { preHandler: [requirePermission(Permissions.USERS_MANAGE)] };
 
-  app.get('/users', { ...pre, schema: { querystring: PaginationQuery } }, async (request) => {
+  app.get('/users', { ...pre, schema: { querystring: PaginationQuery, tags: ['Users'] } }, async (request) => {
     const { limit, offset } = request.query;
     const [users, total] = await app.db.getRepository(User).findAndCount({
       relations: ['groups', 'roles'],
@@ -53,7 +53,7 @@ export const userRoutes: FastifyPluginAsyncZod = async (app) => {
     return paginate(users.map(serialize), total, limit, offset);
   });
 
-  app.post('/users', { ...pre, schema: { body: CreateUserBody } }, async (request, reply) => {
+  app.post('/users', { ...pre, schema: { body: CreateUserBody, tags: ['Users'] } }, async (request, reply) => {
     const { email, displayName, password, groupIds, roleIds } = request.body;
 
     const passwordHash = await bcrypt.hash(password, 10);
@@ -78,7 +78,7 @@ export const userRoutes: FastifyPluginAsyncZod = async (app) => {
 
   app.patch(
     '/users/:id',
-    { ...pre, schema: { params: UuidParam, body: PatchUserBody } },
+    { ...pre, schema: { params: UuidParam, body: PatchUserBody, tags: ['Users'] } },
     async (request, reply) => {
       const { id } = request.params;
       const { displayName, status, groupIds, roleIds } = request.body;
@@ -105,7 +105,7 @@ export const userRoutes: FastifyPluginAsyncZod = async (app) => {
     },
   );
 
-  app.get('/roles', pre, async () => {
+  app.get('/roles', { ...pre, schema: { tags: ['Users'] } }, async () => {
     return app.db.getRepository(Role).find({
       order: { name: 'ASC' },
       select: ['id', 'name', 'permissions'],

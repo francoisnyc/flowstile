@@ -77,7 +77,7 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
   const userHasPermission = (user: { roles: { permissions: string[] }[] }, perm: string) =>
     user.roles.some((r) => r.permissions.includes(perm));
 
-  app.get('/tasks', { ...read, schema: { querystring: TasksQuery } }, async (request) => {
+  app.get('/tasks', { ...read, schema: { querystring: TasksQuery, tags: ['Tasks'] } }, async (request) => {
     const { status, assigneeId, group, limit, offset } = request.query;
 
     const qb = repo()
@@ -99,7 +99,7 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
     return paginate(items.map(serializeTask), total, limit, offset);
   });
 
-  app.post('/tasks', { ...write, schema: { body: CreateTaskBody } }, async (request, reply) => {
+  app.post('/tasks', { ...write, schema: { body: CreateTaskBody, tags: ['Tasks'] } }, async (request, reply) => {
     const {
       taskDefinitionId,
       workflowId,
@@ -157,7 +157,7 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
 
   app.get(
     '/tasks/:id',
-    { ...read, schema: { params: UuidParam } },
+    { ...read, schema: { params: UuidParam, tags: ['Tasks'] } },
     async (request, reply) => {
       const { id } = request.params;
       const user = request.currentUser!;
@@ -203,7 +203,7 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
 
   app.post(
     '/tasks/:id/claim',
-    { ...write, schema: { params: UuidParam } },
+    { ...write, schema: { params: UuidParam, tags: ['Tasks'] } },
     async (request, reply) => {
       const { id } = request.params;
       const user = request.currentUser!;
@@ -228,7 +228,7 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
 
   app.post(
     '/tasks/:id/unclaim',
-    { ...write, schema: { params: UuidParam } },
+    { ...write, schema: { params: UuidParam, tags: ['Tasks'] } },
     async (request, reply) => {
       const { id } = request.params;
       const user = request.currentUser!;
@@ -257,7 +257,7 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
 
   app.post(
     '/tasks/:id/complete',
-    { ...write, schema: { params: UuidParam, body: CompleteTaskBody } },
+    { ...write, schema: { params: UuidParam, body: CompleteTaskBody, tags: ['Tasks'] } },
     async (request, reply) => {
       const { id } = request.params;
       const { data } = request.body;
@@ -338,7 +338,7 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
 
   app.post(
     '/tasks/:id/cancel',
-    { ...write, schema: { params: UuidParam } },
+    { ...write, schema: { params: UuidParam, tags: ['Tasks'] } },
     async (request, reply) => {
       const { id } = request.params;
       const user = request.currentUser!;

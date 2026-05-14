@@ -30,7 +30,7 @@ const PatchGroupBody = z.object({
 export const groupRoutes: FastifyPluginAsyncZod = async (app) => {
   const pre = { preHandler: [requirePermission(Permissions.USERS_MANAGE)] };
 
-  app.get('/groups', { ...pre, schema: { querystring: PaginationQuery } }, async (request) => {
+  app.get('/groups', { ...pre, schema: { querystring: PaginationQuery, tags: ['Groups'] } }, async (request) => {
     const { limit, offset } = request.query;
     const [groups, total] = await app.db.getRepository(Group).findAndCount({
       relations: ['members'],
@@ -40,7 +40,7 @@ export const groupRoutes: FastifyPluginAsyncZod = async (app) => {
     return paginate(groups.map(serialize), total, limit, offset);
   });
 
-  app.post('/groups', { ...pre, schema: { body: CreateGroupBody } }, async (request, reply) => {
+  app.post('/groups', { ...pre, schema: { body: CreateGroupBody, tags: ['Groups'] } }, async (request, reply) => {
     const { name, memberIds } = request.body;
 
     const members = memberIds?.length
@@ -53,7 +53,7 @@ export const groupRoutes: FastifyPluginAsyncZod = async (app) => {
 
   app.patch(
     '/groups/:id',
-    { ...pre, schema: { params: UuidParam, body: PatchGroupBody } },
+    { ...pre, schema: { params: UuidParam, body: PatchGroupBody, tags: ['Groups'] } },
     async (request, reply) => {
       const { id } = request.params;
       const { name, memberIds } = request.body;
