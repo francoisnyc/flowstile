@@ -4,6 +4,7 @@ import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import corsPlugin from './plugins/cors.js';
+import csrfPlugin from './plugins/csrf.js';
 import typeormPlugin from './plugins/typeorm.js';
 import authPlugin from './plugins/auth.js';
 import temporalPlugin from './plugins/temporal.js';
@@ -69,6 +70,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(rateLimit, { global: false });
   await app.register(typeormPlugin);
   await app.register(authPlugin);
+  await app.register(csrfPlugin);
   await app.register(temporalPlugin);
 
   await app.register(healthRoutes);
