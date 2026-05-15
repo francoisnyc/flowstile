@@ -3,6 +3,7 @@ import rateLimit from '@fastify/rate-limit';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
+import corsPlugin from './plugins/cors.js';
 import typeormPlugin from './plugins/typeorm.js';
 import authPlugin from './plugins/auth.js';
 import temporalPlugin from './plugins/temporal.js';
@@ -64,6 +65,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     routePrefix: '/docs',
   });
 
+  await app.register(corsPlugin);
   await app.register(rateLimit, { global: false });
   await app.register(typeormPlugin);
   await app.register(authPlugin);
