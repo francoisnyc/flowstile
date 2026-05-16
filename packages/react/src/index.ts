@@ -9,3 +9,5 @@ export type {
 } from './types.js';
 
 export { useFlowstileTask } from './useFlowstileTask.js';
+export { FlowstileForm } from './FlowstileForm.js';
+export type { FlowstileFormProps } from './FlowstileForm.js';
