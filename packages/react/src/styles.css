@@ -1,0 +1,81 @@
+/* @flowstile/react default styles */
+
+.flowstile-task {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #1a1a1a;
+}
+
+.flowstile-task--loading,
+.flowstile-task--error {
+  padding: 24px;
+  text-align: center;
+  color: #6b7280;
+}
+
+.flowstile-task--error {
+  color: #dc2626;
+}
+
+.flowstile-form {
+  padding: 16px 0;
+}
+
+.flowstile-form-errors {
+  margin-top: 12px;
+  padding: 12px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  color: #dc2626;
+  font-size: 13px;
+}
+
+.flowstile-form-error {
+  margin-bottom: 4px;
+}
+
+.flowstile-form-error:last-child {
+  margin-bottom: 0;
+}
+
+.flowstile-task-actions {
+  display: flex;
+  gap: 8px;
+  padding: 16px 0;
+  justify-content: flex-end;
+}
+
+.flowstile-btn {
+  padding: 8px 16px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #fff;
+  color: #374151;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.flowstile-btn:hover:not(:disabled) {
+  background: #f9fafb;
+  border-color: #9ca3af;
+}
+
+.flowstile-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.flowstile-btn--submit {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+
+.flowstile-btn--submit:hover:not(:disabled) {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+}
