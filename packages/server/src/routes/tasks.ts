@@ -191,6 +191,8 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
       const hasManage = userHasPermission(user, Permissions.TASKS_MANAGE);
       const isAssignee = task.assigneeId === user.id;
 
+      // TODO: canClaim should also check candidateGroups/candidateUsers membership.
+      // Currently the claim endpoint itself doesn't enforce this either — system-wide gap.
       const actions = {
         canClaim: hasWrite && TaskStateMachine.canTransition(task.status, 'claim'),
         canUnclaim: TaskStateMachine.canTransition(task.status, 'unclaim') && (isAssignee || hasManage),

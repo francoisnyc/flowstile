@@ -59,7 +59,7 @@ export default fp(async (app: FastifyInstance) => {
     // Build allowlist: CORS_ORIGINS + server's own origin
     const serverOrigin = (() => {
       const host = request.headers.host ?? 'localhost';
-      const proto = request.headers['x-forwarded-proto'] ?? 'http';
+      const proto = ((request.headers['x-forwarded-proto'] as string) ?? 'http').split(',')[0].trim();
       return `${proto}://${host}`;
     })();
 
