@@ -234,6 +234,84 @@ describe('Task routes', () => {
     });
   });
 
+  describe('GET /tasks/:id — actions', () => {
+    type Actions = {
+      canClaim: boolean;
+      canUnclaim: boolean;
+      canComplete: boolean;
+      canCancel: boolean;
+    };
+
+    it('unassigned created task: canClaim true, canUnclaim false, canComplete false, canCancel true', async () => {
+      const id = await createTask();
+      const res = await authed(app, cookie, { method: 'GET', url: `/tasks/${id}` });
+      expect(res.statusCode).toBe(200);
+      const { actions } = res.json<{ actions: Actions }>();
+      expect(actions.canClaim).toBe(true);
+      expect(actions.canUnclaim).toBe(false);
+      expect(actions.canComplete).toBe(false);
+      expect(actions.canCancel).toBe(true);
+    });
+
+    it('claimed task viewed by assignee: canClaim false, canUnclaim true, canComplete true, canCancel true', async () => {
+      const id = await createTask();
+      await authed(app, cookie, { method: 'POST', url: `/tasks/${id}/claim` });
+      const res = await authed(app, cookie, { method: 'GET', url: `/tasks/${id}` });
+      expect(res.statusCode).toBe(200);
+      const { actions } = res.json<{ actions: Actions }>();
+      expect(actions.canClaim).toBe(false);
+      expect(actions.canUnclaim).toBe(true);
+      expect(actions.canComplete).toBe(true);
+      expect(actions.canCancel).toBe(true);
+    });
+
+    it('completed task: all actions false', async () => {
+      const id = await createTask();
+      await authed(app, cookie, { method: 'POST', url: `/tasks/${id}/claim` });
+      await authed(app, cookie, {
+        method: 'POST',
+        url: `/tasks/${id}/complete`,
+        payload: { data: { DECISION: 'APPROVED' } },
+      });
+      const res = await authed(app, cookie, { method: 'GET', url: `/tasks/${id}` });
+      expect(res.statusCode).toBe(200);
+      const { actions } = res.json<{ actions: Actions }>();
+      expect(actions.canClaim).toBe(false);
+      expect(actions.canUnclaim).toBe(false);
+      expect(actions.canComplete).toBe(false);
+      expect(actions.canCancel).toBe(false);
+    });
+
+    it('claimed task viewed by non-assignee without tasks:manage: canUnclaim false, canComplete false', async () => {
+      // Create a second user (write perms) and claim the task as them
+      const claimUser = await createTestUser(app, { permissions: ['tasks:read', 'tasks:write'] });
+      const claimCookie = await loginAs(app, claimUser.email);
+
+      const id = await createTask();
+      // claim as claimUser
+      await authed(app, claimCookie, { method: 'POST', url: `/tasks/${id}/claim` });
+
+      // view as the main user (not the assignee, no tasks:manage)
+      const res = await authed(app, cookie, { method: 'GET', url: `/tasks/${id}` });
+      expect(res.statusCode).toBe(200);
+      const { actions } = res.json<{ actions: Actions }>();
+      expect(actions.canUnclaim).toBe(false);
+      expect(actions.canComplete).toBe(false);
+    });
+
+    it('user without tasks:write: canClaim false, canCancel false', async () => {
+      const readUser = await createTestUser(app, { permissions: ['tasks:read'] });
+      const readCookie = await loginAs(app, readUser.email);
+
+      const id = await createTask();
+      const res = await authed(app, readCookie, { method: 'GET', url: `/tasks/${id}` });
+      expect(res.statusCode).toBe(200);
+      const { actions } = res.json<{ actions: Actions }>();
+      expect(actions.canClaim).toBe(false);
+      expect(actions.canCancel).toBe(false);
+    });
+  });
+
   describe('GET /tasks', () => {
     it('filters by status', async () => {
       const id = await createTask();

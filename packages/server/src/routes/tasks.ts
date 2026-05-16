@@ -187,6 +187,17 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
         userGroupNames,
       );
 
+      const hasWrite = userHasPermission(user, Permissions.TASKS_WRITE);
+      const hasManage = userHasPermission(user, Permissions.TASKS_MANAGE);
+      const isAssignee = task.assigneeId === user.id;
+
+      const actions = {
+        canClaim: hasWrite && TaskStateMachine.canTransition(task.status, 'claim'),
+        canUnclaim: TaskStateMachine.canTransition(task.status, 'unclaim') && (isAssignee || hasManage),
+        canComplete: hasWrite && TaskStateMachine.canTransition(task.status, 'complete') && isAssignee,
+        canCancel: hasWrite && TaskStateMachine.canTransition(task.status, 'cancel') && (task.status === 'created' || isAssignee || hasManage),
+      };
+
       return {
         ...serializeTask(task),
         form: {
@@ -197,6 +208,7 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
           formMessages: form.formMessages,
         },
         submissionData: filteredData,
+        actions,
       };
     },
   );
