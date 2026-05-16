@@ -1,0 +1,37 @@
+{
+  "name": "@flowstile/react",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./styles.css": "./src/styles.css"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0 <20",
+    "@jsonforms/core": "^3.4.0",
+    "@jsonforms/react": "^3.4.0",
+    "@jsonforms/vanilla-renderers": "^3.4.0"
+  },
+  "devDependencies": {
+    "@jsonforms/core": "^3.4.0",
+    "@jsonforms/react": "^3.4.0",
+    "@jsonforms/vanilla-renderers": "^3.4.0",
+    "@testing-library/react": "^16.0.0",
+    "@types/react": "^18.0.0",
+    "jsdom": "^26.0.0",
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0",
+    "typescript": "^5.8.0",
+    "vitest": "^3.0.0"
+  }
+}
