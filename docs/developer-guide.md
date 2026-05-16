@@ -294,6 +294,184 @@ You should be able to tell, without much effort, which concerns belong to Tempor
 
 The system should also behave predictably under change. Form versions should not surprise in-flight work. Reassignment should preserve useful progress. Visibility rules should be enforced in a way that does not depend on the browser being honest. When something goes wrong, the failure should be understandable from the task model itself rather than from undocumented behavior between services.
 
+## Embeddable React SDK
+
+The `@flowstile/react` package lets internal teams embed Flowstile task forms into their own React apps with minimal integration effort.
+
+### Quickstart
+
+```tsx
+import { FlowstileTask } from '@flowstile/react';
+import '@flowstile/react/styles.css';
+
+function WarehouseDashboard({ taskId }: { taskId: string }) {
+  return (
+    <FlowstileTask
+      taskId={taskId}
+      onComplete={(data) => console.log('Task completed:', data)}
+      onError={(err) => console.error('Error:', err.message)}
+      onClaim={() => console.log('Task claimed')}
+    />
+  );
+}
+```
+
+This renders the task form with Claim/Submit buttons based on the current user's permissions and the task's state.
+
+### Hook + Renderer (Custom UX)
+
+For full control over layout and behavior, use the hook and renderer separately:
+
+```tsx
+import { useFlowstileTask, FlowstileForm } from '@flowstile/react';
+import '@flowstile/react/styles.css';
+
+function CustomTaskView({ taskId }: { taskId: string }) {
+  const { task, form, data, status, error, validationErrors, isMutating, claim, complete } =
+    useFlowstileTask(taskId);
+
+  if (status === 'loading') return <Spinner />;
+  if (status === 'error') return <ErrorBanner error={error!} />;
+
+  const [formData, setFormData] = useState(data);
+
+  return (
+    <div>
+      <h2>Task: {task!.id}</h2>
+      <FlowstileForm
+        schema={form!.jsonSchema}
+        uiSchema={form!.uiSchema}
+        data={formData}
+        onChange={setFormData}
+        readOnly={!task!.actions.canComplete}
+        validationErrors={validationErrors ?? undefined}
+      />
+      {task!.actions.canClaim && (
+        <button onClick={claim} disabled={isMutating}>Claim</button>
+      )}
+      {task!.actions.canComplete && (
+        <button onClick={() => complete(formData)} disabled={isMutating}>Submit</button>
+      )}
+    </div>
+  );
+}
+```
+
+### Authentication
+
+By default, the SDK sends credentials (cookies) with all requests. This works for same-origin or same-site deployments where the Flowstile server sets the `flowstile_token` HttpOnly cookie.
+
+For cross-origin deployments or service-to-service scenarios, use Bearer tokens:
+
+```tsx
+// Static token (short-lived)
+<FlowstileTask taskId="..." token="eyJhbG..." />
+
+// Dynamic token getter (preferred — supports refresh)
+<FlowstileTask taskId="..." getToken={async () => {
+  const res = await fetch('/api/flowstile-token');
+  return (await res.json()).token;
+}} />
+```
+
+Token security guidance:
+
+- Tokens should be short-lived (minutes, not days) and scoped to minimum required permissions
+- Never store tokens in localStorage or sessionStorage (XSS exposure)
+- `getToken` is preferred over `token` because it supports transparent refresh without re-rendering
+- The SDK only attaches tokens to Flowstile API requests under the configured `baseUrl`
+- `baseUrl` must come from trusted application configuration, never from user-controlled input
+
+### CORS Setup
+
+For cross-origin embedding (e.g. `warehouse.company.com` embedding tasks from `api.company.com`), configure the server's `CORS_ORIGINS` environment variable:
+
+```
+CORS_ORIGINS=https://warehouse.company.com,https://dashboard.company.com
+```
+
+When set, only the listed origins are allowed. Credentials (cookies) are included for listed origins. When unset, the server operates in same-origin mode only.
+
+Mutating requests (POST, PUT, PATCH, DELETE) using cookie auth are additionally validated against the Origin header for CSRF protection. Requests from unlisted origins receive 403. Requests with valid Bearer tokens bypass this check.
+
+### Server-Provided Actions
+
+The `GET /tasks/:id` response includes a server-computed `actions` object:
+
+```typescript
+task.actions: {
+  canClaim: boolean;
+  canUnclaim: boolean;
+  canComplete: boolean;
+  canCancel: boolean;
+}
+```
+
+These are computed from task status, user assignment, permissions, and group membership. Clients must render buttons based on these flags — never by comparing `task.assignee` to a local user identity. This ensures consistent authorization regardless of how the client resolves user identity.
+
+### Submission Integrity
+
+The server enforces a writable-field boundary at completion time:
+
+- Fields marked `readOnly` in visibility rules cannot be overwritten by clients
+- Submitted keys outside the writable set are silently stripped before merge
+- Previously stored data in read-only fields is preserved
+- After stripping, the merged data is validated against the full form JSON Schema
+
+The SDK renders fields as read-only in the form as a UX hint, but the server-side stripping is the actual authorization boundary.
+
+### Validation Errors
+
+When the server returns 422 on completion, the SDK parses the `details` array into `validationErrors` keyed by JSON Pointer paths (RFC 6901):
+
+```typescript
+// validationErrors shape:
+{
+  '/customerName': ['is required'],
+  '/address/street': ['must be a string'],
+  '/items/0/quantity': ['must be >= 1'],
+}
+```
+
+These paths match AJV's `instancePath` format. Pass `validationErrors` to `<FlowstileForm>` to display them inline.
+
+### API Reference
+
+```typescript
+// Hook
+import { useFlowstileTask } from '@flowstile/react';
+const result = useFlowstileTask(taskId: string, opts?: {
+  baseUrl?: string;       // defaults to '' (same origin)
+  token?: string;         // static Bearer token
+  getToken?: () => Promise<string>;  // async token getter (preferred)
+});
+// Returns: { task, form, data, status, error, validationErrors, isMutating,
+//            claim, unclaim, complete, cancel, refetch }
+
+// Renderer
+import { FlowstileForm } from '@flowstile/react';
+<FlowstileForm schema={} uiSchema={} data={} onChange={} readOnly={} validationErrors={} />
+
+// Convenience component
+import { FlowstileTask } from '@flowstile/react';
+<FlowstileTask taskId={} baseUrl={} token={} getToken={} onComplete={} onError={} onClaim={} />
+
+// Stylesheet
+import '@flowstile/react/styles.css';
+
+// Types
+import type { FlowstileApiError, Task, TaskActions, TaskForm } from '@flowstile/react';
+```
+
+### Peer Dependencies
+
+| Package | Tested Range |
+|---------|-------------|
+| `react` | >=18.0.0 <20 |
+| `@jsonforms/core` | ^3.4.0 |
+| `@jsonforms/react` | ^3.4.0 |
+| `@jsonforms/vanilla-renderers` | ^3.4.0 |
+
 ## Current Status
 
 Flowstile is being built toward this contract. The architecture, core data model, state machine, package boundaries, and product semantics are defined. Some areas are still in foundation-stage implementation, especially around auth, worker packaging, full API coverage, and the UI surface.
