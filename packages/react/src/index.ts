@@ -11,3 +11,5 @@ export type {
 export { useFlowstileTask } from './useFlowstileTask.js';
 export { FlowstileForm } from './FlowstileForm.js';
 export type { FlowstileFormProps } from './FlowstileForm.js';
+export { FlowstileTask } from './FlowstileTask.js';
+export type { FlowstileTaskProps } from './FlowstileTask.js';
