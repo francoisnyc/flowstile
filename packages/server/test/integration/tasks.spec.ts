@@ -312,6 +312,103 @@ describe('Task routes', () => {
     });
   });
 
+  describe('POST /tasks/:id/complete — writable-field stripping', () => {
+    it('silently strips fields marked readOnly in visibility rules', async () => {
+      // Create a form with NOTES marked readOnly
+      const tag = `READONLY_${Date.now()}`;
+      const form = await app.db.getRepository(
+        (await import('../../src/entities/form-definition.entity.js')).FormDefinition,
+      ).save({
+        code: `TEST_FORM_${tag}`,
+        version: 1,
+        jsonSchema: {
+          type: 'object',
+          properties: {
+            DECISION: { type: 'string', enum: ['APPROVED', 'REJECTED'] },
+            NOTES: { type: 'string' },
+          },
+          required: ['DECISION'],
+        },
+        uiSchema: { type: 'VerticalLayout', elements: [] },
+        visibilityRules: { NOTES: { readOnly: true } },
+        status: 'published',
+      });
+
+      const process = await app.db.getRepository(
+        (await import('../../src/entities/process-definition.entity.js')).ProcessDefinition,
+      ).save({ name: `Test Process ${tag}` });
+
+      const taskDef = await app.db.getRepository(
+        (await import('../../src/entities/task-definition.entity.js')).TaskDefinition,
+      ).save({
+        code: `TEST_TASK_DEF_${tag}`,
+        processDefinitionId: process.id,
+        formDefinitionCode: form.code,
+        candidateGroups: [],
+        candidateUsers: [],
+        defaultPriority: 'normal',
+      });
+
+      // Create the task with pre-existing NOTES in submissionData
+      const createRes = await authed(app, cookie, {
+        method: 'POST',
+        url: '/tasks',
+        payload: {
+          taskDefinitionId: taskDef.id,
+          workflowId: `wf-readonly-${Date.now()}`,
+          submissionData: { NOTES: 'original' },
+        },
+      });
+      expect(createRes.statusCode).toBe(201);
+      const taskId = createRes.json<{ id: string }>().id;
+
+      // Claim it
+      await authed(app, cookie, { method: 'POST', url: `/tasks/${taskId}/claim` });
+
+      // Complete with DECISION + attempt to overwrite NOTES
+      const res = await authed(app, cookie, {
+        method: 'POST',
+        url: `/tasks/${taskId}/complete`,
+        payload: { data: { DECISION: 'APPROVED', NOTES: 'overwritten' } },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json<{ submissionData: Record<string, unknown> }>();
+      expect(body.submissionData.DECISION).toBe('APPROVED');
+      // NOTES must be the original value — overwrite was stripped
+      expect(body.submissionData.NOTES).toBe('original');
+    });
+
+    it('allows submission of writable fields', async () => {
+      // No readOnly rules — all fields are writable
+      const id = await createTask();
+      await authed(app, cookie, { method: 'POST', url: `/tasks/${id}/claim` });
+      const res = await authed(app, cookie, {
+        method: 'POST',
+        url: `/tasks/${id}/complete`,
+        payload: { data: { DECISION: 'REJECTED', NOTES: 'all good' } },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json<{ submissionData: Record<string, unknown> }>();
+      expect(body.submissionData.DECISION).toBe('REJECTED');
+      expect(body.submissionData.NOTES).toBe('all good');
+    });
+
+    it('returns 422 when writable fields fail schema validation', async () => {
+      const id = await createTask();
+      await authed(app, cookie, { method: 'POST', url: `/tasks/${id}/claim` });
+      const res = await authed(app, cookie, {
+        method: 'POST',
+        url: `/tasks/${id}/complete`,
+        // DECISION is required but missing; NOTES is fine
+        payload: { data: { NOTES: 'no decision provided' } },
+      });
+
+      expect(res.statusCode).toBe(422);
+    });
+  });
+
   describe('GET /tasks', () => {
     it('filters by status', async () => {
       const id = await createTask();

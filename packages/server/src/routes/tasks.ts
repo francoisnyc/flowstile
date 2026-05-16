@@ -5,7 +5,7 @@ import { TaskDefinition } from '../entities/task-definition.entity.js';
 import { FormDefinition } from '../entities/form-definition.entity.js';
 import { TaskStatus, FormDefinitionStatus, Priority } from '../common/enums.js';
 import { TaskStateMachine, InvalidTransitionError } from '../common/task-state-machine.js';
-import { filterFormSchemas, filterSubmissionData } from '../common/visibility.js';
+import { filterFormSchemas, filterSubmissionData, getWritableFields } from '../common/visibility.js';
 import { requirePermission } from '../plugins/auth.js';
 import { Permissions } from '../common/permissions.js';
 import { PaginationQuery, paginate } from '../common/pagination.js';
@@ -290,17 +290,29 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
         throw err;
       }
 
-      // Merge and validate submission data
-      const mergedSubmission = data
-        ? { ...task.submissionData, ...data }
-        : task.submissionData;
-
+      // Load the locked form version
       const form = await app.db.getRepository(FormDefinition).findOne({
         where: {
           code: task.taskDefinition.formDefinitionCode,
           version: task.formDefinitionVersion,
         },
       });
+
+      // Strip non-writable fields from submitted data before merging
+      let acceptedData = data ?? {};
+      if (form) {
+        const user = request.currentUser!;
+        const userRoleNames = user.roles.map((r) => r.name);
+        const userGroupNames = user.groups.map((g) => g.name);
+        const writableFields = getWritableFields(form, userRoleNames, userGroupNames);
+        acceptedData = Object.fromEntries(
+          Object.entries(acceptedData).filter(([key]) => writableFields.has(key)),
+        );
+      }
+
+      // Merge existing stored data with accepted submitted fields
+      const mergedSubmission = { ...task.submissionData, ...acceptedData };
+
       if (form) {
         const validation = validateAgainstSchema(
           mergedSubmission,

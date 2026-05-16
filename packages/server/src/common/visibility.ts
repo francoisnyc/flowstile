@@ -3,6 +3,7 @@ import { FormDefinition } from '../entities/form-definition.entity.js';
 interface FieldRule {
   allowedRoles?: string[];
   allowedGroups?: string[];
+  readOnly?: boolean;
 }
 
 type VisibilityRules = Record<string, FieldRule>;
@@ -86,6 +87,27 @@ export function filterFormSchemas(
     jsonSchema: filteredJson as Record<string, unknown>,
     uiSchema: filteredUi as Record<string, unknown>,
   };
+}
+
+export function getWritableFields(
+  form: FormDefinition,
+  userRoleNames: string[],
+  userGroupNames: string[],
+): Set<string> {
+  const jsonSchema = form.jsonSchema as JsonSchema;
+  if (!jsonSchema.properties) return new Set();
+
+  const rules = form.visibilityRules as VisibilityRules;
+  const allFields = Object.keys(jsonSchema.properties);
+
+  return new Set(
+    allFields.filter((field) => {
+      if (!isVisible(field, rules ?? {}, userRoleNames, userGroupNames)) return false;
+      const rule = rules?.[field];
+      if (rule?.readOnly) return false;
+      return true;
+    }),
+  );
 }
 
 export function filterSubmissionData(
