@@ -7,3 +7,5 @@ export type {
   UseFlowstileTaskOptions,
   UseFlowstileTaskResult,
 } from './types.js';
+
+export { useFlowstileTask } from './useFlowstileTask.js';
