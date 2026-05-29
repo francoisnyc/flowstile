@@ -69,6 +69,34 @@ const CompleteTaskBody = z.object({
   data: z.record(z.string(), z.unknown()).optional(),
 });
 
+const VariableFilter = z.object({
+  name: z.string().min(1),
+  operator: z.enum(['eq', 'like']).default('eq'),
+  value: z.union([z.string(), z.number()]),
+}).refine(
+  (f) => f.operator !== 'like' || (typeof f.value === 'string' && f.value.includes('%')),
+  { message: 'like operator requires a string value containing at least one % wildcard' },
+);
+
+const SearchTasksBody = z.object({
+  status: z.nativeEnum(TaskStatus).optional(),
+  assigneeId: z.string().uuid().optional(),
+  group: z.string().optional(),
+  inputVariables: z.array(VariableFilter).optional(),
+  contextVariables: z.array(VariableFilter).optional(),
+  submissionVariables: z.array(VariableFilter).optional(),
+  limit: z.number().int().min(1).max(200).default(50),
+  offset: z.number().int().min(0).default(0),
+}).refine(
+  (body) => {
+    const total = (body.inputVariables?.length ?? 0)
+      + (body.contextVariables?.length ?? 0)
+      + (body.submissionVariables?.length ?? 0);
+    return total <= 10;
+  },
+  { message: 'Maximum 10 variable filters total across all scopes' },
+);
+
 export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
   const read = { preHandler: [requirePermission(Permissions.TASKS_READ)] };
   const write = { preHandler: [requirePermission(Permissions.TASKS_WRITE)] };
@@ -94,6 +122,56 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
       // Filter to tasks whose candidateGroups contains the given group name
       qb.andWhere(':group = ANY(td.candidateGroups)', { group });
     }
+
+    const [items, total] = await qb.getManyAndCount();
+    return paginate(items.map(serializeTask), total, limit, offset);
+  });
+
+  app.post('/tasks/search', { ...read, schema: { body: SearchTasksBody, tags: ['Tasks'] } }, async (request) => {
+    const {
+      status, assigneeId, group,
+      inputVariables, contextVariables, submissionVariables,
+      limit, offset,
+    } = request.body;
+
+    const qb = repo()
+      .createQueryBuilder('t')
+      .leftJoinAndSelect('t.taskDefinition', 'td')
+      .leftJoinAndSelect('t.assignee', 'a')
+      .orderBy('t.createdAt', 'DESC')
+      .limit(limit)
+      .offset(offset);
+
+    if (status) qb.andWhere('t.status = :status', { status });
+    if (assigneeId) qb.andWhere('t.assigneeId = :assigneeId', { assigneeId });
+    if (group) qb.andWhere(':group = ANY(td.candidateGroups)', { group });
+
+    let paramCounter = 0;
+    const applyVariableFilters = (
+      filters: { name: string; operator: string; value: string | number }[] | undefined,
+      column: string,
+    ) => {
+      if (!filters?.length) return;
+      for (const filter of filters) {
+        const idx = paramCounter++;
+        if (filter.operator === 'like') {
+          qb.andWhere(
+            `jsonb_extract_path_text(t."${column}", :vname_${idx}) LIKE :vval_${idx}`,
+            { [`vname_${idx}`]: filter.name, [`vval_${idx}`]: filter.value },
+          );
+        } else {
+          const containment = JSON.stringify({ [filter.name]: filter.value });
+          qb.andWhere(
+            `t."${column}" @> :vval_${idx}::jsonb`,
+            { [`vval_${idx}`]: containment },
+          );
+        }
+      }
+    };
+
+    applyVariableFilters(inputVariables, 'inputData');
+    applyVariableFilters(contextVariables, 'contextData');
+    applyVariableFilters(submissionVariables, 'submissionData');
 
     const [items, total] = await qb.getManyAndCount();
     return paginate(items.map(serializeTask), total, limit, offset);
