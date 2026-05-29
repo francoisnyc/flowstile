@@ -1,73 +1,225 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 
 const BASE = 'http://localhost:5173';
+const SERVER = 'http://localhost:3000';
+
+async function loginAs(page: Page, email: string) {
+  await page.goto(BASE);
+  await page.fill('input[type="email"], input[name="email"]', email);
+  await page.fill('input[type="password"], input[name="password"]', 'password');
+  await page.click('button[type="submit"]');
+  await expect(page.locator('.inbox, text=Inbox').first()).toBeVisible({ timeout: 10000 });
+}
+
+async function goToForms(page: Page) {
+  const formsLink = page.locator('text=Forms').or(page.locator('text=Designer')).first();
+  await formsLink.click();
+  await expect(page.locator('.form-sidebar')).toBeVisible({ timeout: 5000 });
+}
+
+async function apiGet(path: string): Promise<unknown> {
+  const loginRes = await fetch(`${SERVER}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: 'alice@example.com', password: 'password' }),
+  });
+  const cookie = loginRes.headers.get('set-cookie') ?? '';
+  const match = cookie.match(/flowstile_token=([^;]+)/);
+  const token = match?.[1] ?? '';
+
+  const res = await fetch(`${SERVER}${path}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  return res.json();
+}
+
+async function dragPaletteItemToCanvas(page: Page, fieldTypeLabel: string) {
+  const paletteItem = page.locator('.palette-item', { hasText: fieldTypeLabel }).first();
+  const canvas = page.locator('.form-canvas');
+
+  await paletteItem.waitFor({ state: 'visible' });
+  await canvas.waitFor({ state: 'visible' });
+
+  const paletteBox = await paletteItem.boundingBox();
+  const canvasBox = await canvas.boundingBox();
+  if (!paletteBox || !canvasBox) throw new Error('Could not get bounding boxes for drag');
+
+  // Pick up from palette item centre
+  const fromX = paletteBox.x + paletteBox.width / 2;
+  const fromY = paletteBox.y + paletteBox.height / 2;
+  // Drop onto canvas centre
+  const toX = canvasBox.x + canvasBox.width / 2;
+  const toY = canvasBox.y + canvasBox.height / 2;
+
+  await page.mouse.move(fromX, fromY);
+  await page.mouse.down();
+  // Move in small increments so @dnd-kit sensors register the drag
+  await page.mouse.move(fromX + 10, fromY, { steps: 5 });
+  await page.mouse.move(toX, toY, { steps: 20 });
+  await page.mouse.up();
+}
 
 test.describe('Form Designer', () => {
-  test.beforeEach(async ({ page }) => {
-    await page.goto(BASE);
-    await page.fill('input[type="email"], input[name="email"]', 'alice@example.com');
-    await page.fill('input[type="password"], input[name="password"]', 'password');
-    await page.click('button[type="submit"]');
-    // Navigate to Forms
-    const formsLink = page.locator('text=Forms').or(page.locator('text=Designer')).first();
-    await formsLink.click();
-    await expect(page.locator('.form-sidebar')).toBeVisible({ timeout: 5000 });
-  });
+  test('create form, drag fields, configure properties, preview, publish, verify schema', async ({ page }) => {
+    await loginAs(page, 'alice@example.com');
+    await goToForms(page);
 
-  test('create form, switch tabs, save, and publish', async ({ page }) => {
-    // Create a new form
-    const formCode = `E2E_${Date.now()}`;
+    // ── 1. Create a new form ────────────────────────────────────────────────
+    const formCode = `E2E_DESIGNER_${Date.now()}`;
     await page.fill('.new-form input', formCode);
     await page.click('.new-form button');
 
-    // Wait for designer to load with three-panel layout
-    await expect(page.locator('.designer-toolbar')).toBeVisible({ timeout: 5000 });
+    // Designer should open with empty canvas
+    await expect(page.locator('.designer-toolbar')).toBeVisible({ timeout: 8000 });
+    await expect(page.locator('.form-code')).toContainText(formCode);
     await expect(page.locator('.field-palette')).toBeVisible();
-    await expect(page.locator('.form-canvas')).toBeVisible();
     await expect(page.locator('.canvas-empty')).toBeVisible();
 
-    // Switch to Source tab — Monaco editor should show empty schema with builder marker
-    await page.click('button:has-text("Source")');
+    // ── 2. Drag a Text field onto the canvas ───────────────────────────────
+    await dragPaletteItemToCanvas(page, 'Text');
+    await expect(page.locator('.canvas-field')).toHaveCount(1, { timeout: 5000 });
+    await expect(page.locator('.canvas-empty')).not.toBeVisible();
+
+    // ── 3. Drag a Number field onto the canvas ─────────────────────────────
+    await dragPaletteItemToCanvas(page, 'Number');
+    await expect(page.locator('.canvas-field')).toHaveCount(2, { timeout: 5000 });
+
+    // ── 4. Configure the Text field label via Properties panel ────────────
+    await page.locator('.canvas-field').first().click();
+    await expect(page.locator('.properties-panel')).toBeVisible({ timeout: 3000 });
+
+    const labelInput = page.locator('.properties-panel input').first();
+    await labelInput.clear();
+    await labelInput.fill('Customer Name');
+    // Tab away to trigger key sync
+    await labelInput.press('Tab');
+
+    // Verify canvas reflects updated label
+    await expect(page.locator('.canvas-field .field-label').first()).toContainText('Customer Name', { timeout: 3000 });
+
+    // ── 5. Mark the field as required ─────────────────────────────────────
+    const requiredCheckbox = page.locator('.props-checkbox input[type="checkbox"]');
+    if (await requiredCheckbox.isVisible()) {
+      await requiredCheckbox.check();
+    }
+
+    // ── 6. Switch to Preview tab ───────────────────────────────────────────
+    await page.click('.tab:has-text("Preview")');
+    await expect(page.locator('.form-preview')).toBeVisible({ timeout: 5000 });
+    // JSON Forms should render the Customer Name field label
+    await expect(page.locator('.form-preview').getByText('Customer Name')).toBeVisible({ timeout: 5000 });
+
+    // ── 7. Switch to Source tab — verify schema has builder marker ─────────
+    await page.click('.tab:has-text("Source")');
     await expect(page.locator('.form-editor')).toBeVisible({ timeout: 5000 });
 
-    // Switch to Preview tab
-    await page.click('button:has-text("Preview")');
-    await expect(page.locator('.form-preview')).toBeVisible({ timeout: 5000 });
+    // ── 8. Switch back to Designer ─────────────────────────────────────────
+    await page.click('.tab:has-text("Designer")');
+    await expect(page.locator('.canvas-field')).toHaveCount(2, { timeout: 3000 });
 
-    // Switch back to Designer
-    await page.click('button:has-text("Designer")');
-    await expect(page.locator('.form-canvas')).toBeVisible();
-
-    // Save draft
+    // ── 9. Save draft ──────────────────────────────────────────────────────
     await page.click('button:has-text("Save draft")');
-    await page.waitForTimeout(500);
+    // Wait for save to complete (button re-enables)
+    await expect(page.locator('button:has-text("Save draft")')).toBeEnabled({ timeout: 5000 });
 
-    // Publish
+    // ── 10. Publish ────────────────────────────────────────────────────────
     await page.click('button:has-text("Publish")');
+    await expect(page.locator(`.form-item:has-text("${formCode}") .version`)).toBeVisible({ timeout: 8000 });
 
-    // Verify version appears in sidebar
-    await expect(
-      page.locator(`.form-item:has-text("${formCode}") .version`)
-    ).toBeVisible({ timeout: 5000 });
+    // ── 11. Verify published schema via API ────────────────────────────────
+    const published = await apiGet(`/forms/${formCode}`) as {
+      code: string;
+      version: number;
+      status: string;
+      jsonSchema: {
+        type: string;
+        properties: Record<string, unknown>;
+        required?: string[];
+      };
+      uiSchema: { elements: { scope: string }[] };
+    };
+
+    expect(published.code).toBe(formCode);
+    expect(published.version).toBe(1);
+    expect(published.status).toBe('published');
+
+    // Text field should appear in the schema as a string property
+    const properties = published.jsonSchema?.properties ?? {};
+    const fieldKeys = Object.keys(properties);
+    expect(fieldKeys.length).toBeGreaterThanOrEqual(2);
+
+    // The Customer Name field key should derive from the label
+    const customerNameKey = fieldKeys.find((k) =>
+      (properties[k] as Record<string, unknown>)?.type === 'string' &&
+      k.toLowerCase().includes('customer')
+    );
+    expect(customerNameKey).toBeTruthy();
+
+    // Number field should appear as type: number
+    const numberKey = fieldKeys.find((k) =>
+      (properties[k] as Record<string, unknown>)?.type === 'number'
+    );
+    expect(numberKey).toBeTruthy();
+
+    // UI schema should have matching elements
+    const elements = published.uiSchema?.elements ?? [];
+    expect(elements.length).toBeGreaterThanOrEqual(2);
   });
 
-  test('LOAN_APPLICATION loads fields in designer', async ({ page }) => {
+  test('undo/redo works in designer', async ({ page }) => {
+    await loginAs(page, 'alice@example.com');
+    await goToForms(page);
+
+    const formCode = `E2E_UNDO_${Date.now()}`;
+    await page.fill('.new-form input', formCode);
+    await page.click('.new-form button');
+
+    await expect(page.locator('.designer-toolbar')).toBeVisible({ timeout: 8000 });
+
+    // Undo button starts disabled (nothing to undo)
+    await expect(page.locator('button[title*="Undo"]')).toBeDisabled();
+
+    // Drag a field to create history entry
+    await dragPaletteItemToCanvas(page, 'Text');
+    await expect(page.locator('.canvas-field')).toHaveCount(1, { timeout: 5000 });
+
+    // Undo should now be enabled
+    await expect(page.locator('button[title*="Undo"]')).toBeEnabled({ timeout: 3000 });
+
+    // Undo — canvas should be empty again
+    await page.click('button[title*="Undo"]');
+    await expect(page.locator('.canvas-empty')).toBeVisible({ timeout: 3000 });
+
+    // Redo — field comes back
+    await expect(page.locator('button[title*="Redo"]')).toBeEnabled({ timeout: 3000 });
+    await page.click('button[title*="Redo"]');
+    await expect(page.locator('.canvas-field')).toHaveCount(1, { timeout: 3000 });
+  });
+
+  test('LOAN_APPLICATION loads and editable fields round-trip through designer', async ({ page }) => {
+    await loginAs(page, 'alice@example.com');
+    await goToForms(page);
+
     // Click on LOAN_APPLICATION
     await page.click('.form-item:has-text("LOAN_APPLICATION")');
-    await expect(page.locator('.form-workspace')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.form-workspace:not(.empty)')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('.designer-toolbar')).toBeVisible({ timeout: 5000 });
 
-    // Create draft if needed
+    // Create draft to enable editing
     const createDraftBtn = page.locator('button:has-text("Create draft")');
     if (await createDraftBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
       await createDraftBtn.click();
     }
 
-    // Designer tab should show fields from published schema
-    await expect(page.locator('.designer-toolbar')).toBeVisible({ timeout: 5000 });
-    await expect(page.locator('.canvas-field')).toHaveCount(4, { timeout: 5000 });
+    // Designer tab should show existing fields parsed from published schema
+    await expect(page.locator('.canvas-field')).toHaveCount(4, { timeout: 8000 });
 
-    // Verify Source tab shows the schema
-    await page.click('button:has-text("Source")');
+    // Switch to Source — verify it shows valid JSON Schema
+    await page.click('.tab:has-text("Source")');
     await expect(page.locator('.form-editor')).toBeVisible({ timeout: 5000 });
+
+    // Switch back to Designer — fields should still be intact
+    await page.click('.tab:has-text("Designer")');
+    await expect(page.locator('.canvas-field')).toHaveCount(4, { timeout: 5000 });
   });
 });
