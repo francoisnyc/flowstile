@@ -161,6 +161,8 @@ A `TaskDefinition` describes a reusable human task type within a process. It bin
 
 This is the template developers and operators configure once and reuse many times.
 
+Candidate users and groups are not just inbox hints — they gate who may claim a task. If both `candidateGroups` and `candidateUsers` are empty, the task is open to any user with `tasks:write`. If either is set, only matching users (by group membership or email) may claim it; everyone else receives `403`.
+
 ### Tasks
 
 A `Task` is the runtime instance created by workflow execution. It carries:
@@ -222,6 +224,19 @@ This means the browser never receives hidden data in the first place. That choic
 
 The same principle applies to task context. If supporting business context is provided for a task, Flowstile should filter it before delivery when that context exceeds what the current user is allowed to see.
 
+Action authorization is enforced server-side too. The `tasks:write` permission grants the capability to act on tasks, but claiming a restricted task additionally requires candidate-user/group eligibility (see Task Definitions). The `canClaim` flag returned on `GET /tasks/:id` reflects this combined check, so the UI shows the Claim button only when the action would actually succeed.
+
+## Signal Delivery Durability
+
+When a task is completed or cancelled, Flowstile fires a Temporal signal to resume the waiting workflow. Task state is the source of truth and is always durable; signal delivery is retried with backoff but can still fail (workflow gone, Temporal unavailable). To make this observable, each terminal task carries a `signalStatus`:
+
+- `not_applicable` — the task had no associated workflow
+- `pending` — delivery is in progress (or the server crashed mid-delivery)
+- `delivered` — the signal was acknowledged by Temporal
+- `failed` — all retries were exhausted; the workflow is out of sync
+
+Operators can list broken deliveries with `GET /tasks?signalStatus=failed` (or the same filter on `POST /tasks/search`) and replay them with `POST /tasks/:id/retry-signal`, which reconstructs the original signal payload from stored task data and reattempts delivery.
+
 ## API Surface
 
 The Flowstile API is organized around the resources the product exposes:
@@ -237,13 +252,14 @@ The Flowstile API is organized around the resources the product exposes:
 The most important runtime endpoints are:
 
 - `POST /tasks` to create a task instance
-- `GET /tasks` to list tasks (filter by `status`, `assigneeId`, `group`)
+- `GET /tasks` to list tasks (filter by `status`, `assigneeId`, `group`, `signalStatus`)
 - `GET /tasks/:id` to retrieve a task with form schema filtered for the current user
 - `POST /tasks/search` to search tasks by business variables stored in `inputData`, `contextData`, or `submissionData`
-- `POST /tasks/:id/claim`
+- `POST /tasks/:id/claim` (enforces candidate-user/group eligibility)
 - `POST /tasks/:id/unclaim`
 - `POST /tasks/:id/complete`
 - `POST /tasks/:id/cancel`
+- `POST /tasks/:id/retry-signal` to replay a failed Temporal signal (requires `tasks:manage`)
 
 ### Task Variable Search
 
