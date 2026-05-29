@@ -4488,6 +4488,600 @@ paths:
       responses:
         "200":
           description: Default Response
+  /tasks/search:
+    post:
+      tags:
+        - Tasks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              def:
+                type: object
+                shape:
+                  status:
+                    def:
+                      type: optional
+                      innerType:
+                        def:
+                          type: enum
+                          entries:
+                            CREATED: created
+                            CLAIMED: claimed
+                            COMPLETED: completed
+                            CANCELLED: cancelled
+                        type: enum
+                        enum:
+                          CREATED: created
+                          CLAIMED: claimed
+                          COMPLETED: completed
+                          CANCELLED: cancelled
+                        options:
+                          - created
+                          - claimed
+                          - completed
+                          - cancelled
+                    type: optional
+                  assigneeId:
+                    def:
+                      type: optional
+                      innerType:
+                        def:
+                          type: string
+                          checks:
+                            - def:
+                                type: string
+                                format: uuid
+                                check: string_format
+                                abort: false
+                                pattern: {}
+                              type: string
+                              format: uuid
+                              minLength: null
+                              maxLength: null
+                        type: string
+                        format: uuid
+                        minLength: null
+                        maxLength: null
+                    type: optional
+                  group:
+                    def:
+                      type: optional
+                      innerType:
+                        def:
+                          type: string
+                        type: string
+                        format: null
+                        minLength: null
+                        maxLength: null
+                    type: optional
+                  inputVariables:
+                    def:
+                      type: optional
+                      innerType:
+                        def:
+                          type: array
+                          element:
+                            def:
+                              type: object
+                              shape:
+                                name:
+                                  def:
+                                    type: string
+                                    checks:
+                                      - {}
+                                  type: string
+                                  format: null
+                                  minLength: 1
+                                  maxLength: null
+                                operator:
+                                  def:
+                                    type: default
+                                    innerType:
+                                      def:
+                                        type: enum
+                                        entries:
+                                          eq: eq
+                                          like: like
+                                      type: enum
+                                      enum:
+                                        eq: eq
+                                        like: like
+                                      options:
+                                        - eq
+                                        - like
+                                    defaultValue: eq
+                                  type: default
+                                value:
+                                  def:
+                                    type: union
+                                    options:
+                                      - def:
+                                          type: string
+                                        type: string
+                                        format: null
+                                        minLength: null
+                                        maxLength: null
+                                      - def:
+                                          type: number
+                                          checks: []
+                                        type: number
+                                        minValue: null
+                                        maxValue: null
+                                        isInt: false
+                                        isFinite: true
+                                        format: null
+                                  type: union
+                                  options:
+                                    - def:
+                                        type: string
+                                      type: string
+                                      format: null
+                                      minLength: null
+                                      maxLength: null
+                                    - def:
+                                        type: number
+                                        checks: []
+                                      type: number
+                                      minValue: null
+                                      maxValue: null
+                                      isInt: false
+                                      isFinite: true
+                                      format: null
+                              checks:
+                                - def:
+                                    type: custom
+                                    check: custom
+                                  type: custom
+                            type: object
+                        type: array
+                        element:
+                          def:
+                            type: object
+                            shape:
+                              name:
+                                def:
+                                  type: string
+                                  checks:
+                                    - {}
+                                type: string
+                                format: null
+                                minLength: 1
+                                maxLength: null
+                              operator:
+                                def:
+                                  type: default
+                                  innerType:
+                                    def:
+                                      type: enum
+                                      entries:
+                                        eq: eq
+                                        like: like
+                                    type: enum
+                                    enum:
+                                      eq: eq
+                                      like: like
+                                    options:
+                                      - eq
+                                      - like
+                                  defaultValue: eq
+                                type: default
+                              value:
+                                def:
+                                  type: union
+                                  options:
+                                    - def:
+                                        type: string
+                                      type: string
+                                      format: null
+                                      minLength: null
+                                      maxLength: null
+                                    - def:
+                                        type: number
+                                        checks: []
+                                      type: number
+                                      minValue: null
+                                      maxValue: null
+                                      isInt: false
+                                      isFinite: true
+                                      format: null
+                                type: union
+                                options:
+                                  - def:
+                                      type: string
+                                    type: string
+                                    format: null
+                                    minLength: null
+                                    maxLength: null
+                                  - def:
+                                      type: number
+                                      checks: []
+                                    type: number
+                                    minValue: null
+                                    maxValue: null
+                                    isInt: false
+                                    isFinite: true
+                                    format: null
+                            checks:
+                              - def:
+                                  type: custom
+                                  check: custom
+                                type: custom
+                          type: object
+                    type: optional
+                  contextVariables:
+                    def:
+                      type: optional
+                      innerType:
+                        def:
+                          type: array
+                          element:
+                            def:
+                              type: object
+                              shape:
+                                name:
+                                  def:
+                                    type: string
+                                    checks:
+                                      - {}
+                                  type: string
+                                  format: null
+                                  minLength: 1
+                                  maxLength: null
+                                operator:
+                                  def:
+                                    type: default
+                                    innerType:
+                                      def:
+                                        type: enum
+                                        entries:
+                                          eq: eq
+                                          like: like
+                                      type: enum
+                                      enum:
+                                        eq: eq
+                                        like: like
+                                      options:
+                                        - eq
+                                        - like
+                                    defaultValue: eq
+                                  type: default
+                                value:
+                                  def:
+                                    type: union
+                                    options:
+                                      - def:
+                                          type: string
+                                        type: string
+                                        format: null
+                                        minLength: null
+                                        maxLength: null
+                                      - def:
+                                          type: number
+                                          checks: []
+                                        type: number
+                                        minValue: null
+                                        maxValue: null
+                                        isInt: false
+                                        isFinite: true
+                                        format: null
+                                  type: union
+                                  options:
+                                    - def:
+                                        type: string
+                                      type: string
+                                      format: null
+                                      minLength: null
+                                      maxLength: null
+                                    - def:
+                                        type: number
+                                        checks: []
+                                      type: number
+                                      minValue: null
+                                      maxValue: null
+                                      isInt: false
+                                      isFinite: true
+                                      format: null
+                              checks:
+                                - def:
+                                    type: custom
+                                    check: custom
+                                  type: custom
+                            type: object
+                        type: array
+                        element:
+                          def:
+                            type: object
+                            shape:
+                              name:
+                                def:
+                                  type: string
+                                  checks:
+                                    - {}
+                                type: string
+                                format: null
+                                minLength: 1
+                                maxLength: null
+                              operator:
+                                def:
+                                  type: default
+                                  innerType:
+                                    def:
+                                      type: enum
+                                      entries:
+                                        eq: eq
+                                        like: like
+                                    type: enum
+                                    enum:
+                                      eq: eq
+                                      like: like
+                                    options:
+                                      - eq
+                                      - like
+                                  defaultValue: eq
+                                type: default
+                              value:
+                                def:
+                                  type: union
+                                  options:
+                                    - def:
+                                        type: string
+                                      type: string
+                                      format: null
+                                      minLength: null
+                                      maxLength: null
+                                    - def:
+                                        type: number
+                                        checks: []
+                                      type: number
+                                      minValue: null
+                                      maxValue: null
+                                      isInt: false
+                                      isFinite: true
+                                      format: null
+                                type: union
+                                options:
+                                  - def:
+                                      type: string
+                                    type: string
+                                    format: null
+                                    minLength: null
+                                    maxLength: null
+                                  - def:
+                                      type: number
+                                      checks: []
+                                    type: number
+                                    minValue: null
+                                    maxValue: null
+                                    isInt: false
+                                    isFinite: true
+                                    format: null
+                            checks:
+                              - def:
+                                  type: custom
+                                  check: custom
+                                type: custom
+                          type: object
+                    type: optional
+                  submissionVariables:
+                    def:
+                      type: optional
+                      innerType:
+                        def:
+                          type: array
+                          element:
+                            def:
+                              type: object
+                              shape:
+                                name:
+                                  def:
+                                    type: string
+                                    checks:
+                                      - {}
+                                  type: string
+                                  format: null
+                                  minLength: 1
+                                  maxLength: null
+                                operator:
+                                  def:
+                                    type: default
+                                    innerType:
+                                      def:
+                                        type: enum
+                                        entries:
+                                          eq: eq
+                                          like: like
+                                      type: enum
+                                      enum:
+                                        eq: eq
+                                        like: like
+                                      options:
+                                        - eq
+                                        - like
+                                    defaultValue: eq
+                                  type: default
+                                value:
+                                  def:
+                                    type: union
+                                    options:
+                                      - def:
+                                          type: string
+                                        type: string
+                                        format: null
+                                        minLength: null
+                                        maxLength: null
+                                      - def:
+                                          type: number
+                                          checks: []
+                                        type: number
+                                        minValue: null
+                                        maxValue: null
+                                        isInt: false
+                                        isFinite: true
+                                        format: null
+                                  type: union
+                                  options:
+                                    - def:
+                                        type: string
+                                      type: string
+                                      format: null
+                                      minLength: null
+                                      maxLength: null
+                                    - def:
+                                        type: number
+                                        checks: []
+                                      type: number
+                                      minValue: null
+                                      maxValue: null
+                                      isInt: false
+                                      isFinite: true
+                                      format: null
+                              checks:
+                                - def:
+                                    type: custom
+                                    check: custom
+                                  type: custom
+                            type: object
+                        type: array
+                        element:
+                          def:
+                            type: object
+                            shape:
+                              name:
+                                def:
+                                  type: string
+                                  checks:
+                                    - {}
+                                type: string
+                                format: null
+                                minLength: 1
+                                maxLength: null
+                              operator:
+                                def:
+                                  type: default
+                                  innerType:
+                                    def:
+                                      type: enum
+                                      entries:
+                                        eq: eq
+                                        like: like
+                                    type: enum
+                                    enum:
+                                      eq: eq
+                                      like: like
+                                    options:
+                                      - eq
+                                      - like
+                                  defaultValue: eq
+                                type: default
+                              value:
+                                def:
+                                  type: union
+                                  options:
+                                    - def:
+                                        type: string
+                                      type: string
+                                      format: null
+                                      minLength: null
+                                      maxLength: null
+                                    - def:
+                                        type: number
+                                        checks: []
+                                      type: number
+                                      minValue: null
+                                      maxValue: null
+                                      isInt: false
+                                      isFinite: true
+                                      format: null
+                                type: union
+                                options:
+                                  - def:
+                                      type: string
+                                    type: string
+                                    format: null
+                                    minLength: null
+                                    maxLength: null
+                                  - def:
+                                      type: number
+                                      checks: []
+                                    type: number
+                                    minValue: null
+                                    maxValue: null
+                                    isInt: false
+                                    isFinite: true
+                                    format: null
+                            checks:
+                              - def:
+                                  type: custom
+                                  check: custom
+                                type: custom
+                          type: object
+                    type: optional
+                  limit:
+                    def:
+                      type: default
+                      innerType:
+                        def:
+                          type: number
+                          checks:
+                            - def:
+                                type: number
+                                check: number_format
+                                abort: false
+                                format: safeint
+                              type: number
+                              minValue: -9007199254740991
+                              maxValue: 9007199254740991
+                              isInt: true
+                              isFinite: true
+                              format: safeint
+                            - {}
+                            - {}
+                        type: number
+                        minValue: 1
+                        maxValue: 200
+                        isInt: true
+                        isFinite: true
+                        format: safeint
+                      defaultValue: 50
+                    type: default
+                  offset:
+                    def:
+                      type: default
+                      innerType:
+                        def:
+                          type: number
+                          checks:
+                            - def:
+                                type: number
+                                check: number_format
+                                abort: false
+                                format: safeint
+                              type: number
+                              minValue: -9007199254740991
+                              maxValue: 9007199254740991
+                              isInt: true
+                              isFinite: true
+                              format: safeint
+                            - {}
+                        type: number
+                        minValue: 0
+                        maxValue: 9007199254740991
+                        isInt: true
+                        isFinite: true
+                        format: safeint
+                      defaultValue: 0
+                    type: default
+                checks:
+                  - def:
+                      type: custom
+                      check: custom
+                    type: custom
+              type: object
+      responses:
+        "200":
+          description: Default Response
   /tasks/{id}:
     get:
       tags:
