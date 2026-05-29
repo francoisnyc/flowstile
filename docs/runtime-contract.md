@@ -321,10 +321,10 @@ To list or open a task, the user must:
 To claim a task, the user must:
 
 - have `tasks:claim`
-- be task-eligible
+- be task-eligible (email listed in `candidateUsers`, or a member of a group listed in `candidateGroups`, or the task has no restrictions)
 - and the task must be in `created` state
 
-> **v1 limitation:** The claim endpoint does not currently enforce `candidateGroups` / `candidateUsers` eligibility at the HTTP layer. Any user with `tasks:claim` can claim any `created` task. Eligibility is used for filtering (inbox visibility) but not for access control on the claim action itself. This will be addressed in a future release.
+If `candidateGroups` and `candidateUsers` are both empty, the task is open to any user with `tasks:write`. If either list is non-empty, the server enforces eligibility and returns `403 Forbidden` for ineligible callers. `candidateUsers` entries are matched against the user's email address.
 
 ### Unclaim
 
@@ -405,13 +405,39 @@ The important failure case is:
 
 Flowstile should be designed so this is recoverable without data loss or user confusion.
 
-For v1, the implementation may begin simply, but the contract should assume:
+### Signal Delivery Lifecycle
 
-- persisted task completion is the source of truth
-- delivery back to Temporal is retryable
-- the worker layer is responsible for completing delivery
+Every task that reaches a terminal state (`completed` or `cancelled`) tracks its Temporal signal delivery in a `signalStatus` field:
 
-The UI should not need to expose complex delivery states in the first version unless they are truly required for correctness.
+| Status | Meaning |
+|---|---|
+| `not_applicable` | Task has no `workflowId` or Temporal is not configured |
+| `pending` | Delivery attempt in progress (or server crashed mid-delivery) |
+| `delivered` | Signal acknowledged by Temporal |
+| `failed` | All delivery retries exhausted; workflow is out of sync |
+
+The server persists `signalStatus = pending` before attempting delivery, then updates to `delivered` or `failed` after the result is known. A task stuck in `pending` (e.g., after a server crash) should be treated as `failed` for recovery purposes.
+
+`signalDeliveredAt` and `signalFailedAt` timestamps are set accordingly.
+
+### Recovery
+
+An operator with `tasks:manage` can retry a failed or stuck delivery:
+
+```
+POST /tasks/:id/retry-signal
+```
+
+This reconstructs the signal payload from the stored task data and reattempts delivery. The endpoint returns the updated task with the new `signalStatus`.
+
+### Monitoring
+
+Operators can query for all tasks with delivery failures:
+
+```
+GET /tasks?signalStatus=failed
+POST /tasks/search  { "signalStatus": "failed" }
+```
 
 ## Failure Semantics
 

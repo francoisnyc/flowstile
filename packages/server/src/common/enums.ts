@@ -26,3 +26,10 @@ export enum UserStatus {
   ACTIVE = 'active',
   INACTIVE = 'inactive',
 }
+
+export enum SignalStatus {
+  NOT_APPLICABLE = 'not_applicable',
+  PENDING        = 'pending',
+  DELIVERED      = 'delivered',
+  FAILED         = 'failed',
+}

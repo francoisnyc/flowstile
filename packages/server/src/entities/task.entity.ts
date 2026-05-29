@@ -8,7 +8,7 @@ import {
   JoinColumn,
   Index,
 } from 'typeorm';
-import { TaskStatus, Priority } from '../common/enums.js';
+import { TaskStatus, Priority, SignalStatus } from '../common/enums.js';
 import { TaskDefinition } from './task-definition.entity.js';
 import { User } from './user.entity.js';
 
@@ -80,4 +80,13 @@ export class Task {
 
   @Column({ type: 'timestamptz', nullable: true })
   completedAt: Date | null;
+
+  @Column({ type: 'enum', enum: SignalStatus, nullable: true })
+  signalStatus: SignalStatus | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  signalDeliveredAt: Date | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  signalFailedAt: Date | null;
 }

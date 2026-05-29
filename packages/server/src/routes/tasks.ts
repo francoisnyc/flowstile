@@ -4,7 +4,7 @@ import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { Task } from '../entities/task.entity.js';
 import { TaskDefinition } from '../entities/task-definition.entity.js';
 import { FormDefinition } from '../entities/form-definition.entity.js';
-import { TaskStatus, FormDefinitionStatus, Priority } from '../common/enums.js';
+import { TaskStatus, FormDefinitionStatus, Priority, SignalStatus } from '../common/enums.js';
 import { TaskStateMachine, InvalidTransitionError } from '../common/task-state-machine.js';
 import { filterFormSchemas, filterSubmissionData, getWritableFields } from '../common/visibility.js';
 import { requirePermission } from '../plugins/auth.js';
@@ -29,6 +29,9 @@ function serializeTask(task: Task) {
     createdAt: task.createdAt,
     updatedAt: task.updatedAt,
     completedAt: task.completedAt ?? null,
+    signalStatus: task.signalStatus ?? null,
+    signalDeliveredAt: task.signalDeliveredAt ?? null,
+    signalFailedAt: task.signalFailedAt ?? null,
     taskDefinition: task.taskDefinition ? {
       id: task.taskDefinition.id,
       code: task.taskDefinition.code,
@@ -52,6 +55,7 @@ const TasksQuery = PaginationQuery.extend({
   status: z.nativeEnum(TaskStatus).optional(),
   assigneeId: z.string().uuid().optional(),
   group: z.string().optional(),
+  signalStatus: z.nativeEnum(SignalStatus).optional(),
 });
 
 const CreateTaskBody = z.object({
@@ -83,6 +87,7 @@ const SearchTasksBody = z.object({
   status: z.nativeEnum(TaskStatus).optional(),
   assigneeId: z.string().uuid().optional(),
   group: z.string().optional(),
+  signalStatus: z.nativeEnum(SignalStatus).optional(),
   inputVariables: z.array(VariableFilter).optional(),
   contextVariables: z.array(VariableFilter).optional(),
   submissionVariables: z.array(VariableFilter).optional(),
@@ -115,7 +120,7 @@ type SearchableColumn = (typeof SEARCHABLE_COLUMNS)[keyof typeof SEARCHABLE_COLU
 // ordering, and metadata filters. Keeps the two endpoints from drifting.
 function baseTaskQuery(
   repo: Repository<Task>,
-  filters: { status?: TaskStatus; assigneeId?: string; group?: string },
+  filters: { status?: TaskStatus; assigneeId?: string; group?: string; signalStatus?: SignalStatus },
 ): SelectQueryBuilder<Task> {
   const qb = repo
     .createQueryBuilder('t')
@@ -127,8 +132,20 @@ function baseTaskQuery(
   if (filters.assigneeId) qb.andWhere('t.assigneeId = :assigneeId', { assigneeId: filters.assigneeId });
   // Filter to tasks whose candidateGroups contains the given group name
   if (filters.group) qb.andWhere(':group = ANY(td.candidateGroups)', { group: filters.group });
+  if (filters.signalStatus) qb.andWhere('t.signalStatus = :signalStatus', { signalStatus: filters.signalStatus });
 
   return qb;
+}
+
+// Returns true if the user is eligible to claim a task governed by the given definition.
+// An empty candidateGroups+candidateUsers means open to anyone with tasks:write.
+function isEligibleToClaim(
+  user: { email: string; groups: { name: string }[] },
+  td: { candidateGroups: string[]; candidateUsers: string[] },
+): boolean {
+  if (td.candidateGroups.length === 0 && td.candidateUsers.length === 0) return true;
+  const userGroupNames = user.groups.map((g) => g.name);
+  return td.candidateUsers.includes(user.email) || td.candidateGroups.some((g) => userGroupNames.includes(g));
 }
 
 function applyVariableFilters(
@@ -164,9 +181,9 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
     user.roles.some((r) => r.permissions.includes(perm));
 
   app.get('/tasks', { ...read, schema: { querystring: TasksQuery, tags: ['Tasks'] } }, async (request) => {
-    const { status, assigneeId, group, limit, offset } = request.query;
+    const { status, assigneeId, group, signalStatus, limit, offset } = request.query;
 
-    const qb = baseTaskQuery(repo(), { status, assigneeId, group }).limit(limit).offset(offset);
+    const qb = baseTaskQuery(repo(), { status, assigneeId, group, signalStatus }).limit(limit).offset(offset);
 
     const [items, total] = await qb.getManyAndCount();
     return paginate(items.map(serializeTask), total, limit, offset);
@@ -174,12 +191,12 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
 
   app.post('/tasks/search', { ...read, schema: { body: SearchTasksBody, tags: ['Tasks'] } }, async (request) => {
     const {
-      status, assigneeId, group,
+      status, assigneeId, group, signalStatus,
       inputVariables, contextVariables, submissionVariables,
       limit, offset,
     } = request.body;
 
-    const qb = baseTaskQuery(repo(), { status, assigneeId, group }).limit(limit).offset(offset);
+    const qb = baseTaskQuery(repo(), { status, assigneeId, group, signalStatus }).limit(limit).offset(offset);
 
     const counter = { n: 0 };
     applyVariableFilters(qb, SEARCHABLE_COLUMNS.input, inputVariables, counter);
@@ -282,10 +299,8 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
       const hasManage = userHasPermission(user, Permissions.TASKS_MANAGE);
       const isAssignee = task.assigneeId === user.id;
 
-      // TODO: canClaim should also check candidateGroups/candidateUsers membership.
-      // Currently the claim endpoint itself doesn't enforce this either — system-wide gap.
       const actions = {
-        canClaim: hasWrite && TaskStateMachine.canTransition(task.status, 'claim'),
+        canClaim: hasWrite && TaskStateMachine.canTransition(task.status, 'claim') && isEligibleToClaim(user, task.taskDefinition),
         canUnclaim: TaskStateMachine.canTransition(task.status, 'unclaim') && (isAssignee || hasManage),
         canComplete: hasWrite && TaskStateMachine.canTransition(task.status, 'complete') && isAssignee,
         canCancel: hasWrite && TaskStateMachine.canTransition(task.status, 'cancel') && (task.status === 'created' || isAssignee || hasManage),
@@ -313,8 +328,12 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
       const { id } = request.params;
       const user = request.currentUser!;
 
-      const task = await repo().findOne({ where: { id } });
+      const task = await repo().findOne({ where: { id }, relations: ['taskDefinition'] });
       if (!task) return reply.code(404).send({ error: 'Task not found' });
+
+      if (!isEligibleToClaim(user, task.taskDefinition)) {
+        return reply.code(403).send({ error: 'You are not eligible to claim this task' });
+      }
 
       try {
         task.status = TaskStateMachine.transition(task.status, 'claim');
@@ -421,6 +440,7 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
 
       task.submissionData = mergedSubmission;
       task.completedAt = new Date();
+      task.signalStatus = (app.temporal && task.workflowId) ? SignalStatus.PENDING : SignalStatus.NOT_APPLICABLE;
       const savedTask = await repo().save(task);
 
       if (app.temporal && task.workflowId) {
@@ -430,23 +450,28 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
           workflowId: task.workflowId,
           signalName: `flowstile:task:completed:${task.id}`,
           payload: {
-            data: task.submissionData,
+            data: savedTask.submissionData,
             completedBy: {
               id: user.id,
               email: user.email,
               displayName: user.displayName,
             },
             completedAt: savedTask.completedAt!.toISOString(),
-            formVersion: task.formDefinitionVersion,
+            formVersion: savedTask.formDefinitionVersion,
           },
           logger: request.log,
         });
-        if (!delivered) {
+        savedTask.signalStatus = delivered ? SignalStatus.DELIVERED : SignalStatus.FAILED;
+        if (delivered) {
+          savedTask.signalDeliveredAt = new Date();
+        } else {
+          savedTask.signalFailedAt = new Date();
           request.log.error(
-            { taskId: task.id, workflowId: task.workflowId },
+            { taskId: savedTask.id, workflowId: savedTask.workflowId, signalStatus: 'failed' },
             'Completion signal was not delivered — workflow may be out of sync',
           );
         }
+        await repo().save(savedTask);
       }
 
       return serializeTask(savedTask);
@@ -476,6 +501,7 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
         return reply.code(403).send({ error: 'Only the assignee or a manager can cancel this task' });
       }
 
+      task.signalStatus = (app.temporal && task.workflowId) ? SignalStatus.PENDING : SignalStatus.NOT_APPLICABLE;
       await repo().save(task);
 
       if (app.temporal && task.workflowId) {
@@ -486,13 +512,75 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
           payload: undefined,
           logger: request.log,
         });
-        if (!delivered) {
+        task.signalStatus = delivered ? SignalStatus.DELIVERED : SignalStatus.FAILED;
+        if (delivered) {
+          task.signalDeliveredAt = new Date();
+        } else {
+          task.signalFailedAt = new Date();
           request.log.error(
-            { taskId: task.id, workflowId: task.workflowId },
+            { taskId: task.id, workflowId: task.workflowId, signalStatus: 'failed' },
             'Cancellation signal was not delivered — workflow may be out of sync',
           );
         }
+        await repo().save(task);
       }
+
+      return serializeTask(task);
+    },
+  );
+
+  app.post(
+    '/tasks/:id/retry-signal',
+    {
+      preHandler: [requirePermission(Permissions.TASKS_MANAGE)],
+      schema: { params: UuidParam, tags: ['Tasks'] },
+    },
+    async (request, reply) => {
+      const { id } = request.params;
+
+      const task = await repo().findOne({ where: { id }, relations: ['taskDefinition', 'assignee'] });
+      if (!task) return reply.code(404).send({ error: 'Task not found' });
+
+      if (task.signalStatus !== SignalStatus.FAILED && task.signalStatus !== SignalStatus.PENDING) {
+        return reply.code(409).send({
+          error: 'Signal retry only allowed when signalStatus is failed or pending',
+        });
+      }
+      if (!app.temporal || !task.workflowId) {
+        return reply.code(409).send({ error: 'No Temporal connection configured' });
+      }
+
+      const signalName = task.status === TaskStatus.COMPLETED
+        ? `flowstile:task:completed:${task.id}`
+        : `flowstile:task:cancelled:${task.id}`;
+
+      const payload = task.status === TaskStatus.COMPLETED ? {
+        data: task.submissionData,
+        completedBy: task.assignee
+          ? { id: task.assignee.id, email: task.assignee.email, displayName: task.assignee.displayName }
+          : null,
+        completedAt: task.completedAt?.toISOString(),
+        formVersion: task.formDefinitionVersion,
+      } : undefined;
+
+      task.signalStatus = SignalStatus.PENDING;
+      await repo().save(task);
+
+      const delivered = await deliverSignal({
+        temporal: app.temporal,
+        workflowId: task.workflowId,
+        signalName,
+        payload,
+        logger: request.log,
+      });
+
+      task.signalStatus = delivered ? SignalStatus.DELIVERED : SignalStatus.FAILED;
+      if (delivered) {
+        task.signalDeliveredAt = new Date();
+      } else {
+        task.signalFailedAt = new Date();
+      }
+      await repo().save(task);
 
       return serializeTask(task);
     },

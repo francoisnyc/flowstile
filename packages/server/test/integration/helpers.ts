@@ -18,10 +18,15 @@ export async function testPasswordHash() {
   return _hash;
 }
 
+// Creates a named group for use in test task definitions and user memberships
+export async function createTestGroup(app: FastifyInstance, name: string) {
+  return app.db.getRepository(Group).save({ name });
+}
+
 // Creates a test user and returns the entity
 export async function createTestUser(
   app: FastifyInstance,
-  overrides?: { email?: string; displayName?: string; permissions?: string[] },
+  overrides?: { email?: string; displayName?: string; permissions?: string[]; groups?: Group[] },
 ) {
   const passwordHash = await testPasswordHash();
   const email = overrides?.email ?? `test-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`;
@@ -40,7 +45,7 @@ export async function createTestUser(
     displayName: overrides?.displayName ?? 'Test User',
     passwordHash,
     roles,
-    groups: [],
+    groups: overrides?.groups ?? [],
   });
 }
 
@@ -129,4 +134,6 @@ export async function cleanupTestData(app: FastifyInstance) {
     .delete().where('email LIKE :p', { p: 'test-%' }).execute();
   await db.getRepository(Role).createQueryBuilder()
     .delete().where('name LIKE :p', { p: 'test-role-%' }).execute();
+  await db.getRepository(Group).createQueryBuilder()
+    .delete().where('name LIKE :p', { p: 'test-group-%' }).execute();
 }
