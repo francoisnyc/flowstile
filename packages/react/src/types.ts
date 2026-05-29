@@ -55,6 +55,22 @@ export interface Task {
   workflowId: string;
 }
 
+export interface AttachmentRef {
+  attachmentId: string;
+  fileName: string;
+  contentType: string;
+  size: number;
+  checksum: string;
+  uploadedBy: string | null;
+  uploadedAt: string;
+}
+
+export interface AttachmentFieldConfig {
+  multiple?: boolean;
+  accept?: string[];
+  maxSize?: number;
+}
+
 export type TaskStatus = 'loading' | 'error' | 'ready';
 
 export interface UseFlowstileTaskOptions {
@@ -76,4 +92,7 @@ export interface UseFlowstileTaskResult {
   complete: (submissionData: Record<string, unknown>) => Promise<void>;
   cancel: () => Promise<void>;
   refetch: () => Promise<void>;
+  /** The underlying API client — use for uploadAttachment / getAttachmentUrl. */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  client: any;
 }

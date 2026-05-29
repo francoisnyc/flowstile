@@ -129,5 +129,6 @@ export function useFlowstileTask(
     complete,
     cancel,
     refetch: fetchTask,
+    client: clientRef.current,
   };
 }

@@ -118,6 +118,42 @@ describe('FlowstileClient', () => {
     });
   });
 
+  it('uploadAttachment POSTs multipart form data and returns a reference', async () => {
+    const ref = { attachmentId: 'att-1', fileName: 'doc.pdf', contentType: 'application/pdf', size: 512, checksum: 'abc', uploadedBy: null, uploadedAt: '2026-01-01T00:00:00.000Z' };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true, status: 201, json: () => Promise.resolve(ref),
+    } as unknown as Response));
+
+    const client = new FlowstileClient({ token: 'tok' });
+    const file = new File(['hello'], 'doc.pdf', { type: 'application/pdf' });
+    const result = await client.uploadAttachment('task-1', file);
+
+    expect(result).toEqual(ref);
+    const call = vi.mocked(globalThis.fetch).mock.calls[0];
+    expect(call[0]).toBe('/tasks/task-1/attachments');
+    expect((call[1] as RequestInit).method).toBe('POST');
+    expect((call[1] as RequestInit).body).toBeInstanceOf(FormData);
+  });
+
+  it('getAttachmentUrl returns the download URL', () => {
+    const client = new FlowstileClient({ baseUrl: 'http://localhost:3000' });
+    expect(client.getAttachmentUrl('task-1', 'att-1')).toBe('http://localhost:3000/tasks/task-1/attachments/att-1/content');
+  });
+
+  it('uploadAttachment throws FlowstileApiError on 403', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: false, status: 403, json: () => Promise.resolve({ error: 'Access denied' }),
+    } as unknown as Response));
+
+    const client = new FlowstileClient({});
+    const file = new File(['x'], 'x.txt', { type: 'text/plain' });
+    await expect(client.uploadAttachment('task-1', file)).rejects.toMatchObject({
+      name: 'FlowstileApiError',
+      status: 403,
+      code: 'FORBIDDEN',
+    });
+  });
+
   it('POST calls include correct method and body (complete sends { data: ... })', async () => {
     const fetchMock = makeFetchMock(204, null);
     // Make ok: true for 204-like response

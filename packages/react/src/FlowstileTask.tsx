@@ -1,7 +1,8 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useFlowstileTask } from './useFlowstileTask.js';
 import { FlowstileForm } from './FlowstileForm.js';
-import type { FlowstileApiError } from './types.js';
+import { FileField } from './FileField.js';
+import type { FlowstileApiError, AttachmentRef, AttachmentFieldConfig } from './types.js';
 
 export interface FlowstileTaskProps {
   taskId: string;
@@ -22,7 +23,7 @@ export function FlowstileTask({
   onError,
   onClaim,
 }: FlowstileTaskProps) {
-  const { task, form, data, status, error, validationErrors, isMutating, claim, complete } =
+  const { task, form, data, status, error, validationErrors, isMutating, claim, complete, client } =
     useFlowstileTask(taskId, { baseUrl, token, getToken });
   const [formData, setFormData] = useState<Record<string, unknown>>({});
 
@@ -74,6 +75,17 @@ export function FlowstileTask({
   const outcomes = form.outcomes ?? null;
   const hasOutcomes = Array.isArray(outcomes) && outcomes.length > 0;
 
+  // Collect attachment fields from the form schema
+  const attachmentFields = new Map<string, AttachmentFieldConfig>();
+  if (form.jsonSchema?.properties) {
+    const props = form.jsonSchema.properties as Record<string, Record<string, unknown>>;
+    for (const [key, fieldSchema] of Object.entries(props)) {
+      if (fieldSchema['x-flowstile-attachment']) {
+        attachmentFields.set(key, (fieldSchema['x-flowstile-attachment'] as AttachmentFieldConfig) ?? {});
+      }
+    }
+  }
+
   return (
     <div className="flowstile-task">
       <FlowstileForm
@@ -84,6 +96,24 @@ export function FlowstileTask({
         readOnly={!actions.canComplete}
         validationErrors={validationErrors ?? undefined}
       />
+      {attachmentFields.size > 0 && client && (
+        <div className="flowstile-attachment-fields">
+          {[...attachmentFields.entries()].map(([key, cfg]) => (
+            <div key={key} className="flowstile-attachment-field">
+              <label className="flowstile-attachment-label">{key}</label>
+              <FileField
+                taskId={taskId}
+                fieldKey={key}
+                config={cfg}
+                value={formData[key] as AttachmentRef | AttachmentRef[] | null}
+                readOnly={!actions.canComplete}
+                client={client}
+                onChange={(next) => setFormData((prev) => ({ ...prev, [key]: next }))}
+              />
+            </div>
+          ))}
+        </div>
+      )}
       <div className="flowstile-task-actions">
         {actions.canClaim && (
           <button

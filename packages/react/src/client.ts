@@ -1,4 +1,4 @@
-import type { FlowstileApiError, Task, UseFlowstileTaskOptions } from './types.js';
+import type { FlowstileApiError, Task, UseFlowstileTaskOptions, AttachmentRef } from './types.js';
 
 // Error body shape from the Flowstile server
 interface ApiErrorBody {
@@ -111,5 +111,36 @@ export class FlowstileClient {
 
   async cancelTask(taskId: string): Promise<void> {
     await this.request(`/tasks/${taskId}/cancel`, { method: 'POST' });
+  }
+
+  async uploadAttachment(taskId: string, file: File): Promise<AttachmentRef> {
+    const headers: Record<string, string> = {};
+    if (this.getToken) {
+      headers['Authorization'] = `Bearer ${await this.getToken()}`;
+    } else if (this.token) {
+      headers['Authorization'] = `Bearer ${this.token}`;
+    }
+
+    const formData = new FormData();
+    formData.append('file', file, file.name);
+
+    const res = await fetch(`${this.baseUrl}/tasks/${taskId}/attachments`, {
+      method: 'POST',
+      credentials: 'include',
+      headers,
+      body: formData,
+    });
+
+    if (!res.ok) {
+      let body: ApiErrorBody;
+      try { body = await res.json() as ApiErrorBody; } catch { body = {}; }
+      throw new FlowstileApiErrorImpl(res.status, body);
+    }
+
+    return res.json() as Promise<AttachmentRef>;
+  }
+
+  getAttachmentUrl(taskId: string, attachmentId: string): string {
+    return `${this.baseUrl}/tasks/${taskId}/attachments/${attachmentId}/content`;
   }
 }
