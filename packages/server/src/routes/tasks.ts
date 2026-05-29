@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { Repository, SelectQueryBuilder } from 'typeorm';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { Task } from '../entities/task.entity.js';
 import { TaskDefinition } from '../entities/task-definition.entity.js';
@@ -97,6 +98,63 @@ const SearchTasksBody = z.object({
   { message: 'Maximum 10 variable filters total across all scopes' },
 );
 
+type VariableFilterInput = { name: string; operator: 'eq' | 'like'; value: string | number | boolean };
+
+// The only column names ever interpolated into the variable-search SQL.
+// Sourced exclusively from this allowlist — never from the request — so the
+// `t."${column}"` interpolation below carries no injection risk.
+const SEARCHABLE_COLUMNS = {
+  input: 'inputData',
+  context: 'contextData',
+  submission: 'submissionData',
+} as const;
+
+type SearchableColumn = (typeof SEARCHABLE_COLUMNS)[keyof typeof SEARCHABLE_COLUMNS];
+
+// Shared scaffolding for both GET /tasks and POST /tasks/search: the same joins,
+// ordering, and metadata filters. Keeps the two endpoints from drifting.
+function baseTaskQuery(
+  repo: Repository<Task>,
+  filters: { status?: TaskStatus; assigneeId?: string; group?: string },
+): SelectQueryBuilder<Task> {
+  const qb = repo
+    .createQueryBuilder('t')
+    .leftJoinAndSelect('t.taskDefinition', 'td')
+    .leftJoinAndSelect('t.assignee', 'a')
+    .orderBy('t.createdAt', 'DESC');
+
+  if (filters.status) qb.andWhere('t.status = :status', { status: filters.status });
+  if (filters.assigneeId) qb.andWhere('t.assigneeId = :assigneeId', { assigneeId: filters.assigneeId });
+  // Filter to tasks whose candidateGroups contains the given group name
+  if (filters.group) qb.andWhere(':group = ANY(td.candidateGroups)', { group: filters.group });
+
+  return qb;
+}
+
+function applyVariableFilters(
+  qb: SelectQueryBuilder<Task>,
+  column: SearchableColumn,
+  filters: VariableFilterInput[] | undefined,
+  counter: { n: number },
+): void {
+  if (!filters?.length) return;
+  for (const filter of filters) {
+    const idx = counter.n++;
+    if (filter.operator === 'like') {
+      // jsonb_extract_path_text cannot use the GIN index — falls back to seq scan.
+      // Acceptable for low-frequency admin queries; add expression indexes for hot fields.
+      // ILIKE is case-insensitive: users expect `alice%` to match `Alice`.
+      qb.andWhere(
+        `jsonb_extract_path_text(t."${column}", :vname_${idx}) ILIKE :vval_${idx}`,
+        { [`vname_${idx}`]: filter.name, [`vval_${idx}`]: filter.value },
+      );
+    } else {
+      const containment = JSON.stringify({ [filter.name]: filter.value });
+      qb.andWhere(`t."${column}" @> :vval_${idx}::jsonb`, { [`vval_${idx}`]: containment });
+    }
+  }
+}
+
 export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
   const read = { preHandler: [requirePermission(Permissions.TASKS_READ)] };
   const write = { preHandler: [requirePermission(Permissions.TASKS_WRITE)] };
@@ -108,20 +166,7 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
   app.get('/tasks', { ...read, schema: { querystring: TasksQuery, tags: ['Tasks'] } }, async (request) => {
     const { status, assigneeId, group, limit, offset } = request.query;
 
-    const qb = repo()
-      .createQueryBuilder('t')
-      .leftJoinAndSelect('t.taskDefinition', 'td')
-      .leftJoinAndSelect('t.assignee', 'a')
-      .orderBy('t.createdAt', 'DESC')
-      .limit(limit)
-      .offset(offset);
-
-    if (status) qb.andWhere('t.status = :status', { status });
-    if (assigneeId) qb.andWhere('t.assigneeId = :assigneeId', { assigneeId });
-    if (group) {
-      // Filter to tasks whose candidateGroups contains the given group name
-      qb.andWhere(':group = ANY(td.candidateGroups)', { group });
-    }
+    const qb = baseTaskQuery(repo(), { status, assigneeId, group }).limit(limit).offset(offset);
 
     const [items, total] = await qb.getManyAndCount();
     return paginate(items.map(serializeTask), total, limit, offset);
@@ -134,46 +179,12 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
       limit, offset,
     } = request.body;
 
-    const qb = repo()
-      .createQueryBuilder('t')
-      .leftJoinAndSelect('t.taskDefinition', 'td')
-      .leftJoinAndSelect('t.assignee', 'a')
-      .orderBy('t.createdAt', 'DESC')
-      .limit(limit)
-      .offset(offset);
+    const qb = baseTaskQuery(repo(), { status, assigneeId, group }).limit(limit).offset(offset);
 
-    if (status) qb.andWhere('t.status = :status', { status });
-    if (assigneeId) qb.andWhere('t.assigneeId = :assigneeId', { assigneeId });
-    if (group) qb.andWhere(':group = ANY(td.candidateGroups)', { group });
-
-    let paramCounter = 0;
-    const applyVariableFilters = (
-      filters: { name: string; operator: 'eq' | 'like'; value: string | number | boolean }[] | undefined,
-      column: string,
-    ) => {
-      if (!filters?.length) return;
-      for (const filter of filters) {
-        const idx = paramCounter++;
-        if (filter.operator === 'like') {
-          // jsonb_extract_path_text cannot use the GIN index — falls back to seq scan.
-          // Acceptable for low-frequency admin queries; add expression indexes for hot fields.
-          qb.andWhere(
-            `jsonb_extract_path_text(t."${column}", :vname_${idx}) LIKE :vval_${idx}`,
-            { [`vname_${idx}`]: filter.name, [`vval_${idx}`]: filter.value },
-          );
-        } else {
-          const containment = JSON.stringify({ [filter.name]: filter.value });
-          qb.andWhere(
-            `t."${column}" @> :vval_${idx}::jsonb`,
-            { [`vval_${idx}`]: containment },
-          );
-        }
-      }
-    };
-
-    applyVariableFilters(inputVariables, 'inputData');
-    applyVariableFilters(contextVariables, 'contextData');
-    applyVariableFilters(submissionVariables, 'submissionData');
+    const counter = { n: 0 };
+    applyVariableFilters(qb, SEARCHABLE_COLUMNS.input, inputVariables, counter);
+    applyVariableFilters(qb, SEARCHABLE_COLUMNS.context, contextVariables, counter);
+    applyVariableFilters(qb, SEARCHABLE_COLUMNS.submission, submissionVariables, counter);
 
     const [items, total] = await qb.getManyAndCount();
     return paginate(items.map(serializeTask), total, limit, offset);

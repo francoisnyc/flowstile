@@ -183,6 +183,18 @@ describe('POST /tasks/search', () => {
     expect(body.items.every((t) => String(t.inputData.ORDER_ID).startsWith('ORD-LIKE'))).toBe(true);
   });
 
+  it('like operator is case-insensitive', async () => {
+    const matchId = await createTask({ inputData: { CUSTOMER: 'Alice Cooper' } });
+
+    const res = await search({
+      inputVariables: [{ name: 'CUSTOMER', operator: 'like', value: 'alice%' }],
+    });
+    expect(res.statusCode).toBe(200);
+
+    const body = res.json<{ items: { id: string }[] }>();
+    expect(body.items.map((t) => t.id)).toContain(matchId);
+  });
+
   it('rejects like operator with numeric value', async () => {
     const res = await search({
       inputVariables: [{ name: 'AMOUNT', operator: 'like', value: 123 }],

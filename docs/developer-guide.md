@@ -266,7 +266,7 @@ The most important runtime endpoints are:
 }
 ```
 
-Operators: `eq` (exact match, uses GIN index) and `like` (pattern match with `%` wildcard, falls back to seq scan). All filters are ANDed. Maximum 10 variable filters total across all scopes per request.
+Operators: `eq` (exact match on string, number, or boolean — uses the GIN index) and `like` (case-insensitive pattern match with `%` wildcard, falls back to a sequential scan). All filters are ANDed. Maximum 10 variable filters total across all scopes per request.
 
 Forms are addressed by stable `code` values rather than opaque IDs. That matters for developer experience. A form code can live comfortably in source code, configuration, and CI pipelines without becoming environment-specific.
 
