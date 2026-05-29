@@ -237,17 +237,42 @@ The Flowstile API is organized around the resources the product exposes:
 The most important runtime endpoints are:
 
 - `POST /tasks` to create a task instance
+- `GET /tasks` to list tasks (filter by `status`, `assigneeId`, `group`)
 - `GET /tasks/:id` to retrieve a task with form schema filtered for the current user
+- `POST /tasks/search` to search tasks by business variables stored in `inputData`, `contextData`, or `submissionData`
 - `POST /tasks/:id/claim`
 - `POST /tasks/:id/unclaim`
 - `POST /tasks/:id/complete`
 - `POST /tasks/:id/cancel`
 
+### Task Variable Search
+
+`POST /tasks/search` accepts the same metadata filters as `GET /tasks` plus scoped variable filters:
+
+```json
+{
+  "status": "created",
+  "inputVariables": [
+    { "name": "ORDER_ID", "operator": "eq", "value": "ORD-2024-1002" }
+  ],
+  "contextVariables": [
+    { "name": "CUSTOMER_NAME", "operator": "like", "value": "Alice%" }
+  ],
+  "submissionVariables": [
+    { "name": "DECISION", "operator": "eq", "value": "APPROVED" }
+  ],
+  "limit": 20,
+  "offset": 0
+}
+```
+
+Operators: `eq` (exact match, uses GIN index) and `like` (pattern match with `%` wildcard, falls back to seq scan). All filters are ANDed. Maximum 10 variable filters total across all scopes per request.
+
 Forms are addressed by stable `code` values rather than opaque IDs. That matters for developer experience. A form code can live comfortably in source code, configuration, and CI pipelines without becoming environment-specific.
 
 ## Package Layout
 
-Flowstile uses a monorepo with four packages:
+Flowstile uses a monorepo with five packages:
 
 ```text
 packages/
@@ -255,6 +280,7 @@ packages/
   worker/   Temporal worker integration
   sdk/      @flowstile/sdk
   ui/       React application for the inbox and form designer
+  react/    @flowstile/react — embeddable React SDK for third-party apps
 ```
 
 The repository is optimized for shared types, coordinated iteration, and a local development loop where backend and frontend can move together without hand-maintained copies of contracts.

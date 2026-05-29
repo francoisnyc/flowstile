@@ -4,12 +4,13 @@ Flowstile is a human-task inbox and form layer for Temporal.io workflows. Workfl
 
 ## Architecture
 
-Four packages in a pnpm monorepo:
+Five packages in a pnpm monorepo:
 
 - **`packages/server`** — Fastify REST API, TypeORM + PostgreSQL, auth (JWT cookies), RBAC, task lifecycle, form versioning, signal delivery to Temporal
 - **`packages/worker`** — Temporal worker hosting workflow definitions and activities (including the Order Fulfillment demo)
 - **`packages/sdk`** — `@flowstile/sdk` npm package: `FlowstileClient` for API calls, `createTaskAndWait` workflow helper, typed errors
 - **`packages/ui`** — React + Vite + Tailwind inbox and JSON Forms-based form designer
+- **`packages/react`** — `@flowstile/react` npm package: embeddable React SDK for embedding Flowstile task forms into third-party apps (`FlowstileTask`, `FlowstileForm`, `useFlowstileTask`)
 
 ## Key Contracts
 
@@ -83,7 +84,7 @@ pnpm dev                    # starts server + ui + worker
 ## Testing
 
 ```bash
-pnpm test                                           # all unit tests (122)
+pnpm test                                           # all unit tests across all packages
 pnpm --filter @flowstile/server test:integration    # requires Docker postgres
 npx playwright test                                 # e2e (requires running stack)
 ```

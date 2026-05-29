@@ -324,6 +324,8 @@ To claim a task, the user must:
 - be task-eligible
 - and the task must be in `created` state
 
+> **v1 limitation:** The claim endpoint does not currently enforce `candidateGroups` / `candidateUsers` eligibility at the HTTP layer. Any user with `tasks:claim` can claim any `created` task. Eligibility is used for filtering (inbox visibility) but not for access control on the claim action itself. This will be addressed in a future release.
+
 ### Unclaim
 
 To unclaim a task, the user must:

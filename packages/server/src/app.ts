@@ -2,7 +2,7 @@ import Fastify, { FastifyInstance } from 'fastify';
 import rateLimit from '@fastify/rate-limit';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
-import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
+import { serializerCompiler, validatorCompiler, jsonSchemaTransform } from 'fastify-type-provider-zod';
 import corsPlugin from './plugins/cors.js';
 import csrfPlugin from './plugins/csrf.js';
 import typeormPlugin from './plugins/typeorm.js';
@@ -60,6 +60,7 @@ export async function buildApp(): Promise<FastifyInstance> {
         { name: 'Tasks' },
       ],
     },
+    transform: jsonSchemaTransform,
   });
 
   await app.register(swaggerUi, {

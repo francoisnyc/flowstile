@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 import Fastify from 'fastify';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
-import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
+import { serializerCompiler, validatorCompiler, jsonSchemaTransform } from 'fastify-type-provider-zod';
 import { stringify } from 'yaml';
 import { healthRoutes } from './routes/health.js';
 import { authRoutes } from './routes/auth.js';
@@ -59,6 +59,7 @@ async function main() {
         { name: 'Tasks' },
       ],
     },
+    transform: jsonSchemaTransform,
   });
 
   await app.register(swaggerUi, { routePrefix: '/docs' });

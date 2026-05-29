@@ -37,37 +37,18 @@ paths:
         content:
           application/json:
             schema:
-              def:
-                type: object
-                shape:
-                  email:
-                    def:
-                      type: string
-                      checks:
-                        - def:
-                            type: string
-                            format: email
-                            check: string_format
-                            abort: false
-                            pattern: {}
-                          type: string
-                          format: email
-                          minLength: null
-                          maxLength: null
-                    type: string
-                    format: email
-                    minLength: null
-                    maxLength: null
-                  password:
-                    def:
-                      type: string
-                      checks:
-                        - {}
-                    type: string
-                    format: null
-                    minLength: 1
-                    maxLength: null
               type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                  pattern: ^(?!\.)(?!.*\.\.)([A-Za-z0-9_'+\-\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\-]*\.)+[A-Za-z]{2,}$
+                password:
+                  type: string
+                  minLength: 1
+              required:
+                - email
+                - password
       responses:
         "200":
           description: Default Response
@@ -90,179 +71,22 @@ paths:
       tags:
         - Users
       parameters:
-        - in: query
-          name: toJSONSchema
         - schema:
-            type: object
-            shape:
-              limit:
-                def:
-                  type: default
-                  innerType:
-                    def:
-                      type: number
-                      coerce: true
-                      checks:
-                        - def:
-                            type: number
-                            check: number_format
-                            abort: false
-                            format: safeint
-                          type: number
-                          minValue: -9007199254740991
-                          maxValue: 9007199254740991
-                          isInt: true
-                          isFinite: true
-                          format: safeint
-                        - {}
-                        - {}
-                    type: number
-                    minValue: 1
-                    maxValue: 200
-                    isInt: true
-                    isFinite: true
-                    format: safeint
-                  defaultValue: 50
-                type: default
-              offset:
-                def:
-                  type: default
-                  innerType:
-                    def:
-                      type: number
-                      coerce: true
-                      checks:
-                        - def:
-                            type: number
-                            check: number_format
-                            abort: false
-                            format: safeint
-                          type: number
-                          minValue: -9007199254740991
-                          maxValue: 9007199254740991
-                          isInt: true
-                          isFinite: true
-                          format: safeint
-                        - {}
-                    type: number
-                    minValue: 0
-                    maxValue: 9007199254740991
-                    isInt: true
-                    isFinite: true
-                    format: safeint
-                  defaultValue: 0
-                type: default
+            default: 50
+            type: integer
+            minimum: 1
+            maximum: 200
           in: query
-          name: def
-        - schema: object
+          name: limit
+          required: false
+        - schema:
+            default: 0
+            type: integer
+            minimum: 0
+            maximum: 9007199254740991
           in: query
-          name: type
-        - in: query
-          name: check
-        - in: query
-          name: with
-        - in: query
-          name: clone
-        - in: query
-          name: brand
-        - in: query
-          name: register
-        - in: query
-          name: parse
-        - in: query
-          name: safeParse
-        - in: query
-          name: parseAsync
-        - in: query
-          name: safeParseAsync
-        - in: query
-          name: spa
-        - in: query
-          name: encode
-        - in: query
-          name: decode
-        - in: query
-          name: encodeAsync
-        - in: query
-          name: decodeAsync
-        - in: query
-          name: safeEncode
-        - in: query
-          name: safeDecode
-        - in: query
-          name: safeEncodeAsync
-        - in: query
-          name: safeDecodeAsync
-        - in: query
-          name: refine
-        - in: query
-          name: superRefine
-        - in: query
-          name: overwrite
-        - in: query
-          name: optional
-        - in: query
-          name: exactOptional
-        - in: query
-          name: nullable
-        - in: query
-          name: nullish
-        - in: query
-          name: nonoptional
-        - in: query
-          name: array
-        - in: query
-          name: or
-        - in: query
-          name: and
-        - in: query
-          name: transform
-        - in: query
-          name: default
-        - in: query
-          name: prefault
-        - in: query
-          name: catch
-        - in: query
-          name: pipe
-        - in: query
-          name: readonly
-        - in: query
-          name: describe
-        - in: query
-          name: meta
-        - in: query
-          name: isOptional
-        - in: query
-          name: isNullable
-        - in: query
-          name: apply
-        - in: query
-          name: keyof
-        - in: query
-          name: catchall
-        - in: query
-          name: passthrough
-        - in: query
-          name: loose
-        - in: query
-          name: strict
-        - in: query
-          name: strip
-        - in: query
-          name: extend
-        - in: query
-          name: safeExtend
-        - in: query
-          name: merge
-        - in: query
-          name: pick
-        - in: query
-          name: omit
-        - in: query
-          name: partial
-        - in: query
-          name: required
+          name: offset
+          required: false
       responses:
         "200":
           description: Default Response
@@ -274,134 +98,34 @@ paths:
         content:
           application/json:
             schema:
-              def:
-                type: object
-                shape:
-                  email:
-                    def:
-                      type: string
-                      checks:
-                        - def:
-                            type: string
-                            format: email
-                            check: string_format
-                            abort: false
-                            pattern: {}
-                          type: string
-                          format: email
-                          minLength: null
-                          maxLength: null
-                    type: string
-                    format: email
-                    minLength: null
-                    maxLength: null
-                  displayName:
-                    def:
-                      type: string
-                      checks:
-                        - {}
-                    type: string
-                    format: null
-                    minLength: 1
-                    maxLength: null
-                  password:
-                    def:
-                      type: string
-                      checks:
-                        - {}
-                    type: string
-                    format: null
-                    minLength: 8
-                    maxLength: null
-                  groupIds:
-                    def:
-                      type: optional
-                      innerType:
-                        def:
-                          type: array
-                          element:
-                            def:
-                              type: string
-                              checks:
-                                - def:
-                                    type: string
-                                    format: uuid
-                                    check: string_format
-                                    abort: false
-                                    pattern: {}
-                                  type: string
-                                  format: uuid
-                                  minLength: null
-                                  maxLength: null
-                            type: string
-                            format: uuid
-                            minLength: null
-                            maxLength: null
-                        type: array
-                        element:
-                          def:
-                            type: string
-                            checks:
-                              - def:
-                                  type: string
-                                  format: uuid
-                                  check: string_format
-                                  abort: false
-                                  pattern: {}
-                                type: string
-                                format: uuid
-                                minLength: null
-                                maxLength: null
-                          type: string
-                          format: uuid
-                          minLength: null
-                          maxLength: null
-                    type: optional
-                  roleIds:
-                    def:
-                      type: optional
-                      innerType:
-                        def:
-                          type: array
-                          element:
-                            def:
-                              type: string
-                              checks:
-                                - def:
-                                    type: string
-                                    format: uuid
-                                    check: string_format
-                                    abort: false
-                                    pattern: {}
-                                  type: string
-                                  format: uuid
-                                  minLength: null
-                                  maxLength: null
-                            type: string
-                            format: uuid
-                            minLength: null
-                            maxLength: null
-                        type: array
-                        element:
-                          def:
-                            type: string
-                            checks:
-                              - def:
-                                  type: string
-                                  format: uuid
-                                  check: string_format
-                                  abort: false
-                                  pattern: {}
-                                type: string
-                                format: uuid
-                                minLength: null
-                                maxLength: null
-                          type: string
-                          format: uuid
-                          minLength: null
-                          maxLength: null
-                    type: optional
               type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                  pattern: ^(?!\.)(?!.*\.\.)([A-Za-z0-9_'+\-\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\-]*\.)+[A-Za-z]{2,}$
+                displayName:
+                  type: string
+                  minLength: 1
+                password:
+                  type: string
+                  minLength: 8
+                groupIds:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                roleIds:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+              required:
+                - email
+                - displayName
+                - password
       responses:
         "200":
           description: Default Response
@@ -414,318 +138,35 @@ paths:
         content:
           application/json:
             schema:
-              def:
-                type: object
-                shape:
-                  displayName:
-                    def:
-                      type: optional
-                      innerType:
-                        def:
-                          type: string
-                          checks:
-                            - {}
-                        type: string
-                        format: null
-                        minLength: 1
-                        maxLength: null
-                    type: optional
-                  status:
-                    def:
-                      type: optional
-                      innerType:
-                        def:
-                          type: enum
-                          entries:
-                            ACTIVE: active
-                            INACTIVE: inactive
-                        type: enum
-                        enum:
-                          ACTIVE: active
-                          INACTIVE: inactive
-                        options:
-                          - active
-                          - inactive
-                    type: optional
-                  groupIds:
-                    def:
-                      type: optional
-                      innerType:
-                        def:
-                          type: array
-                          element:
-                            def:
-                              type: string
-                              checks:
-                                - def:
-                                    type: string
-                                    format: uuid
-                                    check: string_format
-                                    abort: false
-                                    pattern: {}
-                                  type: string
-                                  format: uuid
-                                  minLength: null
-                                  maxLength: null
-                            type: string
-                            format: uuid
-                            minLength: null
-                            maxLength: null
-                        type: array
-                        element:
-                          def:
-                            type: string
-                            checks:
-                              - def:
-                                  type: string
-                                  format: uuid
-                                  check: string_format
-                                  abort: false
-                                  pattern: {}
-                                type: string
-                                format: uuid
-                                minLength: null
-                                maxLength: null
-                          type: string
-                          format: uuid
-                          minLength: null
-                          maxLength: null
-                    type: optional
-                  roleIds:
-                    def:
-                      type: optional
-                      innerType:
-                        def:
-                          type: array
-                          element:
-                            def:
-                              type: string
-                              checks:
-                                - def:
-                                    type: string
-                                    format: uuid
-                                    check: string_format
-                                    abort: false
-                                    pattern: {}
-                                  type: string
-                                  format: uuid
-                                  minLength: null
-                                  maxLength: null
-                            type: string
-                            format: uuid
-                            minLength: null
-                            maxLength: null
-                        type: array
-                        element:
-                          def:
-                            type: string
-                            checks:
-                              - def:
-                                  type: string
-                                  format: uuid
-                                  check: string_format
-                                  abort: false
-                                  pattern: {}
-                                type: string
-                                format: uuid
-                                minLength: null
-                                maxLength: null
-                          type: string
-                          format: uuid
-                          minLength: null
-                          maxLength: null
-                    type: optional
               type: object
-      parameters:
-        - in: path
-          name: toJSONSchema
-          required: true
-        - schema:
-            type: object
-            shape:
-              id:
-                def:
+              properties:
+                displayName:
                   type: string
-                  checks:
-                    - def:
-                        type: string
-                        format: uuid
-                        check: string_format
-                        abort: false
-                        pattern: {}
-                      type: string
-                      format: uuid
-                      minLength: null
-                      maxLength: null
-                type: string
-                format: uuid
-                minLength: null
-                maxLength: null
+                  minLength: 1
+                status:
+                  type: string
+                  enum:
+                    - active
+                    - inactive
+                groupIds:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                roleIds:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
           in: path
-          name: def
-          required: true
-        - schema: object
-          in: path
-          name: type
-          required: true
-        - in: path
-          name: check
-          required: true
-        - in: path
-          name: with
-          required: true
-        - in: path
-          name: clone
-          required: true
-        - in: path
-          name: brand
-          required: true
-        - in: path
-          name: register
-          required: true
-        - in: path
-          name: parse
-          required: true
-        - in: path
-          name: safeParse
-          required: true
-        - in: path
-          name: parseAsync
-          required: true
-        - in: path
-          name: safeParseAsync
-          required: true
-        - in: path
-          name: spa
-          required: true
-        - in: path
-          name: encode
-          required: true
-        - in: path
-          name: decode
-          required: true
-        - in: path
-          name: encodeAsync
-          required: true
-        - in: path
-          name: decodeAsync
-          required: true
-        - in: path
-          name: safeEncode
-          required: true
-        - in: path
-          name: safeDecode
-          required: true
-        - in: path
-          name: safeEncodeAsync
-          required: true
-        - in: path
-          name: safeDecodeAsync
-          required: true
-        - in: path
-          name: refine
-          required: true
-        - in: path
-          name: superRefine
-          required: true
-        - in: path
-          name: overwrite
-          required: true
-        - in: path
-          name: optional
-          required: true
-        - in: path
-          name: exactOptional
-          required: true
-        - in: path
-          name: nullable
-          required: true
-        - in: path
-          name: nullish
-          required: true
-        - in: path
-          name: nonoptional
-          required: true
-        - in: path
-          name: array
-          required: true
-        - in: path
-          name: or
-          required: true
-        - in: path
-          name: and
-          required: true
-        - in: path
-          name: transform
-          required: true
-        - in: path
-          name: default
-          required: true
-        - in: path
-          name: prefault
-          required: true
-        - in: path
-          name: catch
-          required: true
-        - in: path
-          name: pipe
-          required: true
-        - in: path
-          name: readonly
-          required: true
-        - in: path
-          name: describe
-          required: true
-        - in: path
-          name: meta
-          required: true
-        - in: path
-          name: isOptional
-          required: true
-        - in: path
-          name: isNullable
-          required: true
-        - in: path
-          name: apply
-          required: true
-        - in: path
-          name: keyof
-          required: true
-        - in: path
-          name: catchall
-          required: true
-        - in: path
-          name: passthrough
-          required: true
-        - in: path
-          name: loose
-          required: true
-        - in: path
-          name: strict
-          required: true
-        - in: path
-          name: strip
-          required: true
-        - in: path
-          name: extend
-          required: true
-        - in: path
-          name: safeExtend
-          required: true
-        - in: path
-          name: merge
-          required: true
-        - in: path
-          name: pick
-          required: true
-        - in: path
-          name: omit
-          required: true
-        - in: path
-          name: partial
-          required: true
-        - in: path
-          name: required
+          name: id
           required: true
       responses:
         "200":
@@ -742,179 +183,22 @@ paths:
       tags:
         - Groups
       parameters:
-        - in: query
-          name: toJSONSchema
         - schema:
-            type: object
-            shape:
-              limit:
-                def:
-                  type: default
-                  innerType:
-                    def:
-                      type: number
-                      coerce: true
-                      checks:
-                        - def:
-                            type: number
-                            check: number_format
-                            abort: false
-                            format: safeint
-                          type: number
-                          minValue: -9007199254740991
-                          maxValue: 9007199254740991
-                          isInt: true
-                          isFinite: true
-                          format: safeint
-                        - {}
-                        - {}
-                    type: number
-                    minValue: 1
-                    maxValue: 200
-                    isInt: true
-                    isFinite: true
-                    format: safeint
-                  defaultValue: 50
-                type: default
-              offset:
-                def:
-                  type: default
-                  innerType:
-                    def:
-                      type: number
-                      coerce: true
-                      checks:
-                        - def:
-                            type: number
-                            check: number_format
-                            abort: false
-                            format: safeint
-                          type: number
-                          minValue: -9007199254740991
-                          maxValue: 9007199254740991
-                          isInt: true
-                          isFinite: true
-                          format: safeint
-                        - {}
-                    type: number
-                    minValue: 0
-                    maxValue: 9007199254740991
-                    isInt: true
-                    isFinite: true
-                    format: safeint
-                  defaultValue: 0
-                type: default
+            default: 50
+            type: integer
+            minimum: 1
+            maximum: 200
           in: query
-          name: def
-        - schema: object
+          name: limit
+          required: false
+        - schema:
+            default: 0
+            type: integer
+            minimum: 0
+            maximum: 9007199254740991
           in: query
-          name: type
-        - in: query
-          name: check
-        - in: query
-          name: with
-        - in: query
-          name: clone
-        - in: query
-          name: brand
-        - in: query
-          name: register
-        - in: query
-          name: parse
-        - in: query
-          name: safeParse
-        - in: query
-          name: parseAsync
-        - in: query
-          name: safeParseAsync
-        - in: query
-          name: spa
-        - in: query
-          name: encode
-        - in: query
-          name: decode
-        - in: query
-          name: encodeAsync
-        - in: query
-          name: decodeAsync
-        - in: query
-          name: safeEncode
-        - in: query
-          name: safeDecode
-        - in: query
-          name: safeEncodeAsync
-        - in: query
-          name: safeDecodeAsync
-        - in: query
-          name: refine
-        - in: query
-          name: superRefine
-        - in: query
-          name: overwrite
-        - in: query
-          name: optional
-        - in: query
-          name: exactOptional
-        - in: query
-          name: nullable
-        - in: query
-          name: nullish
-        - in: query
-          name: nonoptional
-        - in: query
-          name: array
-        - in: query
-          name: or
-        - in: query
-          name: and
-        - in: query
-          name: transform
-        - in: query
-          name: default
-        - in: query
-          name: prefault
-        - in: query
-          name: catch
-        - in: query
-          name: pipe
-        - in: query
-          name: readonly
-        - in: query
-          name: describe
-        - in: query
-          name: meta
-        - in: query
-          name: isOptional
-        - in: query
-          name: isNullable
-        - in: query
-          name: apply
-        - in: query
-          name: keyof
-        - in: query
-          name: catchall
-        - in: query
-          name: passthrough
-        - in: query
-          name: loose
-        - in: query
-          name: strict
-        - in: query
-          name: strip
-        - in: query
-          name: extend
-        - in: query
-          name: safeExtend
-        - in: query
-          name: merge
-        - in: query
-          name: pick
-        - in: query
-          name: omit
-        - in: query
-          name: partial
-        - in: query
-          name: required
+          name: offset
+          required: false
       responses:
         "200":
           description: Default Response
@@ -926,63 +210,19 @@ paths:
         content:
           application/json:
             schema:
-              def:
-                type: object
-                shape:
-                  name:
-                    def:
-                      type: string
-                      checks:
-                        - {}
-                    type: string
-                    format: null
-                    minLength: 1
-                    maxLength: null
-                  memberIds:
-                    def:
-                      type: optional
-                      innerType:
-                        def:
-                          type: array
-                          element:
-                            def:
-                              type: string
-                              checks:
-                                - def:
-                                    type: string
-                                    format: uuid
-                                    check: string_format
-                                    abort: false
-                                    pattern: {}
-                                  type: string
-                                  format: uuid
-                                  minLength: null
-                                  maxLength: null
-                            type: string
-                            format: uuid
-                            minLength: null
-                            maxLength: null
-                        type: array
-                        element:
-                          def:
-                            type: string
-                            checks:
-                              - def:
-                                  type: string
-                                  format: uuid
-                                  check: string_format
-                                  abort: false
-                                  pattern: {}
-                                type: string
-                                format: uuid
-                                minLength: null
-                                maxLength: null
-                          type: string
-                          format: uuid
-                          minLength: null
-                          maxLength: null
-                    type: optional
               type: object
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                memberIds:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+              required:
+                - name
       responses:
         "200":
           description: Default Response
@@ -995,257 +235,24 @@ paths:
         content:
           application/json:
             schema:
-              def:
-                type: object
-                shape:
-                  name:
-                    def:
-                      type: optional
-                      innerType:
-                        def:
-                          type: string
-                          checks:
-                            - {}
-                        type: string
-                        format: null
-                        minLength: 1
-                        maxLength: null
-                    type: optional
-                  memberIds:
-                    def:
-                      type: optional
-                      innerType:
-                        def:
-                          type: array
-                          element:
-                            def:
-                              type: string
-                              checks:
-                                - def:
-                                    type: string
-                                    format: uuid
-                                    check: string_format
-                                    abort: false
-                                    pattern: {}
-                                  type: string
-                                  format: uuid
-                                  minLength: null
-                                  maxLength: null
-                            type: string
-                            format: uuid
-                            minLength: null
-                            maxLength: null
-                        type: array
-                        element:
-                          def:
-                            type: string
-                            checks:
-                              - def:
-                                  type: string
-                                  format: uuid
-                                  check: string_format
-                                  abort: false
-                                  pattern: {}
-                                type: string
-                                format: uuid
-                                minLength: null
-                                maxLength: null
-                          type: string
-                          format: uuid
-                          minLength: null
-                          maxLength: null
-                    type: optional
               type: object
-      parameters:
-        - in: path
-          name: toJSONSchema
-          required: true
-        - schema:
-            type: object
-            shape:
-              id:
-                def:
+              properties:
+                name:
                   type: string
-                  checks:
-                    - def:
-                        type: string
-                        format: uuid
-                        check: string_format
-                        abort: false
-                        pattern: {}
-                      type: string
-                      format: uuid
-                      minLength: null
-                      maxLength: null
-                type: string
-                format: uuid
-                minLength: null
-                maxLength: null
+                  minLength: 1
+                memberIds:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                    pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
           in: path
-          name: def
-          required: true
-        - schema: object
-          in: path
-          name: type
-          required: true
-        - in: path
-          name: check
-          required: true
-        - in: path
-          name: with
-          required: true
-        - in: path
-          name: clone
-          required: true
-        - in: path
-          name: brand
-          required: true
-        - in: path
-          name: register
-          required: true
-        - in: path
-          name: parse
-          required: true
-        - in: path
-          name: safeParse
-          required: true
-        - in: path
-          name: parseAsync
-          required: true
-        - in: path
-          name: safeParseAsync
-          required: true
-        - in: path
-          name: spa
-          required: true
-        - in: path
-          name: encode
-          required: true
-        - in: path
-          name: decode
-          required: true
-        - in: path
-          name: encodeAsync
-          required: true
-        - in: path
-          name: decodeAsync
-          required: true
-        - in: path
-          name: safeEncode
-          required: true
-        - in: path
-          name: safeDecode
-          required: true
-        - in: path
-          name: safeEncodeAsync
-          required: true
-        - in: path
-          name: safeDecodeAsync
-          required: true
-        - in: path
-          name: refine
-          required: true
-        - in: path
-          name: superRefine
-          required: true
-        - in: path
-          name: overwrite
-          required: true
-        - in: path
-          name: optional
-          required: true
-        - in: path
-          name: exactOptional
-          required: true
-        - in: path
-          name: nullable
-          required: true
-        - in: path
-          name: nullish
-          required: true
-        - in: path
-          name: nonoptional
-          required: true
-        - in: path
-          name: array
-          required: true
-        - in: path
-          name: or
-          required: true
-        - in: path
-          name: and
-          required: true
-        - in: path
-          name: transform
-          required: true
-        - in: path
-          name: default
-          required: true
-        - in: path
-          name: prefault
-          required: true
-        - in: path
-          name: catch
-          required: true
-        - in: path
-          name: pipe
-          required: true
-        - in: path
-          name: readonly
-          required: true
-        - in: path
-          name: describe
-          required: true
-        - in: path
-          name: meta
-          required: true
-        - in: path
-          name: isOptional
-          required: true
-        - in: path
-          name: isNullable
-          required: true
-        - in: path
-          name: apply
-          required: true
-        - in: path
-          name: keyof
-          required: true
-        - in: path
-          name: catchall
-          required: true
-        - in: path
-          name: passthrough
-          required: true
-        - in: path
-          name: loose
-          required: true
-        - in: path
-          name: strict
-          required: true
-        - in: path
-          name: strip
-          required: true
-        - in: path
-          name: extend
-          required: true
-        - in: path
-          name: safeExtend
-          required: true
-        - in: path
-          name: merge
-          required: true
-        - in: path
-          name: pick
-          required: true
-        - in: path
-          name: omit
-          required: true
-        - in: path
-          name: partial
-          required: true
-        - in: path
-          name: required
+          name: id
           required: true
       responses:
         "200":
@@ -1255,179 +262,22 @@ paths:
       tags:
         - Forms
       parameters:
-        - in: query
-          name: toJSONSchema
         - schema:
-            type: object
-            shape:
-              limit:
-                def:
-                  type: default
-                  innerType:
-                    def:
-                      type: number
-                      coerce: true
-                      checks:
-                        - def:
-                            type: number
-                            check: number_format
-                            abort: false
-                            format: safeint
-                          type: number
-                          minValue: -9007199254740991
-                          maxValue: 9007199254740991
-                          isInt: true
-                          isFinite: true
-                          format: safeint
-                        - {}
-                        - {}
-                    type: number
-                    minValue: 1
-                    maxValue: 200
-                    isInt: true
-                    isFinite: true
-                    format: safeint
-                  defaultValue: 50
-                type: default
-              offset:
-                def:
-                  type: default
-                  innerType:
-                    def:
-                      type: number
-                      coerce: true
-                      checks:
-                        - def:
-                            type: number
-                            check: number_format
-                            abort: false
-                            format: safeint
-                          type: number
-                          minValue: -9007199254740991
-                          maxValue: 9007199254740991
-                          isInt: true
-                          isFinite: true
-                          format: safeint
-                        - {}
-                    type: number
-                    minValue: 0
-                    maxValue: 9007199254740991
-                    isInt: true
-                    isFinite: true
-                    format: safeint
-                  defaultValue: 0
-                type: default
+            default: 50
+            type: integer
+            minimum: 1
+            maximum: 200
           in: query
-          name: def
-        - schema: object
+          name: limit
+          required: false
+        - schema:
+            default: 0
+            type: integer
+            minimum: 0
+            maximum: 9007199254740991
           in: query
-          name: type
-        - in: query
-          name: check
-        - in: query
-          name: with
-        - in: query
-          name: clone
-        - in: query
-          name: brand
-        - in: query
-          name: register
-        - in: query
-          name: parse
-        - in: query
-          name: safeParse
-        - in: query
-          name: parseAsync
-        - in: query
-          name: safeParseAsync
-        - in: query
-          name: spa
-        - in: query
-          name: encode
-        - in: query
-          name: decode
-        - in: query
-          name: encodeAsync
-        - in: query
-          name: decodeAsync
-        - in: query
-          name: safeEncode
-        - in: query
-          name: safeDecode
-        - in: query
-          name: safeEncodeAsync
-        - in: query
-          name: safeDecodeAsync
-        - in: query
-          name: refine
-        - in: query
-          name: superRefine
-        - in: query
-          name: overwrite
-        - in: query
-          name: optional
-        - in: query
-          name: exactOptional
-        - in: query
-          name: nullable
-        - in: query
-          name: nullish
-        - in: query
-          name: nonoptional
-        - in: query
-          name: array
-        - in: query
-          name: or
-        - in: query
-          name: and
-        - in: query
-          name: transform
-        - in: query
-          name: default
-        - in: query
-          name: prefault
-        - in: query
-          name: catch
-        - in: query
-          name: pipe
-        - in: query
-          name: readonly
-        - in: query
-          name: describe
-        - in: query
-          name: meta
-        - in: query
-          name: isOptional
-        - in: query
-          name: isNullable
-        - in: query
-          name: apply
-        - in: query
-          name: keyof
-        - in: query
-          name: catchall
-        - in: query
-          name: passthrough
-        - in: query
-          name: loose
-        - in: query
-          name: strict
-        - in: query
-          name: strip
-        - in: query
-          name: extend
-        - in: query
-          name: safeExtend
-        - in: query
-          name: merge
-        - in: query
-          name: pick
-        - in: query
-          name: omit
-        - in: query
-          name: partial
-        - in: query
-          name: required
+          name: offset
+          required: false
       responses:
         "200":
           description: Default Response
@@ -1439,135 +289,34 @@ paths:
         content:
           application/json:
             schema:
-              def:
-                type: object
-                shape:
-                  code:
-                    def:
-                      type: string
-                      checks:
-                        - {}
-                    type: string
-                    format: null
-                    minLength: 1
-                    maxLength: null
-                  jsonSchema:
-                    def:
-                      type: record
-                      keyType:
-                        def:
-                          type: string
-                        type: string
-                        format: null
-                        minLength: null
-                        maxLength: null
-                      valueType:
-                        def:
-                          type: unknown
-                        type: unknown
-                    type: record
-                    keyType:
-                      def:
-                        type: string
-                      type: string
-                      format: null
-                      minLength: null
-                      maxLength: null
-                    valueType:
-                      def:
-                        type: unknown
-                      type: unknown
-                  uiSchema:
-                    def:
-                      type: optional
-                      innerType:
-                        def:
-                          type: record
-                          keyType:
-                            def:
-                              type: string
-                            type: string
-                            format: null
-                            minLength: null
-                            maxLength: null
-                          valueType:
-                            def:
-                              type: unknown
-                            type: unknown
-                        type: record
-                        keyType:
-                          def:
-                            type: string
-                          type: string
-                          format: null
-                          minLength: null
-                          maxLength: null
-                        valueType:
-                          def:
-                            type: unknown
-                          type: unknown
-                    type: optional
-                  visibilityRules:
-                    def:
-                      type: optional
-                      innerType:
-                        def:
-                          type: record
-                          keyType:
-                            def:
-                              type: string
-                            type: string
-                            format: null
-                            minLength: null
-                            maxLength: null
-                          valueType:
-                            def:
-                              type: unknown
-                            type: unknown
-                        type: record
-                        keyType:
-                          def:
-                            type: string
-                          type: string
-                          format: null
-                          minLength: null
-                          maxLength: null
-                        valueType:
-                          def:
-                            type: unknown
-                          type: unknown
-                    type: optional
-                  formMessages:
-                    def:
-                      type: optional
-                      innerType:
-                        def:
-                          type: record
-                          keyType:
-                            def:
-                              type: string
-                            type: string
-                            format: null
-                            minLength: null
-                            maxLength: null
-                          valueType:
-                            def:
-                              type: unknown
-                            type: unknown
-                        type: record
-                        keyType:
-                          def:
-                            type: string
-                          type: string
-                          format: null
-                          minLength: null
-                          maxLength: null
-                        valueType:
-                          def:
-                            type: unknown
-                          type: unknown
-                    type: optional
               type: object
+              properties:
+                code:
+                  type: string
+                  minLength: 1
+                jsonSchema:
+                  type: object
+                  propertyNames:
+                    type: string
+                  additionalProperties: {}
+                uiSchema:
+                  type: object
+                  propertyNames:
+                    type: string
+                  additionalProperties: {}
+                visibilityRules:
+                  type: object
+                  propertyNames:
+                    type: string
+                  additionalProperties: {}
+                formMessages:
+                  type: object
+                  propertyNames:
+                    type: string
+                  additionalProperties: {}
+              required:
+                - code
+                - jsonSchema
       responses:
         "200":
           description: Default Response
@@ -1576,186 +325,11 @@ paths:
       tags:
         - Forms
       parameters:
-        - in: path
-          name: toJSONSchema
-          required: true
         - schema:
-            type: object
-            shape:
-              code:
-                def:
-                  type: string
-                  checks:
-                    - {}
-                type: string
-                format: null
-                minLength: 1
-                maxLength: null
+            type: string
+            minLength: 1
           in: path
-          name: def
-          required: true
-        - schema: object
-          in: path
-          name: type
-          required: true
-        - in: path
-          name: check
-          required: true
-        - in: path
-          name: with
-          required: true
-        - in: path
-          name: clone
-          required: true
-        - in: path
-          name: brand
-          required: true
-        - in: path
-          name: register
-          required: true
-        - in: path
-          name: parse
-          required: true
-        - in: path
-          name: safeParse
-          required: true
-        - in: path
-          name: parseAsync
-          required: true
-        - in: path
-          name: safeParseAsync
-          required: true
-        - in: path
-          name: spa
-          required: true
-        - in: path
-          name: encode
-          required: true
-        - in: path
-          name: decode
-          required: true
-        - in: path
-          name: encodeAsync
-          required: true
-        - in: path
-          name: decodeAsync
-          required: true
-        - in: path
-          name: safeEncode
-          required: true
-        - in: path
-          name: safeDecode
-          required: true
-        - in: path
-          name: safeEncodeAsync
-          required: true
-        - in: path
-          name: safeDecodeAsync
-          required: true
-        - in: path
-          name: refine
-          required: true
-        - in: path
-          name: superRefine
-          required: true
-        - in: path
-          name: overwrite
-          required: true
-        - in: path
-          name: optional
-          required: true
-        - in: path
-          name: exactOptional
-          required: true
-        - in: path
-          name: nullable
-          required: true
-        - in: path
-          name: nullish
-          required: true
-        - in: path
-          name: nonoptional
-          required: true
-        - in: path
-          name: array
-          required: true
-        - in: path
-          name: or
-          required: true
-        - in: path
-          name: and
-          required: true
-        - in: path
-          name: transform
-          required: true
-        - in: path
-          name: default
-          required: true
-        - in: path
-          name: prefault
-          required: true
-        - in: path
-          name: catch
-          required: true
-        - in: path
-          name: pipe
-          required: true
-        - in: path
-          name: readonly
-          required: true
-        - in: path
-          name: describe
-          required: true
-        - in: path
-          name: meta
-          required: true
-        - in: path
-          name: isOptional
-          required: true
-        - in: path
-          name: isNullable
-          required: true
-        - in: path
-          name: apply
-          required: true
-        - in: path
-          name: keyof
-          required: true
-        - in: path
-          name: catchall
-          required: true
-        - in: path
-          name: passthrough
-          required: true
-        - in: path
-          name: loose
-          required: true
-        - in: path
-          name: strict
-          required: true
-        - in: path
-          name: strip
-          required: true
-        - in: path
-          name: extend
-          required: true
-        - in: path
-          name: safeExtend
-          required: true
-        - in: path
-          name: merge
-          required: true
-        - in: path
-          name: pick
-          required: true
-        - in: path
-          name: omit
-          required: true
-        - in: path
-          name: partial
-          required: true
-        - in: path
-          name: required
+          name: code
           required: true
       responses:
         "200":
@@ -1765,186 +339,11 @@ paths:
       tags:
         - Forms
       parameters:
-        - in: path
-          name: toJSONSchema
-          required: true
         - schema:
-            type: object
-            shape:
-              code:
-                def:
-                  type: string
-                  checks:
-                    - {}
-                type: string
-                format: null
-                minLength: 1
-                maxLength: null
+            type: string
+            minLength: 1
           in: path
-          name: def
-          required: true
-        - schema: object
-          in: path
-          name: type
-          required: true
-        - in: path
-          name: check
-          required: true
-        - in: path
-          name: with
-          required: true
-        - in: path
-          name: clone
-          required: true
-        - in: path
-          name: brand
-          required: true
-        - in: path
-          name: register
-          required: true
-        - in: path
-          name: parse
-          required: true
-        - in: path
-          name: safeParse
-          required: true
-        - in: path
-          name: parseAsync
-          required: true
-        - in: path
-          name: safeParseAsync
-          required: true
-        - in: path
-          name: spa
-          required: true
-        - in: path
-          name: encode
-          required: true
-        - in: path
-          name: decode
-          required: true
-        - in: path
-          name: encodeAsync
-          required: true
-        - in: path
-          name: decodeAsync
-          required: true
-        - in: path
-          name: safeEncode
-          required: true
-        - in: path
-          name: safeDecode
-          required: true
-        - in: path
-          name: safeEncodeAsync
-          required: true
-        - in: path
-          name: safeDecodeAsync
-          required: true
-        - in: path
-          name: refine
-          required: true
-        - in: path
-          name: superRefine
-          required: true
-        - in: path
-          name: overwrite
-          required: true
-        - in: path
-          name: optional
-          required: true
-        - in: path
-          name: exactOptional
-          required: true
-        - in: path
-          name: nullable
-          required: true
-        - in: path
-          name: nullish
-          required: true
-        - in: path
-          name: nonoptional
-          required: true
-        - in: path
-          name: array
-          required: true
-        - in: path
-          name: or
-          required: true
-        - in: path
-          name: and
-          required: true
-        - in: path
-          name: transform
-          required: true
-        - in: path
-          name: default
-          required: true
-        - in: path
-          name: prefault
-          required: true
-        - in: path
-          name: catch
-          required: true
-        - in: path
-          name: pipe
-          required: true
-        - in: path
-          name: readonly
-          required: true
-        - in: path
-          name: describe
-          required: true
-        - in: path
-          name: meta
-          required: true
-        - in: path
-          name: isOptional
-          required: true
-        - in: path
-          name: isNullable
-          required: true
-        - in: path
-          name: apply
-          required: true
-        - in: path
-          name: keyof
-          required: true
-        - in: path
-          name: catchall
-          required: true
-        - in: path
-          name: passthrough
-          required: true
-        - in: path
-          name: loose
-          required: true
-        - in: path
-          name: strict
-          required: true
-        - in: path
-          name: strip
-          required: true
-        - in: path
-          name: extend
-          required: true
-        - in: path
-          name: safeExtend
-          required: true
-        - in: path
-          name: merge
-          required: true
-        - in: path
-          name: pick
-          required: true
-        - in: path
-          name: omit
-          required: true
-        - in: path
-          name: partial
-          required: true
-        - in: path
-          name: required
+          name: code
           required: true
       responses:
         "200":
@@ -1958,311 +357,34 @@ paths:
         content:
           application/json:
             schema:
-              def:
-                type: object
-                shape:
-                  jsonSchema:
-                    def:
-                      type: optional
-                      innerType:
-                        def:
-                          type: record
-                          keyType:
-                            def:
-                              type: string
-                            type: string
-                            format: null
-                            minLength: null
-                            maxLength: null
-                          valueType:
-                            def:
-                              type: unknown
-                            type: unknown
-                        type: record
-                        keyType:
-                          def:
-                            type: string
-                          type: string
-                          format: null
-                          minLength: null
-                          maxLength: null
-                        valueType:
-                          def:
-                            type: unknown
-                          type: unknown
-                    type: optional
-                  uiSchema:
-                    def:
-                      type: optional
-                      innerType:
-                        def:
-                          type: record
-                          keyType:
-                            def:
-                              type: string
-                            type: string
-                            format: null
-                            minLength: null
-                            maxLength: null
-                          valueType:
-                            def:
-                              type: unknown
-                            type: unknown
-                        type: record
-                        keyType:
-                          def:
-                            type: string
-                          type: string
-                          format: null
-                          minLength: null
-                          maxLength: null
-                        valueType:
-                          def:
-                            type: unknown
-                          type: unknown
-                    type: optional
-                  visibilityRules:
-                    def:
-                      type: optional
-                      innerType:
-                        def:
-                          type: record
-                          keyType:
-                            def:
-                              type: string
-                            type: string
-                            format: null
-                            minLength: null
-                            maxLength: null
-                          valueType:
-                            def:
-                              type: unknown
-                            type: unknown
-                        type: record
-                        keyType:
-                          def:
-                            type: string
-                          type: string
-                          format: null
-                          minLength: null
-                          maxLength: null
-                        valueType:
-                          def:
-                            type: unknown
-                          type: unknown
-                    type: optional
-                  formMessages:
-                    def:
-                      type: optional
-                      innerType:
-                        def:
-                          type: record
-                          keyType:
-                            def:
-                              type: string
-                            type: string
-                            format: null
-                            minLength: null
-                            maxLength: null
-                          valueType:
-                            def:
-                              type: unknown
-                            type: unknown
-                        type: record
-                        keyType:
-                          def:
-                            type: string
-                          type: string
-                          format: null
-                          minLength: null
-                          maxLength: null
-                        valueType:
-                          def:
-                            type: unknown
-                          type: unknown
-                    type: optional
               type: object
+              properties:
+                jsonSchema:
+                  type: object
+                  propertyNames:
+                    type: string
+                  additionalProperties: {}
+                uiSchema:
+                  type: object
+                  propertyNames:
+                    type: string
+                  additionalProperties: {}
+                visibilityRules:
+                  type: object
+                  propertyNames:
+                    type: string
+                  additionalProperties: {}
+                formMessages:
+                  type: object
+                  propertyNames:
+                    type: string
+                  additionalProperties: {}
       parameters:
-        - in: path
-          name: toJSONSchema
-          required: true
         - schema:
-            type: object
-            shape:
-              code:
-                def:
-                  type: string
-                  checks:
-                    - {}
-                type: string
-                format: null
-                minLength: 1
-                maxLength: null
+            type: string
+            minLength: 1
           in: path
-          name: def
-          required: true
-        - schema: object
-          in: path
-          name: type
-          required: true
-        - in: path
-          name: check
-          required: true
-        - in: path
-          name: with
-          required: true
-        - in: path
-          name: clone
-          required: true
-        - in: path
-          name: brand
-          required: true
-        - in: path
-          name: register
-          required: true
-        - in: path
-          name: parse
-          required: true
-        - in: path
-          name: safeParse
-          required: true
-        - in: path
-          name: parseAsync
-          required: true
-        - in: path
-          name: safeParseAsync
-          required: true
-        - in: path
-          name: spa
-          required: true
-        - in: path
-          name: encode
-          required: true
-        - in: path
-          name: decode
-          required: true
-        - in: path
-          name: encodeAsync
-          required: true
-        - in: path
-          name: decodeAsync
-          required: true
-        - in: path
-          name: safeEncode
-          required: true
-        - in: path
-          name: safeDecode
-          required: true
-        - in: path
-          name: safeEncodeAsync
-          required: true
-        - in: path
-          name: safeDecodeAsync
-          required: true
-        - in: path
-          name: refine
-          required: true
-        - in: path
-          name: superRefine
-          required: true
-        - in: path
-          name: overwrite
-          required: true
-        - in: path
-          name: optional
-          required: true
-        - in: path
-          name: exactOptional
-          required: true
-        - in: path
-          name: nullable
-          required: true
-        - in: path
-          name: nullish
-          required: true
-        - in: path
-          name: nonoptional
-          required: true
-        - in: path
-          name: array
-          required: true
-        - in: path
-          name: or
-          required: true
-        - in: path
-          name: and
-          required: true
-        - in: path
-          name: transform
-          required: true
-        - in: path
-          name: default
-          required: true
-        - in: path
-          name: prefault
-          required: true
-        - in: path
-          name: catch
-          required: true
-        - in: path
-          name: pipe
-          required: true
-        - in: path
-          name: readonly
-          required: true
-        - in: path
-          name: describe
-          required: true
-        - in: path
-          name: meta
-          required: true
-        - in: path
-          name: isOptional
-          required: true
-        - in: path
-          name: isNullable
-          required: true
-        - in: path
-          name: apply
-          required: true
-        - in: path
-          name: keyof
-          required: true
-        - in: path
-          name: catchall
-          required: true
-        - in: path
-          name: passthrough
-          required: true
-        - in: path
-          name: loose
-          required: true
-        - in: path
-          name: strict
-          required: true
-        - in: path
-          name: strip
-          required: true
-        - in: path
-          name: extend
-          required: true
-        - in: path
-          name: safeExtend
-          required: true
-        - in: path
-          name: merge
-          required: true
-        - in: path
-          name: pick
-          required: true
-        - in: path
-          name: omit
-          required: true
-        - in: path
-          name: partial
-          required: true
-        - in: path
-          name: required
+          name: code
           required: true
       responses:
         "200":
@@ -2272,186 +394,11 @@ paths:
       tags:
         - Forms
       parameters:
-        - in: path
-          name: toJSONSchema
-          required: true
         - schema:
-            type: object
-            shape:
-              code:
-                def:
-                  type: string
-                  checks:
-                    - {}
-                type: string
-                format: null
-                minLength: 1
-                maxLength: null
+            type: string
+            minLength: 1
           in: path
-          name: def
-          required: true
-        - schema: object
-          in: path
-          name: type
-          required: true
-        - in: path
-          name: check
-          required: true
-        - in: path
-          name: with
-          required: true
-        - in: path
-          name: clone
-          required: true
-        - in: path
-          name: brand
-          required: true
-        - in: path
-          name: register
-          required: true
-        - in: path
-          name: parse
-          required: true
-        - in: path
-          name: safeParse
-          required: true
-        - in: path
-          name: parseAsync
-          required: true
-        - in: path
-          name: safeParseAsync
-          required: true
-        - in: path
-          name: spa
-          required: true
-        - in: path
-          name: encode
-          required: true
-        - in: path
-          name: decode
-          required: true
-        - in: path
-          name: encodeAsync
-          required: true
-        - in: path
-          name: decodeAsync
-          required: true
-        - in: path
-          name: safeEncode
-          required: true
-        - in: path
-          name: safeDecode
-          required: true
-        - in: path
-          name: safeEncodeAsync
-          required: true
-        - in: path
-          name: safeDecodeAsync
-          required: true
-        - in: path
-          name: refine
-          required: true
-        - in: path
-          name: superRefine
-          required: true
-        - in: path
-          name: overwrite
-          required: true
-        - in: path
-          name: optional
-          required: true
-        - in: path
-          name: exactOptional
-          required: true
-        - in: path
-          name: nullable
-          required: true
-        - in: path
-          name: nullish
-          required: true
-        - in: path
-          name: nonoptional
-          required: true
-        - in: path
-          name: array
-          required: true
-        - in: path
-          name: or
-          required: true
-        - in: path
-          name: and
-          required: true
-        - in: path
-          name: transform
-          required: true
-        - in: path
-          name: default
-          required: true
-        - in: path
-          name: prefault
-          required: true
-        - in: path
-          name: catch
-          required: true
-        - in: path
-          name: pipe
-          required: true
-        - in: path
-          name: readonly
-          required: true
-        - in: path
-          name: describe
-          required: true
-        - in: path
-          name: meta
-          required: true
-        - in: path
-          name: isOptional
-          required: true
-        - in: path
-          name: isNullable
-          required: true
-        - in: path
-          name: apply
-          required: true
-        - in: path
-          name: keyof
-          required: true
-        - in: path
-          name: catchall
-          required: true
-        - in: path
-          name: passthrough
-          required: true
-        - in: path
-          name: loose
-          required: true
-        - in: path
-          name: strict
-          required: true
-        - in: path
-          name: strip
-          required: true
-        - in: path
-          name: extend
-          required: true
-        - in: path
-          name: safeExtend
-          required: true
-        - in: path
-          name: merge
-          required: true
-        - in: path
-          name: pick
-          required: true
-        - in: path
-          name: omit
-          required: true
-        - in: path
-          name: partial
-          required: true
-        - in: path
-          name: required
+          name: code
           required: true
       responses:
         "200":
@@ -2461,179 +408,22 @@ paths:
       tags:
         - Processes
       parameters:
-        - in: query
-          name: toJSONSchema
         - schema:
-            type: object
-            shape:
-              limit:
-                def:
-                  type: default
-                  innerType:
-                    def:
-                      type: number
-                      coerce: true
-                      checks:
-                        - def:
-                            type: number
-                            check: number_format
-                            abort: false
-                            format: safeint
-                          type: number
-                          minValue: -9007199254740991
-                          maxValue: 9007199254740991
-                          isInt: true
-                          isFinite: true
-                          format: safeint
-                        - {}
-                        - {}
-                    type: number
-                    minValue: 1
-                    maxValue: 200
-                    isInt: true
-                    isFinite: true
-                    format: safeint
-                  defaultValue: 50
-                type: default
-              offset:
-                def:
-                  type: default
-                  innerType:
-                    def:
-                      type: number
-                      coerce: true
-                      checks:
-                        - def:
-                            type: number
-                            check: number_format
-                            abort: false
-                            format: safeint
-                          type: number
-                          minValue: -9007199254740991
-                          maxValue: 9007199254740991
-                          isInt: true
-                          isFinite: true
-                          format: safeint
-                        - {}
-                    type: number
-                    minValue: 0
-                    maxValue: 9007199254740991
-                    isInt: true
-                    isFinite: true
-                    format: safeint
-                  defaultValue: 0
-                type: default
+            default: 50
+            type: integer
+            minimum: 1
+            maximum: 200
           in: query
-          name: def
-        - schema: object
+          name: limit
+          required: false
+        - schema:
+            default: 0
+            type: integer
+            minimum: 0
+            maximum: 9007199254740991
           in: query
-          name: type
-        - in: query
-          name: check
-        - in: query
-          name: with
-        - in: query
-          name: clone
-        - in: query
-          name: brand
-        - in: query
-          name: register
-        - in: query
-          name: parse
-        - in: query
-          name: safeParse
-        - in: query
-          name: parseAsync
-        - in: query
-          name: safeParseAsync
-        - in: query
-          name: spa
-        - in: query
-          name: encode
-        - in: query
-          name: decode
-        - in: query
-          name: encodeAsync
-        - in: query
-          name: decodeAsync
-        - in: query
-          name: safeEncode
-        - in: query
-          name: safeDecode
-        - in: query
-          name: safeEncodeAsync
-        - in: query
-          name: safeDecodeAsync
-        - in: query
-          name: refine
-        - in: query
-          name: superRefine
-        - in: query
-          name: overwrite
-        - in: query
-          name: optional
-        - in: query
-          name: exactOptional
-        - in: query
-          name: nullable
-        - in: query
-          name: nullish
-        - in: query
-          name: nonoptional
-        - in: query
-          name: array
-        - in: query
-          name: or
-        - in: query
-          name: and
-        - in: query
-          name: transform
-        - in: query
-          name: default
-        - in: query
-          name: prefault
-        - in: query
-          name: catch
-        - in: query
-          name: pipe
-        - in: query
-          name: readonly
-        - in: query
-          name: describe
-        - in: query
-          name: meta
-        - in: query
-          name: isOptional
-        - in: query
-          name: isNullable
-        - in: query
-          name: apply
-        - in: query
-          name: keyof
-        - in: query
-          name: catchall
-        - in: query
-          name: passthrough
-        - in: query
-          name: loose
-        - in: query
-          name: strict
-        - in: query
-          name: strip
-        - in: query
-          name: extend
-        - in: query
-          name: safeExtend
-        - in: query
-          name: merge
-        - in: query
-          name: pick
-        - in: query
-          name: omit
-        - in: query
-          name: partial
-        - in: query
-          name: required
+          name: offset
+          required: false
       responses:
         "200":
           description: Default Response
@@ -2645,36 +435,18 @@ paths:
         content:
           application/json:
             schema:
-              def:
-                type: object
-                shape:
-                  name:
-                    def:
-                      type: string
-                      checks:
-                        - {}
-                    type: string
-                    format: null
-                    minLength: 1
-                    maxLength: null
-                  status:
-                    def:
-                      type: optional
-                      innerType:
-                        def:
-                          type: enum
-                          entries:
-                            ACTIVE: active
-                            INACTIVE: inactive
-                        type: enum
-                        enum:
-                          ACTIVE: active
-                          INACTIVE: inactive
-                        options:
-                          - active
-                          - inactive
-                    type: optional
               type: object
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                status:
+                  type: string
+                  enum:
+                    - active
+                    - inactive
+              required:
+                - name
       responses:
         "200":
           description: Default Response
@@ -2683,195 +455,12 @@ paths:
       tags:
         - Processes
       parameters:
-        - in: path
-          name: toJSONSchema
-          required: true
         - schema:
-            type: object
-            shape:
-              id:
-                def:
-                  type: string
-                  checks:
-                    - def:
-                        type: string
-                        format: uuid
-                        check: string_format
-                        abort: false
-                        pattern: {}
-                      type: string
-                      format: uuid
-                      minLength: null
-                      maxLength: null
-                type: string
-                format: uuid
-                minLength: null
-                maxLength: null
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
           in: path
-          name: def
-          required: true
-        - schema: object
-          in: path
-          name: type
-          required: true
-        - in: path
-          name: check
-          required: true
-        - in: path
-          name: with
-          required: true
-        - in: path
-          name: clone
-          required: true
-        - in: path
-          name: brand
-          required: true
-        - in: path
-          name: register
-          required: true
-        - in: path
-          name: parse
-          required: true
-        - in: path
-          name: safeParse
-          required: true
-        - in: path
-          name: parseAsync
-          required: true
-        - in: path
-          name: safeParseAsync
-          required: true
-        - in: path
-          name: spa
-          required: true
-        - in: path
-          name: encode
-          required: true
-        - in: path
-          name: decode
-          required: true
-        - in: path
-          name: encodeAsync
-          required: true
-        - in: path
-          name: decodeAsync
-          required: true
-        - in: path
-          name: safeEncode
-          required: true
-        - in: path
-          name: safeDecode
-          required: true
-        - in: path
-          name: safeEncodeAsync
-          required: true
-        - in: path
-          name: safeDecodeAsync
-          required: true
-        - in: path
-          name: refine
-          required: true
-        - in: path
-          name: superRefine
-          required: true
-        - in: path
-          name: overwrite
-          required: true
-        - in: path
-          name: optional
-          required: true
-        - in: path
-          name: exactOptional
-          required: true
-        - in: path
-          name: nullable
-          required: true
-        - in: path
-          name: nullish
-          required: true
-        - in: path
-          name: nonoptional
-          required: true
-        - in: path
-          name: array
-          required: true
-        - in: path
-          name: or
-          required: true
-        - in: path
-          name: and
-          required: true
-        - in: path
-          name: transform
-          required: true
-        - in: path
-          name: default
-          required: true
-        - in: path
-          name: prefault
-          required: true
-        - in: path
-          name: catch
-          required: true
-        - in: path
-          name: pipe
-          required: true
-        - in: path
-          name: readonly
-          required: true
-        - in: path
-          name: describe
-          required: true
-        - in: path
-          name: meta
-          required: true
-        - in: path
-          name: isOptional
-          required: true
-        - in: path
-          name: isNullable
-          required: true
-        - in: path
-          name: apply
-          required: true
-        - in: path
-          name: keyof
-          required: true
-        - in: path
-          name: catchall
-          required: true
-        - in: path
-          name: passthrough
-          required: true
-        - in: path
-          name: loose
-          required: true
-        - in: path
-          name: strict
-          required: true
-        - in: path
-          name: strip
-          required: true
-        - in: path
-          name: extend
-          required: true
-        - in: path
-          name: safeExtend
-          required: true
-        - in: path
-          name: merge
-          required: true
-        - in: path
-          name: pick
-          required: true
-        - in: path
-          name: omit
-          required: true
-        - in: path
-          name: partial
-          required: true
-        - in: path
-          name: required
+          name: id
           required: true
       responses:
         "200":
@@ -2884,230 +473,23 @@ paths:
         content:
           application/json:
             schema:
-              def:
-                type: object
-                shape:
-                  name:
-                    def:
-                      type: optional
-                      innerType:
-                        def:
-                          type: string
-                          checks:
-                            - {}
-                        type: string
-                        format: null
-                        minLength: 1
-                        maxLength: null
-                    type: optional
-                  status:
-                    def:
-                      type: optional
-                      innerType:
-                        def:
-                          type: enum
-                          entries:
-                            ACTIVE: active
-                            INACTIVE: inactive
-                        type: enum
-                        enum:
-                          ACTIVE: active
-                          INACTIVE: inactive
-                        options:
-                          - active
-                          - inactive
-                    type: optional
               type: object
-      parameters:
-        - in: path
-          name: toJSONSchema
-          required: true
-        - schema:
-            type: object
-            shape:
-              id:
-                def:
+              properties:
+                name:
                   type: string
-                  checks:
-                    - def:
-                        type: string
-                        format: uuid
-                        check: string_format
-                        abort: false
-                        pattern: {}
-                      type: string
-                      format: uuid
-                      minLength: null
-                      maxLength: null
-                type: string
-                format: uuid
-                minLength: null
-                maxLength: null
+                  minLength: 1
+                status:
+                  type: string
+                  enum:
+                    - active
+                    - inactive
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
           in: path
-          name: def
-          required: true
-        - schema: object
-          in: path
-          name: type
-          required: true
-        - in: path
-          name: check
-          required: true
-        - in: path
-          name: with
-          required: true
-        - in: path
-          name: clone
-          required: true
-        - in: path
-          name: brand
-          required: true
-        - in: path
-          name: register
-          required: true
-        - in: path
-          name: parse
-          required: true
-        - in: path
-          name: safeParse
-          required: true
-        - in: path
-          name: parseAsync
-          required: true
-        - in: path
-          name: safeParseAsync
-          required: true
-        - in: path
-          name: spa
-          required: true
-        - in: path
-          name: encode
-          required: true
-        - in: path
-          name: decode
-          required: true
-        - in: path
-          name: encodeAsync
-          required: true
-        - in: path
-          name: decodeAsync
-          required: true
-        - in: path
-          name: safeEncode
-          required: true
-        - in: path
-          name: safeDecode
-          required: true
-        - in: path
-          name: safeEncodeAsync
-          required: true
-        - in: path
-          name: safeDecodeAsync
-          required: true
-        - in: path
-          name: refine
-          required: true
-        - in: path
-          name: superRefine
-          required: true
-        - in: path
-          name: overwrite
-          required: true
-        - in: path
-          name: optional
-          required: true
-        - in: path
-          name: exactOptional
-          required: true
-        - in: path
-          name: nullable
-          required: true
-        - in: path
-          name: nullish
-          required: true
-        - in: path
-          name: nonoptional
-          required: true
-        - in: path
-          name: array
-          required: true
-        - in: path
-          name: or
-          required: true
-        - in: path
-          name: and
-          required: true
-        - in: path
-          name: transform
-          required: true
-        - in: path
-          name: default
-          required: true
-        - in: path
-          name: prefault
-          required: true
-        - in: path
-          name: catch
-          required: true
-        - in: path
-          name: pipe
-          required: true
-        - in: path
-          name: readonly
-          required: true
-        - in: path
-          name: describe
-          required: true
-        - in: path
-          name: meta
-          required: true
-        - in: path
-          name: isOptional
-          required: true
-        - in: path
-          name: isNullable
-          required: true
-        - in: path
-          name: apply
-          required: true
-        - in: path
-          name: keyof
-          required: true
-        - in: path
-          name: catchall
-          required: true
-        - in: path
-          name: passthrough
-          required: true
-        - in: path
-          name: loose
-          required: true
-        - in: path
-          name: strict
-          required: true
-        - in: path
-          name: strip
-          required: true
-        - in: path
-          name: extend
-          required: true
-        - in: path
-          name: safeExtend
-          required: true
-        - in: path
-          name: merge
-          required: true
-        - in: path
-          name: pick
-          required: true
-        - in: path
-          name: omit
-          required: true
-        - in: path
-          name: partial
-          required: true
-        - in: path
-          name: required
+          name: id
           required: true
       responses:
         "200":
@@ -3117,368 +499,28 @@ paths:
       tags:
         - Processes
       parameters:
-        - in: query
-          name: toJSONSchema
         - schema:
-            type: object
-            shape:
-              limit:
-                def:
-                  type: default
-                  innerType:
-                    def:
-                      type: number
-                      coerce: true
-                      checks:
-                        - def:
-                            type: number
-                            check: number_format
-                            abort: false
-                            format: safeint
-                          type: number
-                          minValue: -9007199254740991
-                          maxValue: 9007199254740991
-                          isInt: true
-                          isFinite: true
-                          format: safeint
-                        - {}
-                        - {}
-                    type: number
-                    minValue: 1
-                    maxValue: 200
-                    isInt: true
-                    isFinite: true
-                    format: safeint
-                  defaultValue: 50
-                type: default
-              offset:
-                def:
-                  type: default
-                  innerType:
-                    def:
-                      type: number
-                      coerce: true
-                      checks:
-                        - def:
-                            type: number
-                            check: number_format
-                            abort: false
-                            format: safeint
-                          type: number
-                          minValue: -9007199254740991
-                          maxValue: 9007199254740991
-                          isInt: true
-                          isFinite: true
-                          format: safeint
-                        - {}
-                    type: number
-                    minValue: 0
-                    maxValue: 9007199254740991
-                    isInt: true
-                    isFinite: true
-                    format: safeint
-                  defaultValue: 0
-                type: default
+            default: 50
+            type: integer
+            minimum: 1
+            maximum: 200
           in: query
-          name: def
-        - schema: object
-          in: query
-          name: type
-        - in: query
-          name: check
-        - in: query
-          name: with
-        - in: query
-          name: clone
-        - in: query
-          name: brand
-        - in: query
-          name: register
-        - in: query
-          name: parse
-        - in: query
-          name: safeParse
-        - in: query
-          name: parseAsync
-        - in: query
-          name: safeParseAsync
-        - in: query
-          name: spa
-        - in: query
-          name: encode
-        - in: query
-          name: decode
-        - in: query
-          name: encodeAsync
-        - in: query
-          name: decodeAsync
-        - in: query
-          name: safeEncode
-        - in: query
-          name: safeDecode
-        - in: query
-          name: safeEncodeAsync
-        - in: query
-          name: safeDecodeAsync
-        - in: query
-          name: refine
-        - in: query
-          name: superRefine
-        - in: query
-          name: overwrite
-        - in: query
-          name: optional
-        - in: query
-          name: exactOptional
-        - in: query
-          name: nullable
-        - in: query
-          name: nullish
-        - in: query
-          name: nonoptional
-        - in: query
-          name: array
-        - in: query
-          name: or
-        - in: query
-          name: and
-        - in: query
-          name: transform
-        - in: query
-          name: default
-        - in: query
-          name: prefault
-        - in: query
-          name: catch
-        - in: query
-          name: pipe
-        - in: query
-          name: readonly
-        - in: query
-          name: describe
-        - in: query
-          name: meta
-        - in: query
-          name: isOptional
-        - in: query
-          name: isNullable
-        - in: query
-          name: apply
-        - in: query
-          name: keyof
-        - in: query
-          name: catchall
-        - in: query
-          name: passthrough
-        - in: query
-          name: loose
-        - in: query
-          name: strict
-        - in: query
-          name: strip
-        - in: query
-          name: extend
-        - in: query
-          name: safeExtend
-        - in: query
-          name: merge
-        - in: query
-          name: pick
-        - in: query
-          name: omit
-        - in: query
-          name: partial
-        - in: query
-          name: required
-        - in: path
-          name: toJSONSchema
-          required: true
+          name: limit
+          required: false
         - schema:
-            type: object
-            shape:
-              id:
-                def:
-                  type: string
-                  checks:
-                    - def:
-                        type: string
-                        format: uuid
-                        check: string_format
-                        abort: false
-                        pattern: {}
-                      type: string
-                      format: uuid
-                      minLength: null
-                      maxLength: null
-                type: string
-                format: uuid
-                minLength: null
-                maxLength: null
+            default: 0
+            type: integer
+            minimum: 0
+            maximum: 9007199254740991
+          in: query
+          name: offset
+          required: false
+        - schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
           in: path
-          name: def
-          required: true
-        - schema: object
-          in: path
-          name: type
-          required: true
-        - in: path
-          name: check
-          required: true
-        - in: path
-          name: with
-          required: true
-        - in: path
-          name: clone
-          required: true
-        - in: path
-          name: brand
-          required: true
-        - in: path
-          name: register
-          required: true
-        - in: path
-          name: parse
-          required: true
-        - in: path
-          name: safeParse
-          required: true
-        - in: path
-          name: parseAsync
-          required: true
-        - in: path
-          name: safeParseAsync
-          required: true
-        - in: path
-          name: spa
-          required: true
-        - in: path
-          name: encode
-          required: true
-        - in: path
-          name: decode
-          required: true
-        - in: path
-          name: encodeAsync
-          required: true
-        - in: path
-          name: decodeAsync
-          required: true
-        - in: path
-          name: safeEncode
-          required: true
-        - in: path
-          name: safeDecode
-          required: true
-        - in: path
-          name: safeEncodeAsync
-          required: true
-        - in: path
-          name: safeDecodeAsync
-          required: true
-        - in: path
-          name: refine
-          required: true
-        - in: path
-          name: superRefine
-          required: true
-        - in: path
-          name: overwrite
-          required: true
-        - in: path
-          name: optional
-          required: true
-        - in: path
-          name: exactOptional
-          required: true
-        - in: path
-          name: nullable
-          required: true
-        - in: path
-          name: nullish
-          required: true
-        - in: path
-          name: nonoptional
-          required: true
-        - in: path
-          name: array
-          required: true
-        - in: path
-          name: or
-          required: true
-        - in: path
-          name: and
-          required: true
-        - in: path
-          name: transform
-          required: true
-        - in: path
-          name: default
-          required: true
-        - in: path
-          name: prefault
-          required: true
-        - in: path
-          name: catch
-          required: true
-        - in: path
-          name: pipe
-          required: true
-        - in: path
-          name: readonly
-          required: true
-        - in: path
-          name: describe
-          required: true
-        - in: path
-          name: meta
-          required: true
-        - in: path
-          name: isOptional
-          required: true
-        - in: path
-          name: isNullable
-          required: true
-        - in: path
-          name: apply
-          required: true
-        - in: path
-          name: keyof
-          required: true
-        - in: path
-          name: catchall
-          required: true
-        - in: path
-          name: passthrough
-          required: true
-        - in: path
-          name: loose
-          required: true
-        - in: path
-          name: strict
-          required: true
-        - in: path
-          name: strip
-          required: true
-        - in: path
-          name: extend
-          required: true
-        - in: path
-          name: safeExtend
-          required: true
-        - in: path
-          name: merge
-          required: true
-        - in: path
-          name: pick
-          required: true
-        - in: path
-          name: omit
-          required: true
-        - in: path
-          name: partial
-          required: true
-        - in: path
-          name: required
+          name: id
           required: true
       responses:
         "200":
@@ -3491,285 +533,39 @@ paths:
         content:
           application/json:
             schema:
-              def:
-                type: object
-                shape:
-                  code:
-                    def:
-                      type: string
-                      checks:
-                        - {}
-                    type: string
-                    format: null
-                    minLength: 1
-                    maxLength: null
-                  formDefinitionCode:
-                    def:
-                      type: string
-                      checks:
-                        - {}
-                    type: string
-                    format: null
-                    minLength: 1
-                    maxLength: null
-                  candidateGroups:
-                    def:
-                      type: optional
-                      innerType:
-                        def:
-                          type: array
-                          element:
-                            def:
-                              type: string
-                            type: string
-                            format: null
-                            minLength: null
-                            maxLength: null
-                        type: array
-                        element:
-                          def:
-                            type: string
-                          type: string
-                          format: null
-                          minLength: null
-                          maxLength: null
-                    type: optional
-                  candidateUsers:
-                    def:
-                      type: optional
-                      innerType:
-                        def:
-                          type: array
-                          element:
-                            def:
-                              type: string
-                            type: string
-                            format: null
-                            minLength: null
-                            maxLength: null
-                        type: array
-                        element:
-                          def:
-                            type: string
-                          type: string
-                          format: null
-                          minLength: null
-                          maxLength: null
-                    type: optional
-                  defaultPriority:
-                    def:
-                      type: optional
-                      innerType:
-                        def:
-                          type: enum
-                          entries:
-                            LOW: low
-                            NORMAL: normal
-                            HIGH: high
-                            URGENT: urgent
-                        type: enum
-                        enum:
-                          LOW: low
-                          NORMAL: normal
-                          HIGH: high
-                          URGENT: urgent
-                        options:
-                          - low
-                          - normal
-                          - high
-                          - urgent
-                    type: optional
               type: object
-      parameters:
-        - in: path
-          name: toJSONSchema
-          required: true
-        - schema:
-            type: object
-            shape:
-              id:
-                def:
+              properties:
+                code:
                   type: string
-                  checks:
-                    - def:
-                        type: string
-                        format: uuid
-                        check: string_format
-                        abort: false
-                        pattern: {}
-                      type: string
-                      format: uuid
-                      minLength: null
-                      maxLength: null
-                type: string
-                format: uuid
-                minLength: null
-                maxLength: null
+                  minLength: 1
+                formDefinitionCode:
+                  type: string
+                  minLength: 1
+                candidateGroups:
+                  type: array
+                  items:
+                    type: string
+                candidateUsers:
+                  type: array
+                  items:
+                    type: string
+                defaultPriority:
+                  type: string
+                  enum:
+                    - low
+                    - normal
+                    - high
+                    - urgent
+              required:
+                - code
+                - formDefinitionCode
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
           in: path
-          name: def
-          required: true
-        - schema: object
-          in: path
-          name: type
-          required: true
-        - in: path
-          name: check
-          required: true
-        - in: path
-          name: with
-          required: true
-        - in: path
-          name: clone
-          required: true
-        - in: path
-          name: brand
-          required: true
-        - in: path
-          name: register
-          required: true
-        - in: path
-          name: parse
-          required: true
-        - in: path
-          name: safeParse
-          required: true
-        - in: path
-          name: parseAsync
-          required: true
-        - in: path
-          name: safeParseAsync
-          required: true
-        - in: path
-          name: spa
-          required: true
-        - in: path
-          name: encode
-          required: true
-        - in: path
-          name: decode
-          required: true
-        - in: path
-          name: encodeAsync
-          required: true
-        - in: path
-          name: decodeAsync
-          required: true
-        - in: path
-          name: safeEncode
-          required: true
-        - in: path
-          name: safeDecode
-          required: true
-        - in: path
-          name: safeEncodeAsync
-          required: true
-        - in: path
-          name: safeDecodeAsync
-          required: true
-        - in: path
-          name: refine
-          required: true
-        - in: path
-          name: superRefine
-          required: true
-        - in: path
-          name: overwrite
-          required: true
-        - in: path
-          name: optional
-          required: true
-        - in: path
-          name: exactOptional
-          required: true
-        - in: path
-          name: nullable
-          required: true
-        - in: path
-          name: nullish
-          required: true
-        - in: path
-          name: nonoptional
-          required: true
-        - in: path
-          name: array
-          required: true
-        - in: path
-          name: or
-          required: true
-        - in: path
-          name: and
-          required: true
-        - in: path
-          name: transform
-          required: true
-        - in: path
-          name: default
-          required: true
-        - in: path
-          name: prefault
-          required: true
-        - in: path
-          name: catch
-          required: true
-        - in: path
-          name: pipe
-          required: true
-        - in: path
-          name: readonly
-          required: true
-        - in: path
-          name: describe
-          required: true
-        - in: path
-          name: meta
-          required: true
-        - in: path
-          name: isOptional
-          required: true
-        - in: path
-          name: isNullable
-          required: true
-        - in: path
-          name: apply
-          required: true
-        - in: path
-          name: keyof
-          required: true
-        - in: path
-          name: catchall
-          required: true
-        - in: path
-          name: passthrough
-          required: true
-        - in: path
-          name: loose
-          required: true
-        - in: path
-          name: strict
-          required: true
-        - in: path
-          name: strip
-          required: true
-        - in: path
-          name: extend
-          required: true
-        - in: path
-          name: safeExtend
-          required: true
-        - in: path
-          name: merge
-          required: true
-        - in: path
-          name: pick
-          required: true
-        - in: path
-          name: omit
-          required: true
-        - in: path
-          name: partial
-          required: true
-        - in: path
-          name: required
+          name: id
           required: true
       responses:
         "200":
@@ -3783,280 +579,33 @@ paths:
         content:
           application/json:
             schema:
-              def:
-                type: object
-                shape:
-                  formDefinitionCode:
-                    def:
-                      type: optional
-                      innerType:
-                        def:
-                          type: string
-                          checks:
-                            - {}
-                        type: string
-                        format: null
-                        minLength: 1
-                        maxLength: null
-                    type: optional
-                  candidateGroups:
-                    def:
-                      type: optional
-                      innerType:
-                        def:
-                          type: array
-                          element:
-                            def:
-                              type: string
-                            type: string
-                            format: null
-                            minLength: null
-                            maxLength: null
-                        type: array
-                        element:
-                          def:
-                            type: string
-                          type: string
-                          format: null
-                          minLength: null
-                          maxLength: null
-                    type: optional
-                  candidateUsers:
-                    def:
-                      type: optional
-                      innerType:
-                        def:
-                          type: array
-                          element:
-                            def:
-                              type: string
-                            type: string
-                            format: null
-                            minLength: null
-                            maxLength: null
-                        type: array
-                        element:
-                          def:
-                            type: string
-                          type: string
-                          format: null
-                          minLength: null
-                          maxLength: null
-                    type: optional
-                  defaultPriority:
-                    def:
-                      type: optional
-                      innerType:
-                        def:
-                          type: enum
-                          entries:
-                            LOW: low
-                            NORMAL: normal
-                            HIGH: high
-                            URGENT: urgent
-                        type: enum
-                        enum:
-                          LOW: low
-                          NORMAL: normal
-                          HIGH: high
-                          URGENT: urgent
-                        options:
-                          - low
-                          - normal
-                          - high
-                          - urgent
-                    type: optional
               type: object
-      parameters:
-        - in: path
-          name: toJSONSchema
-          required: true
-        - schema:
-            type: object
-            shape:
-              id:
-                def:
+              properties:
+                formDefinitionCode:
                   type: string
-                  checks:
-                    - def:
-                        type: string
-                        format: uuid
-                        check: string_format
-                        abort: false
-                        pattern: {}
-                      type: string
-                      format: uuid
-                      minLength: null
-                      maxLength: null
-                type: string
-                format: uuid
-                minLength: null
-                maxLength: null
+                  minLength: 1
+                candidateGroups:
+                  type: array
+                  items:
+                    type: string
+                candidateUsers:
+                  type: array
+                  items:
+                    type: string
+                defaultPriority:
+                  type: string
+                  enum:
+                    - low
+                    - normal
+                    - high
+                    - urgent
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
           in: path
-          name: def
-          required: true
-        - schema: object
-          in: path
-          name: type
-          required: true
-        - in: path
-          name: check
-          required: true
-        - in: path
-          name: with
-          required: true
-        - in: path
-          name: clone
-          required: true
-        - in: path
-          name: brand
-          required: true
-        - in: path
-          name: register
-          required: true
-        - in: path
-          name: parse
-          required: true
-        - in: path
-          name: safeParse
-          required: true
-        - in: path
-          name: parseAsync
-          required: true
-        - in: path
-          name: safeParseAsync
-          required: true
-        - in: path
-          name: spa
-          required: true
-        - in: path
-          name: encode
-          required: true
-        - in: path
-          name: decode
-          required: true
-        - in: path
-          name: encodeAsync
-          required: true
-        - in: path
-          name: decodeAsync
-          required: true
-        - in: path
-          name: safeEncode
-          required: true
-        - in: path
-          name: safeDecode
-          required: true
-        - in: path
-          name: safeEncodeAsync
-          required: true
-        - in: path
-          name: safeDecodeAsync
-          required: true
-        - in: path
-          name: refine
-          required: true
-        - in: path
-          name: superRefine
-          required: true
-        - in: path
-          name: overwrite
-          required: true
-        - in: path
-          name: optional
-          required: true
-        - in: path
-          name: exactOptional
-          required: true
-        - in: path
-          name: nullable
-          required: true
-        - in: path
-          name: nullish
-          required: true
-        - in: path
-          name: nonoptional
-          required: true
-        - in: path
-          name: array
-          required: true
-        - in: path
-          name: or
-          required: true
-        - in: path
-          name: and
-          required: true
-        - in: path
-          name: transform
-          required: true
-        - in: path
-          name: default
-          required: true
-        - in: path
-          name: prefault
-          required: true
-        - in: path
-          name: catch
-          required: true
-        - in: path
-          name: pipe
-          required: true
-        - in: path
-          name: readonly
-          required: true
-        - in: path
-          name: describe
-          required: true
-        - in: path
-          name: meta
-          required: true
-        - in: path
-          name: isOptional
-          required: true
-        - in: path
-          name: isNullable
-          required: true
-        - in: path
-          name: apply
-          required: true
-        - in: path
-          name: keyof
-          required: true
-        - in: path
-          name: catchall
-          required: true
-        - in: path
-          name: passthrough
-          required: true
-        - in: path
-          name: loose
-          required: true
-        - in: path
-          name: strict
-          required: true
-        - in: path
-          name: strip
-          required: true
-        - in: path
-          name: extend
-          required: true
-        - in: path
-          name: safeExtend
-          required: true
-        - in: path
-          name: merge
-          required: true
-        - in: path
-          name: pick
-          required: true
-        - in: path
-          name: omit
-          required: true
-        - in: path
-          name: partial
-          required: true
-        - in: path
-          name: required
+          name: id
           required: true
       responses:
         "200":
@@ -4066,235 +615,44 @@ paths:
       tags:
         - Tasks
       parameters:
-        - in: query
-          name: toJSONSchema
         - schema:
-            type: object
-            shape:
-              limit:
-                def:
-                  type: default
-                  innerType:
-                    def:
-                      type: number
-                      coerce: true
-                      checks:
-                        - def:
-                            type: number
-                            check: number_format
-                            abort: false
-                            format: safeint
-                          type: number
-                          minValue: -9007199254740991
-                          maxValue: 9007199254740991
-                          isInt: true
-                          isFinite: true
-                          format: safeint
-                        - {}
-                        - {}
-                    type: number
-                    minValue: 1
-                    maxValue: 200
-                    isInt: true
-                    isFinite: true
-                    format: safeint
-                  defaultValue: 50
-                type: default
-              offset:
-                def:
-                  type: default
-                  innerType:
-                    def:
-                      type: number
-                      coerce: true
-                      checks:
-                        - def:
-                            type: number
-                            check: number_format
-                            abort: false
-                            format: safeint
-                          type: number
-                          minValue: -9007199254740991
-                          maxValue: 9007199254740991
-                          isInt: true
-                          isFinite: true
-                          format: safeint
-                        - {}
-                    type: number
-                    minValue: 0
-                    maxValue: 9007199254740991
-                    isInt: true
-                    isFinite: true
-                    format: safeint
-                  defaultValue: 0
-                type: default
-              status:
-                def:
-                  type: optional
-                  innerType:
-                    def:
-                      type: enum
-                      entries:
-                        CREATED: created
-                        CLAIMED: claimed
-                        COMPLETED: completed
-                        CANCELLED: cancelled
-                    type: enum
-                    enum:
-                      CREATED: created
-                      CLAIMED: claimed
-                      COMPLETED: completed
-                      CANCELLED: cancelled
-                    options:
-                      - created
-                      - claimed
-                      - completed
-                      - cancelled
-                type: optional
-              assigneeId:
-                def:
-                  type: optional
-                  innerType:
-                    def:
-                      type: string
-                      checks:
-                        - def:
-                            type: string
-                            format: uuid
-                            check: string_format
-                            abort: false
-                            pattern: {}
-                          type: string
-                          format: uuid
-                          minLength: null
-                          maxLength: null
-                    type: string
-                    format: uuid
-                    minLength: null
-                    maxLength: null
-                type: optional
-              group:
-                def:
-                  type: optional
-                  innerType:
-                    def:
-                      type: string
-                    type: string
-                    format: null
-                    minLength: null
-                    maxLength: null
-                type: optional
+            default: 50
+            type: integer
+            minimum: 1
+            maximum: 200
           in: query
-          name: def
-        - schema: object
+          name: limit
+          required: false
+        - schema:
+            default: 0
+            type: integer
+            minimum: 0
+            maximum: 9007199254740991
           in: query
-          name: type
-        - in: query
-          name: check
-        - in: query
-          name: with
-        - in: query
-          name: clone
-        - in: query
-          name: brand
-        - in: query
-          name: register
-        - in: query
-          name: parse
-        - in: query
-          name: safeParse
-        - in: query
-          name: parseAsync
-        - in: query
-          name: safeParseAsync
-        - in: query
-          name: spa
-        - in: query
-          name: encode
-        - in: query
-          name: decode
-        - in: query
-          name: encodeAsync
-        - in: query
-          name: decodeAsync
-        - in: query
-          name: safeEncode
-        - in: query
-          name: safeDecode
-        - in: query
-          name: safeEncodeAsync
-        - in: query
-          name: safeDecodeAsync
-        - in: query
-          name: refine
-        - in: query
-          name: superRefine
-        - in: query
-          name: overwrite
-        - in: query
-          name: optional
-        - in: query
-          name: exactOptional
-        - in: query
-          name: nullable
-        - in: query
-          name: nullish
-        - in: query
-          name: nonoptional
-        - in: query
-          name: array
-        - in: query
-          name: or
-        - in: query
-          name: and
-        - in: query
-          name: transform
-        - in: query
-          name: default
-        - in: query
-          name: prefault
-        - in: query
-          name: catch
-        - in: query
-          name: pipe
-        - in: query
-          name: readonly
-        - in: query
-          name: describe
-        - in: query
-          name: meta
-        - in: query
-          name: isOptional
-        - in: query
-          name: isNullable
-        - in: query
-          name: apply
-        - in: query
-          name: keyof
-        - in: query
-          name: catchall
-        - in: query
-          name: passthrough
-        - in: query
-          name: loose
-        - in: query
-          name: strict
-        - in: query
-          name: strip
-        - in: query
-          name: extend
-        - in: query
-          name: safeExtend
-        - in: query
-          name: merge
-        - in: query
-          name: pick
-        - in: query
-          name: omit
-        - in: query
-          name: partial
-        - in: query
-          name: required
+          name: offset
+          required: false
+        - schema:
+            type: string
+            enum:
+              - created
+              - claimed
+              - completed
+              - cancelled
+          in: query
+          name: status
+          required: false
+        - schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+          in: query
+          name: assigneeId
+          required: false
+        - schema:
+            type: string
+          in: query
+          name: group
+          required: false
       responses:
         "200":
           description: Default Response
@@ -4306,185 +664,45 @@ paths:
         content:
           application/json:
             schema:
-              def:
-                type: object
-                shape:
-                  taskDefinitionId:
-                    def:
-                      type: string
-                      checks:
-                        - def:
-                            type: string
-                            format: uuid
-                            check: string_format
-                            abort: false
-                            pattern: {}
-                          type: string
-                          format: uuid
-                          minLength: null
-                          maxLength: null
-                    type: string
-                    format: uuid
-                    minLength: null
-                    maxLength: null
-                  workflowId:
-                    def:
-                      type: string
-                      checks:
-                        - {}
-                    type: string
-                    format: null
-                    minLength: 1
-                    maxLength: null
-                  processInstanceId:
-                    def:
-                      type: optional
-                      innerType:
-                        def:
-                          type: string
-                          checks:
-                            - {}
-                        type: string
-                        format: null
-                        minLength: 1
-                        maxLength: null
-                    type: optional
-                  priority:
-                    def:
-                      type: optional
-                      innerType:
-                        def:
-                          type: enum
-                          entries:
-                            LOW: low
-                            NORMAL: normal
-                            HIGH: high
-                            URGENT: urgent
-                        type: enum
-                        enum:
-                          LOW: low
-                          NORMAL: normal
-                          HIGH: high
-                          URGENT: urgent
-                        options:
-                          - low
-                          - normal
-                          - high
-                          - urgent
-                    type: optional
-                  dueDate:
-                    def:
-                      type: optional
-                      innerType:
-                        def:
-                          type: date
-                          coerce: true
-                        type: date
-                        minDate: null
-                        maxDate: null
-                    type: optional
-                  followUpDate:
-                    def:
-                      type: optional
-                      innerType:
-                        def:
-                          type: date
-                          coerce: true
-                        type: date
-                        minDate: null
-                        maxDate: null
-                    type: optional
-                  inputData:
-                    def:
-                      type: optional
-                      innerType:
-                        def:
-                          type: record
-                          keyType:
-                            def:
-                              type: string
-                            type: string
-                            format: null
-                            minLength: null
-                            maxLength: null
-                          valueType:
-                            def:
-                              type: unknown
-                            type: unknown
-                        type: record
-                        keyType:
-                          def:
-                            type: string
-                          type: string
-                          format: null
-                          minLength: null
-                          maxLength: null
-                        valueType:
-                          def:
-                            type: unknown
-                          type: unknown
-                    type: optional
-                  contextData:
-                    def:
-                      type: optional
-                      innerType:
-                        def:
-                          type: record
-                          keyType:
-                            def:
-                              type: string
-                            type: string
-                            format: null
-                            minLength: null
-                            maxLength: null
-                          valueType:
-                            def:
-                              type: unknown
-                            type: unknown
-                        type: record
-                        keyType:
-                          def:
-                            type: string
-                          type: string
-                          format: null
-                          minLength: null
-                          maxLength: null
-                        valueType:
-                          def:
-                            type: unknown
-                          type: unknown
-                    type: optional
-                  submissionData:
-                    def:
-                      type: optional
-                      innerType:
-                        def:
-                          type: record
-                          keyType:
-                            def:
-                              type: string
-                            type: string
-                            format: null
-                            minLength: null
-                            maxLength: null
-                          valueType:
-                            def:
-                              type: unknown
-                            type: unknown
-                        type: record
-                        keyType:
-                          def:
-                            type: string
-                          type: string
-                          format: null
-                          minLength: null
-                          maxLength: null
-                        valueType:
-                          def:
-                            type: unknown
-                          type: unknown
-                    type: optional
               type: object
+              properties:
+                taskDefinitionId:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                workflowId:
+                  type: string
+                  minLength: 1
+                processInstanceId:
+                  type: string
+                  minLength: 1
+                priority:
+                  type: string
+                  enum:
+                    - low
+                    - normal
+                    - high
+                    - urgent
+                dueDate: {}
+                followUpDate: {}
+                inputData:
+                  type: object
+                  propertyNames:
+                    type: string
+                  additionalProperties: {}
+                contextData:
+                  type: object
+                  propertyNames:
+                    type: string
+                  additionalProperties: {}
+                submissionData:
+                  type: object
+                  propertyNames:
+                    type: string
+                  additionalProperties: {}
+              required:
+                - taskDefinitionId
+                - workflowId
       responses:
         "200":
           description: Default Response
@@ -4497,588 +715,94 @@ paths:
         content:
           application/json:
             schema:
-              def:
-                type: object
-                shape:
-                  status:
-                    def:
-                      type: optional
-                      innerType:
-                        def:
-                          type: enum
-                          entries:
-                            CREATED: created
-                            CLAIMED: claimed
-                            COMPLETED: completed
-                            CANCELLED: cancelled
-                        type: enum
-                        enum:
-                          CREATED: created
-                          CLAIMED: claimed
-                          COMPLETED: completed
-                          CANCELLED: cancelled
-                        options:
-                          - created
-                          - claimed
-                          - completed
-                          - cancelled
-                    type: optional
-                  assigneeId:
-                    def:
-                      type: optional
-                      innerType:
-                        def:
-                          type: string
-                          checks:
-                            - def:
-                                type: string
-                                format: uuid
-                                check: string_format
-                                abort: false
-                                pattern: {}
-                              type: string
-                              format: uuid
-                              minLength: null
-                              maxLength: null
-                        type: string
-                        format: uuid
-                        minLength: null
-                        maxLength: null
-                    type: optional
-                  group:
-                    def:
-                      type: optional
-                      innerType:
-                        def:
-                          type: string
-                        type: string
-                        format: null
-                        minLength: null
-                        maxLength: null
-                    type: optional
-                  inputVariables:
-                    def:
-                      type: optional
-                      innerType:
-                        def:
-                          type: array
-                          element:
-                            def:
-                              type: object
-                              shape:
-                                name:
-                                  def:
-                                    type: string
-                                    checks:
-                                      - {}
-                                  type: string
-                                  format: null
-                                  minLength: 1
-                                  maxLength: null
-                                operator:
-                                  def:
-                                    type: default
-                                    innerType:
-                                      def:
-                                        type: enum
-                                        entries:
-                                          eq: eq
-                                          like: like
-                                      type: enum
-                                      enum:
-                                        eq: eq
-                                        like: like
-                                      options:
-                                        - eq
-                                        - like
-                                    defaultValue: eq
-                                  type: default
-                                value:
-                                  def:
-                                    type: union
-                                    options:
-                                      - def:
-                                          type: string
-                                        type: string
-                                        format: null
-                                        minLength: null
-                                        maxLength: null
-                                      - def:
-                                          type: number
-                                          checks: []
-                                        type: number
-                                        minValue: null
-                                        maxValue: null
-                                        isInt: false
-                                        isFinite: true
-                                        format: null
-                                  type: union
-                                  options:
-                                    - def:
-                                        type: string
-                                      type: string
-                                      format: null
-                                      minLength: null
-                                      maxLength: null
-                                    - def:
-                                        type: number
-                                        checks: []
-                                      type: number
-                                      minValue: null
-                                      maxValue: null
-                                      isInt: false
-                                      isFinite: true
-                                      format: null
-                              checks:
-                                - def:
-                                    type: custom
-                                    check: custom
-                                  type: custom
-                            type: object
-                        type: array
-                        element:
-                          def:
-                            type: object
-                            shape:
-                              name:
-                                def:
-                                  type: string
-                                  checks:
-                                    - {}
-                                type: string
-                                format: null
-                                minLength: 1
-                                maxLength: null
-                              operator:
-                                def:
-                                  type: default
-                                  innerType:
-                                    def:
-                                      type: enum
-                                      entries:
-                                        eq: eq
-                                        like: like
-                                    type: enum
-                                    enum:
-                                      eq: eq
-                                      like: like
-                                    options:
-                                      - eq
-                                      - like
-                                  defaultValue: eq
-                                type: default
-                              value:
-                                def:
-                                  type: union
-                                  options:
-                                    - def:
-                                        type: string
-                                      type: string
-                                      format: null
-                                      minLength: null
-                                      maxLength: null
-                                    - def:
-                                        type: number
-                                        checks: []
-                                      type: number
-                                      minValue: null
-                                      maxValue: null
-                                      isInt: false
-                                      isFinite: true
-                                      format: null
-                                type: union
-                                options:
-                                  - def:
-                                      type: string
-                                    type: string
-                                    format: null
-                                    minLength: null
-                                    maxLength: null
-                                  - def:
-                                      type: number
-                                      checks: []
-                                    type: number
-                                    minValue: null
-                                    maxValue: null
-                                    isInt: false
-                                    isFinite: true
-                                    format: null
-                            checks:
-                              - def:
-                                  type: custom
-                                  check: custom
-                                type: custom
-                          type: object
-                    type: optional
-                  contextVariables:
-                    def:
-                      type: optional
-                      innerType:
-                        def:
-                          type: array
-                          element:
-                            def:
-                              type: object
-                              shape:
-                                name:
-                                  def:
-                                    type: string
-                                    checks:
-                                      - {}
-                                  type: string
-                                  format: null
-                                  minLength: 1
-                                  maxLength: null
-                                operator:
-                                  def:
-                                    type: default
-                                    innerType:
-                                      def:
-                                        type: enum
-                                        entries:
-                                          eq: eq
-                                          like: like
-                                      type: enum
-                                      enum:
-                                        eq: eq
-                                        like: like
-                                      options:
-                                        - eq
-                                        - like
-                                    defaultValue: eq
-                                  type: default
-                                value:
-                                  def:
-                                    type: union
-                                    options:
-                                      - def:
-                                          type: string
-                                        type: string
-                                        format: null
-                                        minLength: null
-                                        maxLength: null
-                                      - def:
-                                          type: number
-                                          checks: []
-                                        type: number
-                                        minValue: null
-                                        maxValue: null
-                                        isInt: false
-                                        isFinite: true
-                                        format: null
-                                  type: union
-                                  options:
-                                    - def:
-                                        type: string
-                                      type: string
-                                      format: null
-                                      minLength: null
-                                      maxLength: null
-                                    - def:
-                                        type: number
-                                        checks: []
-                                      type: number
-                                      minValue: null
-                                      maxValue: null
-                                      isInt: false
-                                      isFinite: true
-                                      format: null
-                              checks:
-                                - def:
-                                    type: custom
-                                    check: custom
-                                  type: custom
-                            type: object
-                        type: array
-                        element:
-                          def:
-                            type: object
-                            shape:
-                              name:
-                                def:
-                                  type: string
-                                  checks:
-                                    - {}
-                                type: string
-                                format: null
-                                minLength: 1
-                                maxLength: null
-                              operator:
-                                def:
-                                  type: default
-                                  innerType:
-                                    def:
-                                      type: enum
-                                      entries:
-                                        eq: eq
-                                        like: like
-                                    type: enum
-                                    enum:
-                                      eq: eq
-                                      like: like
-                                    options:
-                                      - eq
-                                      - like
-                                  defaultValue: eq
-                                type: default
-                              value:
-                                def:
-                                  type: union
-                                  options:
-                                    - def:
-                                        type: string
-                                      type: string
-                                      format: null
-                                      minLength: null
-                                      maxLength: null
-                                    - def:
-                                        type: number
-                                        checks: []
-                                      type: number
-                                      minValue: null
-                                      maxValue: null
-                                      isInt: false
-                                      isFinite: true
-                                      format: null
-                                type: union
-                                options:
-                                  - def:
-                                      type: string
-                                    type: string
-                                    format: null
-                                    minLength: null
-                                    maxLength: null
-                                  - def:
-                                      type: number
-                                      checks: []
-                                    type: number
-                                    minValue: null
-                                    maxValue: null
-                                    isInt: false
-                                    isFinite: true
-                                    format: null
-                            checks:
-                              - def:
-                                  type: custom
-                                  check: custom
-                                type: custom
-                          type: object
-                    type: optional
-                  submissionVariables:
-                    def:
-                      type: optional
-                      innerType:
-                        def:
-                          type: array
-                          element:
-                            def:
-                              type: object
-                              shape:
-                                name:
-                                  def:
-                                    type: string
-                                    checks:
-                                      - {}
-                                  type: string
-                                  format: null
-                                  minLength: 1
-                                  maxLength: null
-                                operator:
-                                  def:
-                                    type: default
-                                    innerType:
-                                      def:
-                                        type: enum
-                                        entries:
-                                          eq: eq
-                                          like: like
-                                      type: enum
-                                      enum:
-                                        eq: eq
-                                        like: like
-                                      options:
-                                        - eq
-                                        - like
-                                    defaultValue: eq
-                                  type: default
-                                value:
-                                  def:
-                                    type: union
-                                    options:
-                                      - def:
-                                          type: string
-                                        type: string
-                                        format: null
-                                        minLength: null
-                                        maxLength: null
-                                      - def:
-                                          type: number
-                                          checks: []
-                                        type: number
-                                        minValue: null
-                                        maxValue: null
-                                        isInt: false
-                                        isFinite: true
-                                        format: null
-                                  type: union
-                                  options:
-                                    - def:
-                                        type: string
-                                      type: string
-                                      format: null
-                                      minLength: null
-                                      maxLength: null
-                                    - def:
-                                        type: number
-                                        checks: []
-                                      type: number
-                                      minValue: null
-                                      maxValue: null
-                                      isInt: false
-                                      isFinite: true
-                                      format: null
-                              checks:
-                                - def:
-                                    type: custom
-                                    check: custom
-                                  type: custom
-                            type: object
-                        type: array
-                        element:
-                          def:
-                            type: object
-                            shape:
-                              name:
-                                def:
-                                  type: string
-                                  checks:
-                                    - {}
-                                type: string
-                                format: null
-                                minLength: 1
-                                maxLength: null
-                              operator:
-                                def:
-                                  type: default
-                                  innerType:
-                                    def:
-                                      type: enum
-                                      entries:
-                                        eq: eq
-                                        like: like
-                                    type: enum
-                                    enum:
-                                      eq: eq
-                                      like: like
-                                    options:
-                                      - eq
-                                      - like
-                                  defaultValue: eq
-                                type: default
-                              value:
-                                def:
-                                  type: union
-                                  options:
-                                    - def:
-                                        type: string
-                                      type: string
-                                      format: null
-                                      minLength: null
-                                      maxLength: null
-                                    - def:
-                                        type: number
-                                        checks: []
-                                      type: number
-                                      minValue: null
-                                      maxValue: null
-                                      isInt: false
-                                      isFinite: true
-                                      format: null
-                                type: union
-                                options:
-                                  - def:
-                                      type: string
-                                    type: string
-                                    format: null
-                                    minLength: null
-                                    maxLength: null
-                                  - def:
-                                      type: number
-                                      checks: []
-                                    type: number
-                                    minValue: null
-                                    maxValue: null
-                                    isInt: false
-                                    isFinite: true
-                                    format: null
-                            checks:
-                              - def:
-                                  type: custom
-                                  check: custom
-                                type: custom
-                          type: object
-                    type: optional
-                  limit:
-                    def:
-                      type: default
-                      innerType:
-                        def:
-                          type: number
-                          checks:
-                            - def:
-                                type: number
-                                check: number_format
-                                abort: false
-                                format: safeint
-                              type: number
-                              minValue: -9007199254740991
-                              maxValue: 9007199254740991
-                              isInt: true
-                              isFinite: true
-                              format: safeint
-                            - {}
-                            - {}
-                        type: number
-                        minValue: 1
-                        maxValue: 200
-                        isInt: true
-                        isFinite: true
-                        format: safeint
-                      defaultValue: 50
-                    type: default
-                  offset:
-                    def:
-                      type: default
-                      innerType:
-                        def:
-                          type: number
-                          checks:
-                            - def:
-                                type: number
-                                check: number_format
-                                abort: false
-                                format: safeint
-                              type: number
-                              minValue: -9007199254740991
-                              maxValue: 9007199254740991
-                              isInt: true
-                              isFinite: true
-                              format: safeint
-                            - {}
-                        type: number
-                        minValue: 0
-                        maxValue: 9007199254740991
-                        isInt: true
-                        isFinite: true
-                        format: safeint
-                      defaultValue: 0
-                    type: default
-                checks:
-                  - def:
-                      type: custom
-                      check: custom
-                    type: custom
               type: object
+              properties:
+                status:
+                  type: string
+                  enum:
+                    - created
+                    - claimed
+                    - completed
+                    - cancelled
+                assigneeId:
+                  type: string
+                  format: uuid
+                  pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                group:
+                  type: string
+                inputVariables:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                        minLength: 1
+                      operator:
+                        default: eq
+                        type: string
+                        enum:
+                          - eq
+                          - like
+                      value:
+                        anyOf:
+                          - type: string
+                          - type: number
+                    required:
+                      - name
+                      - value
+                contextVariables:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                        minLength: 1
+                      operator:
+                        default: eq
+                        type: string
+                        enum:
+                          - eq
+                          - like
+                      value:
+                        anyOf:
+                          - type: string
+                          - type: number
+                    required:
+                      - name
+                      - value
+                submissionVariables:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                        minLength: 1
+                      operator:
+                        default: eq
+                        type: string
+                        enum:
+                          - eq
+                          - like
+                      value:
+                        anyOf:
+                          - type: string
+                          - type: number
+                    required:
+                      - name
+                      - value
+                limit:
+                  default: 50
+                  type: integer
+                  minimum: 1
+                  maximum: 200
+                offset:
+                  default: 0
+                  type: integer
+                  minimum: 0
+                  maximum: 9007199254740991
       responses:
         "200":
           description: Default Response
@@ -5087,195 +811,12 @@ paths:
       tags:
         - Tasks
       parameters:
-        - in: path
-          name: toJSONSchema
-          required: true
         - schema:
-            type: object
-            shape:
-              id:
-                def:
-                  type: string
-                  checks:
-                    - def:
-                        type: string
-                        format: uuid
-                        check: string_format
-                        abort: false
-                        pattern: {}
-                      type: string
-                      format: uuid
-                      minLength: null
-                      maxLength: null
-                type: string
-                format: uuid
-                minLength: null
-                maxLength: null
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
           in: path
-          name: def
-          required: true
-        - schema: object
-          in: path
-          name: type
-          required: true
-        - in: path
-          name: check
-          required: true
-        - in: path
-          name: with
-          required: true
-        - in: path
-          name: clone
-          required: true
-        - in: path
-          name: brand
-          required: true
-        - in: path
-          name: register
-          required: true
-        - in: path
-          name: parse
-          required: true
-        - in: path
-          name: safeParse
-          required: true
-        - in: path
-          name: parseAsync
-          required: true
-        - in: path
-          name: safeParseAsync
-          required: true
-        - in: path
-          name: spa
-          required: true
-        - in: path
-          name: encode
-          required: true
-        - in: path
-          name: decode
-          required: true
-        - in: path
-          name: encodeAsync
-          required: true
-        - in: path
-          name: decodeAsync
-          required: true
-        - in: path
-          name: safeEncode
-          required: true
-        - in: path
-          name: safeDecode
-          required: true
-        - in: path
-          name: safeEncodeAsync
-          required: true
-        - in: path
-          name: safeDecodeAsync
-          required: true
-        - in: path
-          name: refine
-          required: true
-        - in: path
-          name: superRefine
-          required: true
-        - in: path
-          name: overwrite
-          required: true
-        - in: path
-          name: optional
-          required: true
-        - in: path
-          name: exactOptional
-          required: true
-        - in: path
-          name: nullable
-          required: true
-        - in: path
-          name: nullish
-          required: true
-        - in: path
-          name: nonoptional
-          required: true
-        - in: path
-          name: array
-          required: true
-        - in: path
-          name: or
-          required: true
-        - in: path
-          name: and
-          required: true
-        - in: path
-          name: transform
-          required: true
-        - in: path
-          name: default
-          required: true
-        - in: path
-          name: prefault
-          required: true
-        - in: path
-          name: catch
-          required: true
-        - in: path
-          name: pipe
-          required: true
-        - in: path
-          name: readonly
-          required: true
-        - in: path
-          name: describe
-          required: true
-        - in: path
-          name: meta
-          required: true
-        - in: path
-          name: isOptional
-          required: true
-        - in: path
-          name: isNullable
-          required: true
-        - in: path
-          name: apply
-          required: true
-        - in: path
-          name: keyof
-          required: true
-        - in: path
-          name: catchall
-          required: true
-        - in: path
-          name: passthrough
-          required: true
-        - in: path
-          name: loose
-          required: true
-        - in: path
-          name: strict
-          required: true
-        - in: path
-          name: strip
-          required: true
-        - in: path
-          name: extend
-          required: true
-        - in: path
-          name: safeExtend
-          required: true
-        - in: path
-          name: merge
-          required: true
-        - in: path
-          name: pick
-          required: true
-        - in: path
-          name: omit
-          required: true
-        - in: path
-          name: partial
-          required: true
-        - in: path
-          name: required
+          name: id
           required: true
       responses:
         "200":
@@ -5285,195 +826,12 @@ paths:
       tags:
         - Tasks
       parameters:
-        - in: path
-          name: toJSONSchema
-          required: true
         - schema:
-            type: object
-            shape:
-              id:
-                def:
-                  type: string
-                  checks:
-                    - def:
-                        type: string
-                        format: uuid
-                        check: string_format
-                        abort: false
-                        pattern: {}
-                      type: string
-                      format: uuid
-                      minLength: null
-                      maxLength: null
-                type: string
-                format: uuid
-                minLength: null
-                maxLength: null
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
           in: path
-          name: def
-          required: true
-        - schema: object
-          in: path
-          name: type
-          required: true
-        - in: path
-          name: check
-          required: true
-        - in: path
-          name: with
-          required: true
-        - in: path
-          name: clone
-          required: true
-        - in: path
-          name: brand
-          required: true
-        - in: path
-          name: register
-          required: true
-        - in: path
-          name: parse
-          required: true
-        - in: path
-          name: safeParse
-          required: true
-        - in: path
-          name: parseAsync
-          required: true
-        - in: path
-          name: safeParseAsync
-          required: true
-        - in: path
-          name: spa
-          required: true
-        - in: path
-          name: encode
-          required: true
-        - in: path
-          name: decode
-          required: true
-        - in: path
-          name: encodeAsync
-          required: true
-        - in: path
-          name: decodeAsync
-          required: true
-        - in: path
-          name: safeEncode
-          required: true
-        - in: path
-          name: safeDecode
-          required: true
-        - in: path
-          name: safeEncodeAsync
-          required: true
-        - in: path
-          name: safeDecodeAsync
-          required: true
-        - in: path
-          name: refine
-          required: true
-        - in: path
-          name: superRefine
-          required: true
-        - in: path
-          name: overwrite
-          required: true
-        - in: path
-          name: optional
-          required: true
-        - in: path
-          name: exactOptional
-          required: true
-        - in: path
-          name: nullable
-          required: true
-        - in: path
-          name: nullish
-          required: true
-        - in: path
-          name: nonoptional
-          required: true
-        - in: path
-          name: array
-          required: true
-        - in: path
-          name: or
-          required: true
-        - in: path
-          name: and
-          required: true
-        - in: path
-          name: transform
-          required: true
-        - in: path
-          name: default
-          required: true
-        - in: path
-          name: prefault
-          required: true
-        - in: path
-          name: catch
-          required: true
-        - in: path
-          name: pipe
-          required: true
-        - in: path
-          name: readonly
-          required: true
-        - in: path
-          name: describe
-          required: true
-        - in: path
-          name: meta
-          required: true
-        - in: path
-          name: isOptional
-          required: true
-        - in: path
-          name: isNullable
-          required: true
-        - in: path
-          name: apply
-          required: true
-        - in: path
-          name: keyof
-          required: true
-        - in: path
-          name: catchall
-          required: true
-        - in: path
-          name: passthrough
-          required: true
-        - in: path
-          name: loose
-          required: true
-        - in: path
-          name: strict
-          required: true
-        - in: path
-          name: strip
-          required: true
-        - in: path
-          name: extend
-          required: true
-        - in: path
-          name: safeExtend
-          required: true
-        - in: path
-          name: merge
-          required: true
-        - in: path
-          name: pick
-          required: true
-        - in: path
-          name: omit
-          required: true
-        - in: path
-          name: partial
-          required: true
-        - in: path
-          name: required
+          name: id
           required: true
       responses:
         "200":
@@ -5483,195 +841,12 @@ paths:
       tags:
         - Tasks
       parameters:
-        - in: path
-          name: toJSONSchema
-          required: true
         - schema:
-            type: object
-            shape:
-              id:
-                def:
-                  type: string
-                  checks:
-                    - def:
-                        type: string
-                        format: uuid
-                        check: string_format
-                        abort: false
-                        pattern: {}
-                      type: string
-                      format: uuid
-                      minLength: null
-                      maxLength: null
-                type: string
-                format: uuid
-                minLength: null
-                maxLength: null
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
           in: path
-          name: def
-          required: true
-        - schema: object
-          in: path
-          name: type
-          required: true
-        - in: path
-          name: check
-          required: true
-        - in: path
-          name: with
-          required: true
-        - in: path
-          name: clone
-          required: true
-        - in: path
-          name: brand
-          required: true
-        - in: path
-          name: register
-          required: true
-        - in: path
-          name: parse
-          required: true
-        - in: path
-          name: safeParse
-          required: true
-        - in: path
-          name: parseAsync
-          required: true
-        - in: path
-          name: safeParseAsync
-          required: true
-        - in: path
-          name: spa
-          required: true
-        - in: path
-          name: encode
-          required: true
-        - in: path
-          name: decode
-          required: true
-        - in: path
-          name: encodeAsync
-          required: true
-        - in: path
-          name: decodeAsync
-          required: true
-        - in: path
-          name: safeEncode
-          required: true
-        - in: path
-          name: safeDecode
-          required: true
-        - in: path
-          name: safeEncodeAsync
-          required: true
-        - in: path
-          name: safeDecodeAsync
-          required: true
-        - in: path
-          name: refine
-          required: true
-        - in: path
-          name: superRefine
-          required: true
-        - in: path
-          name: overwrite
-          required: true
-        - in: path
-          name: optional
-          required: true
-        - in: path
-          name: exactOptional
-          required: true
-        - in: path
-          name: nullable
-          required: true
-        - in: path
-          name: nullish
-          required: true
-        - in: path
-          name: nonoptional
-          required: true
-        - in: path
-          name: array
-          required: true
-        - in: path
-          name: or
-          required: true
-        - in: path
-          name: and
-          required: true
-        - in: path
-          name: transform
-          required: true
-        - in: path
-          name: default
-          required: true
-        - in: path
-          name: prefault
-          required: true
-        - in: path
-          name: catch
-          required: true
-        - in: path
-          name: pipe
-          required: true
-        - in: path
-          name: readonly
-          required: true
-        - in: path
-          name: describe
-          required: true
-        - in: path
-          name: meta
-          required: true
-        - in: path
-          name: isOptional
-          required: true
-        - in: path
-          name: isNullable
-          required: true
-        - in: path
-          name: apply
-          required: true
-        - in: path
-          name: keyof
-          required: true
-        - in: path
-          name: catchall
-          required: true
-        - in: path
-          name: passthrough
-          required: true
-        - in: path
-          name: loose
-          required: true
-        - in: path
-          name: strict
-          required: true
-        - in: path
-          name: strip
-          required: true
-        - in: path
-          name: extend
-          required: true
-        - in: path
-          name: safeExtend
-          required: true
-        - in: path
-          name: merge
-          required: true
-        - in: path
-          name: pick
-          required: true
-        - in: path
-          name: omit
-          required: true
-        - in: path
-          name: partial
-          required: true
-        - in: path
-          name: required
+          name: id
           required: true
       responses:
         "200":
@@ -5685,230 +860,20 @@ paths:
         content:
           application/json:
             schema:
-              def:
-                type: object
-                shape:
-                  data:
-                    def:
-                      type: optional
-                      innerType:
-                        def:
-                          type: record
-                          keyType:
-                            def:
-                              type: string
-                            type: string
-                            format: null
-                            minLength: null
-                            maxLength: null
-                          valueType:
-                            def:
-                              type: unknown
-                            type: unknown
-                        type: record
-                        keyType:
-                          def:
-                            type: string
-                          type: string
-                          format: null
-                          minLength: null
-                          maxLength: null
-                        valueType:
-                          def:
-                            type: unknown
-                          type: unknown
-                    type: optional
               type: object
+              properties:
+                data:
+                  type: object
+                  propertyNames:
+                    type: string
+                  additionalProperties: {}
       parameters:
-        - in: path
-          name: toJSONSchema
-          required: true
         - schema:
-            type: object
-            shape:
-              id:
-                def:
-                  type: string
-                  checks:
-                    - def:
-                        type: string
-                        format: uuid
-                        check: string_format
-                        abort: false
-                        pattern: {}
-                      type: string
-                      format: uuid
-                      minLength: null
-                      maxLength: null
-                type: string
-                format: uuid
-                minLength: null
-                maxLength: null
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
           in: path
-          name: def
-          required: true
-        - schema: object
-          in: path
-          name: type
-          required: true
-        - in: path
-          name: check
-          required: true
-        - in: path
-          name: with
-          required: true
-        - in: path
-          name: clone
-          required: true
-        - in: path
-          name: brand
-          required: true
-        - in: path
-          name: register
-          required: true
-        - in: path
-          name: parse
-          required: true
-        - in: path
-          name: safeParse
-          required: true
-        - in: path
-          name: parseAsync
-          required: true
-        - in: path
-          name: safeParseAsync
-          required: true
-        - in: path
-          name: spa
-          required: true
-        - in: path
-          name: encode
-          required: true
-        - in: path
-          name: decode
-          required: true
-        - in: path
-          name: encodeAsync
-          required: true
-        - in: path
-          name: decodeAsync
-          required: true
-        - in: path
-          name: safeEncode
-          required: true
-        - in: path
-          name: safeDecode
-          required: true
-        - in: path
-          name: safeEncodeAsync
-          required: true
-        - in: path
-          name: safeDecodeAsync
-          required: true
-        - in: path
-          name: refine
-          required: true
-        - in: path
-          name: superRefine
-          required: true
-        - in: path
-          name: overwrite
-          required: true
-        - in: path
-          name: optional
-          required: true
-        - in: path
-          name: exactOptional
-          required: true
-        - in: path
-          name: nullable
-          required: true
-        - in: path
-          name: nullish
-          required: true
-        - in: path
-          name: nonoptional
-          required: true
-        - in: path
-          name: array
-          required: true
-        - in: path
-          name: or
-          required: true
-        - in: path
-          name: and
-          required: true
-        - in: path
-          name: transform
-          required: true
-        - in: path
-          name: default
-          required: true
-        - in: path
-          name: prefault
-          required: true
-        - in: path
-          name: catch
-          required: true
-        - in: path
-          name: pipe
-          required: true
-        - in: path
-          name: readonly
-          required: true
-        - in: path
-          name: describe
-          required: true
-        - in: path
-          name: meta
-          required: true
-        - in: path
-          name: isOptional
-          required: true
-        - in: path
-          name: isNullable
-          required: true
-        - in: path
-          name: apply
-          required: true
-        - in: path
-          name: keyof
-          required: true
-        - in: path
-          name: catchall
-          required: true
-        - in: path
-          name: passthrough
-          required: true
-        - in: path
-          name: loose
-          required: true
-        - in: path
-          name: strict
-          required: true
-        - in: path
-          name: strip
-          required: true
-        - in: path
-          name: extend
-          required: true
-        - in: path
-          name: safeExtend
-          required: true
-        - in: path
-          name: merge
-          required: true
-        - in: path
-          name: pick
-          required: true
-        - in: path
-          name: omit
-          required: true
-        - in: path
-          name: partial
-          required: true
-        - in: path
-          name: required
+          name: id
           required: true
       responses:
         "200":
@@ -5918,195 +883,12 @@ paths:
       tags:
         - Tasks
       parameters:
-        - in: path
-          name: toJSONSchema
-          required: true
         - schema:
-            type: object
-            shape:
-              id:
-                def:
-                  type: string
-                  checks:
-                    - def:
-                        type: string
-                        format: uuid
-                        check: string_format
-                        abort: false
-                        pattern: {}
-                      type: string
-                      format: uuid
-                      minLength: null
-                      maxLength: null
-                type: string
-                format: uuid
-                minLength: null
-                maxLength: null
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
           in: path
-          name: def
-          required: true
-        - schema: object
-          in: path
-          name: type
-          required: true
-        - in: path
-          name: check
-          required: true
-        - in: path
-          name: with
-          required: true
-        - in: path
-          name: clone
-          required: true
-        - in: path
-          name: brand
-          required: true
-        - in: path
-          name: register
-          required: true
-        - in: path
-          name: parse
-          required: true
-        - in: path
-          name: safeParse
-          required: true
-        - in: path
-          name: parseAsync
-          required: true
-        - in: path
-          name: safeParseAsync
-          required: true
-        - in: path
-          name: spa
-          required: true
-        - in: path
-          name: encode
-          required: true
-        - in: path
-          name: decode
-          required: true
-        - in: path
-          name: encodeAsync
-          required: true
-        - in: path
-          name: decodeAsync
-          required: true
-        - in: path
-          name: safeEncode
-          required: true
-        - in: path
-          name: safeDecode
-          required: true
-        - in: path
-          name: safeEncodeAsync
-          required: true
-        - in: path
-          name: safeDecodeAsync
-          required: true
-        - in: path
-          name: refine
-          required: true
-        - in: path
-          name: superRefine
-          required: true
-        - in: path
-          name: overwrite
-          required: true
-        - in: path
-          name: optional
-          required: true
-        - in: path
-          name: exactOptional
-          required: true
-        - in: path
-          name: nullable
-          required: true
-        - in: path
-          name: nullish
-          required: true
-        - in: path
-          name: nonoptional
-          required: true
-        - in: path
-          name: array
-          required: true
-        - in: path
-          name: or
-          required: true
-        - in: path
-          name: and
-          required: true
-        - in: path
-          name: transform
-          required: true
-        - in: path
-          name: default
-          required: true
-        - in: path
-          name: prefault
-          required: true
-        - in: path
-          name: catch
-          required: true
-        - in: path
-          name: pipe
-          required: true
-        - in: path
-          name: readonly
-          required: true
-        - in: path
-          name: describe
-          required: true
-        - in: path
-          name: meta
-          required: true
-        - in: path
-          name: isOptional
-          required: true
-        - in: path
-          name: isNullable
-          required: true
-        - in: path
-          name: apply
-          required: true
-        - in: path
-          name: keyof
-          required: true
-        - in: path
-          name: catchall
-          required: true
-        - in: path
-          name: passthrough
-          required: true
-        - in: path
-          name: loose
-          required: true
-        - in: path
-          name: strict
-          required: true
-        - in: path
-          name: strip
-          required: true
-        - in: path
-          name: extend
-          required: true
-        - in: path
-          name: safeExtend
-          required: true
-        - in: path
-          name: merge
-          required: true
-        - in: path
-          name: pick
-          required: true
-        - in: path
-          name: omit
-          required: true
-        - in: path
-          name: partial
-          required: true
-        - in: path
-          name: required
+          name: id
           required: true
       responses:
         "200":
