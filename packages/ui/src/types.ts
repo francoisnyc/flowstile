@@ -109,3 +109,19 @@ export interface Page<T> {
   limit: number;
   offset: number;
 }
+
+export interface AttachmentRef {
+  attachmentId: string;
+  fileName: string;
+  contentType: string;
+  size: number;
+  checksum: string;
+  uploadedBy: string | null;
+  uploadedAt: string;
+}
+
+export interface AttachmentFieldConfig {
+  multiple?: boolean;
+  accept?: string[];
+  maxSize?: number;
+}

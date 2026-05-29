@@ -127,6 +127,9 @@ function createField(type: FieldType, existingKeys: Set<string>): FieldDefinitio
   if (type === 'email') {
     return { id, key, label, type: 'email', required: false };
   }
+  if (type === 'file') {
+    return { id, key, label, type: 'file', required: false };
+  }
   // fallback (unsupported — should not be reachable from palette)
   return { id, key, label, type: 'unsupported', required: false, jsonSchemaFragment: {} };
 }

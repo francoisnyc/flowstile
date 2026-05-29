@@ -7,6 +7,7 @@ import type {
   TextareaField,
   DateField,
   EmailField,
+  FileField,
   SectionField,
   RepeatField,
   UnsupportedField,
@@ -66,6 +67,20 @@ function inferFieldType(
 ): FieldDefinition {
   const opts = baseOptions(uiOptions);
   const base = { key, label, required, ...(visibility ? { visibility } : {}), ...(opts ? { options: opts } : {}) };
+
+  // Attachment field (x-flowstile-attachment vendor extension)
+  if ('x-flowstile-attachment' in prop) {
+    const cfg = (prop['x-flowstile-attachment'] ?? {}) as Record<string, unknown>;
+    const field: FileField = {
+      id: crypto.randomUUID(),
+      ...base,
+      type: 'file',
+      ...(cfg.multiple !== undefined ? { multiple: cfg.multiple as boolean } : {}),
+      ...(cfg.accept !== undefined ? { accept: cfg.accept as string[] } : {}),
+      ...(cfg.maxSize !== undefined ? { maxSize: cfg.maxSize as number } : {}),
+    };
+    return field;
+  }
 
   // Unknown constructs → unsupported
   if ('oneOf' in prop || 'anyOf' in prop || 'allOf' in prop || '$ref' in prop) {

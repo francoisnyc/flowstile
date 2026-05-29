@@ -7,7 +7,7 @@ export interface ValidationResult {
 }
 
 function createAjv(): Ajv {
-  const ajv = new Ajv({ allErrors: true, coerceTypes: false });
+  const ajv = new Ajv({ allErrors: true, coerceTypes: false, strict: false });
   addFormats(ajv);
   return ajv;
 }

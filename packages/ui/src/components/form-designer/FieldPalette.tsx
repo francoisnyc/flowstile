@@ -11,6 +11,7 @@ const PALETTE_ITEMS: { type: FieldType; icon: string }[] = [
   { type: 'textarea', icon: '¶' },
   { type: 'date', icon: '📅' },
   { type: 'email', icon: '@' },
+  { type: 'file', icon: '📎' },
   { type: 'section', icon: '⊞' },
   { type: 'repeat', icon: '⟳' },
 ];

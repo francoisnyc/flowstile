@@ -173,8 +173,43 @@ export default function PropertiesPanel({ field, allFields, hasPublishedVersions
         </>
       )}
 
-      {/* Placeholder and helpText (not for section or boolean) */}
-      {!isSection && !isBoolean && (
+      {field.type === 'file' && (
+        <>
+          <SectionHeader>File Upload</SectionHeader>
+          <label className="props-checkbox">
+            <input
+              type="checkbox"
+              checked={(field as { multiple?: boolean }).multiple ?? false}
+              onChange={(e) => patch({ multiple: e.target.checked } as Partial<FieldDefinition>)}
+            />
+            Allow multiple files
+          </label>
+          <FieldRow label="Accepted types (comma-separated)">
+            <input
+              type="text"
+              placeholder="image/*, application/pdf"
+              value={((field as { accept?: string[] }).accept ?? []).join(', ')}
+              onChange={(e) =>
+                patch({
+                  accept: e.target.value.split(',').map((s) => s.trim()).filter(Boolean),
+                } as Partial<FieldDefinition>)
+              }
+            />
+          </FieldRow>
+          <FieldRow label="Max file size (bytes)">
+            <input
+              type="number"
+              value={(field as { maxSize?: number }).maxSize ?? ''}
+              onChange={(e) =>
+                patch({ maxSize: e.target.value === '' ? undefined : Number(e.target.value) } as Partial<FieldDefinition>)
+              }
+            />
+          </FieldRow>
+        </>
+      )}
+
+      {/* Placeholder and helpText (not for section or boolean or file) */}
+      {!isSection && !isBoolean && field.type !== 'file' && (
         <>
           <SectionHeader>Display</SectionHeader>
           <FieldRow label="Placeholder">

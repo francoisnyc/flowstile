@@ -1,5 +1,6 @@
 import Fastify, { FastifyInstance } from 'fastify';
 import rateLimit from '@fastify/rate-limit';
+import multipart from '@fastify/multipart';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
@@ -10,6 +11,8 @@ import typeormPlugin from './plugins/typeorm.js';
 import authPlugin from './plugins/auth.js';
 import temporalPlugin from './plugins/temporal.js';
 import signalRelayPlugin from './plugins/signal-relay.js';
+import attachmentStorePlugin from './plugins/attachment-store-plugin.js';
+import attachmentSweeperPlugin from './plugins/attachment-sweeper.js';
 import { healthRoutes } from './routes/health.js';
 import { authRoutes } from './routes/auth.js';
 import { userRoutes } from './routes/users.js';
@@ -17,6 +20,7 @@ import { groupRoutes } from './routes/groups.js';
 import { formRoutes } from './routes/forms.js';
 import { processRoutes } from './routes/processes.js';
 import { taskRoutes } from './routes/tasks.js';
+import { attachmentRoutes } from './routes/attachments.js';
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -34,11 +38,14 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   await app.register(corsPlugin);
   await app.register(rateLimit, { global: false });
+  await app.register(multipart);
   await app.register(typeormPlugin);
   await app.register(authPlugin);
   await app.register(csrfPlugin);
   await app.register(temporalPlugin);
   await app.register(signalRelayPlugin);
+  await app.register(attachmentStorePlugin);
+  await app.register(attachmentSweeperPlugin);
 
   await app.register(healthRoutes);
   await app.register(authRoutes);
@@ -47,6 +54,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(formRoutes);
   await app.register(processRoutes);
   await app.register(taskRoutes);
+  await app.register(attachmentRoutes);
 
   return app;
 }

@@ -45,3 +45,10 @@ export enum OutcomeStyle {
   SECONDARY = 'secondary',
   DANGER    = 'danger',
 }
+
+export enum AttachmentStatus {
+  PENDING = 'pending',
+  LINKED  = 'linked',
+}
+
+export type PayloadScope = 'input' | 'context' | 'submission';

@@ -5,6 +5,7 @@ import type {
   TextareaField,
   EmailField,
   SelectField,
+  FileField,
   SectionField,
   RepeatField,
   UnsupportedField,
@@ -45,6 +46,16 @@ function emailToJsonSchema(field: EmailField): Record<string, unknown> {
 
 function selectToJsonSchema(field: SelectField): Record<string, unknown> {
   return { type: 'string', enum: field.enumValues };
+}
+
+function fileToJsonSchema(field: FileField): Record<string, unknown> {
+  const cfg: Record<string, unknown> = {};
+  if (field.multiple !== undefined) cfg.multiple = field.multiple;
+  if (field.accept && field.accept.length > 0) cfg.accept = field.accept;
+  if (field.maxSize !== undefined) cfg.maxSize = field.maxSize;
+  // For multiple files the stored value is an array; single is an object.
+  // No top-level `type` constraint — validateAndCollectReferences handles shape validation.
+  return { 'x-flowstile-attachment': cfg };
 }
 
 // ---------------------------------------------------------------------------
@@ -96,6 +107,16 @@ function fieldToUiElement(field: FieldDefinition): UiElement | null {
       const opts = buildBaseUiOptions(field, { multi: true });
       el.options = opts!; // always has at least { multi: true }
       return el;
+    }
+
+    case 'file': {
+      // File fields are rendered by FileField, not JSON Forms.
+      // Emit a uiSchema element with scope so visibility filtering still works.
+      return {
+        type: 'Control',
+        scope: `#/properties/${field.key}`,
+        label: field.label,
+      };
     }
 
     case 'section': {
@@ -194,6 +215,12 @@ function collectFields(fields: FieldDefinition[]): CollectResult {
       case 'email':
         properties[field.key] = emailToJsonSchema(field);
         if (field.required) required.push(field.key);
+        break;
+
+      case 'file':
+        properties[field.key] = fileToJsonSchema(field);
+        // File fields are never "required" in the JSON Schema sense — presence is
+        // validated separately by validateAndCollectReferences.
         break;
 
       case 'section': {

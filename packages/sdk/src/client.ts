@@ -3,6 +3,8 @@ import type {
   FlowstileClientOptions,
   CreateTaskInput,
   Task,
+  AttachmentReference,
+  UploadAttachmentInput,
 } from './types.js';
 
 export class FlowstileClient {
@@ -86,5 +88,64 @@ export class FlowstileClient {
 
   cancelTask(taskId: string): Promise<Task> {
     return this.request<Task>(`/tasks/${taskId}/cancel`, { method: 'POST' });
+  }
+
+  async uploadAttachment(taskId: string, input: UploadAttachmentInput): Promise<AttachmentReference> {
+    await this.ensureAuth();
+
+    const formData = new FormData();
+    const blob = input.content instanceof Blob
+      ? input.content
+      : new Blob([input.content as Buffer], { type: input.contentType });
+    formData.append('file', blob, input.fileName);
+
+    const doRequest = async () => {
+      const headers: Record<string, string> = {};
+      if (this.jwt) headers['Authorization'] = `Bearer ${this.jwt}`;
+
+      return fetch(`${this.baseUrl}/tasks/${taskId}/attachments`, {
+        method: 'POST',
+        headers,
+        body: formData,
+      });
+    };
+
+    let response = await doRequest();
+    if (response.status === 401 && this.auth) {
+      this.jwt = null;
+      await this.ensureAuth();
+      response = await doRequest();
+    }
+
+    if (!response.ok) {
+      const body = await response.text();
+      throw new FlowstileApiError(response.status, `/tasks/${taskId}/attachments`, body);
+    }
+
+    return response.json() as Promise<AttachmentReference>;
+  }
+
+  async downloadAttachment(taskId: string, attachmentId: string): Promise<Buffer> {
+    await this.ensureAuth();
+
+    const doRequest = async () => {
+      const headers: Record<string, string> = {};
+      if (this.jwt) headers['Authorization'] = `Bearer ${this.jwt}`;
+      return fetch(`${this.baseUrl}/tasks/${taskId}/attachments/${attachmentId}/content`, { headers });
+    };
+
+    let response = await doRequest();
+    if (response.status === 401 && this.auth) {
+      this.jwt = null;
+      await this.ensureAuth();
+      response = await doRequest();
+    }
+
+    if (!response.ok) {
+      const body = await response.text();
+      throw new FlowstileApiError(response.status, `/tasks/${taskId}/attachments/${attachmentId}/content`, body);
+    }
+
+    return Buffer.from(await response.arrayBuffer());
   }
 }

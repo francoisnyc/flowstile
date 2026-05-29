@@ -18,6 +18,10 @@ import {
   completedSignalName,
   cancelledSignalName,
 } from '../signals/outbox.js';
+import { validateAndCollectReferences } from '../common/attachments.js';
+import { Attachment } from '../entities/attachment.entity.js';
+import { AttachmentStatus } from '../common/enums.js';
+import { In } from 'typeorm';
 
 function serializeTask(task: Task) {
   return {
@@ -479,6 +483,39 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
         }
       }
 
+      // Validate and collect attachment references from the merged submission
+      const ATTACHMENT_MAX_BYTES = parseInt(process.env.ATTACHMENT_MAX_BYTES ?? String(25 * 1024 * 1024), 10);
+      let attachmentIdsToLink: string[] = [];
+      if (form) {
+        const refResult = validateAndCollectReferences(
+          mergedSubmission,
+          form.jsonSchema as Record<string, unknown>,
+          { globalMaxBytes: ATTACHMENT_MAX_BYTES },
+        );
+        if (refResult.errors.length > 0) {
+          return reply.code(422).send({
+            error: 'submissionData validation failed',
+            details: refResult.errors,
+          });
+        }
+        attachmentIdsToLink = refResult.attachmentIds;
+      }
+
+      // Verify each referenced attachment is pending and belongs to this task
+      if (attachmentIdsToLink.length > 0) {
+        const atts = await app.db.getRepository(Attachment).find({ where: { id: In(attachmentIdsToLink) } });
+        const attMap = new Map(atts.map((a) => [a.id, a]));
+        for (const attId of attachmentIdsToLink) {
+          const att = attMap.get(attId);
+          if (!att || att.taskId !== id || att.status !== AttachmentStatus.PENDING) {
+            return reply.code(422).send({
+              error: 'submissionData validation failed',
+              details: [{ path: '/', message: `Attachment ${attId} is not a pending upload for this task` }],
+            });
+          }
+        }
+      }
+
       task.submissionData = mergedSubmission;
       task.completedAt = new Date();
 
@@ -486,9 +523,56 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
       task.signalStatus = enqueue ? SignalStatus.PENDING : SignalStatus.NOT_APPLICABLE;
 
       const user = request.currentUser!;
-      // Persist the task and the signal intent atomically. The relay delivers.
+      const linkedAt = new Date();
+
+      // Build a map of fieldKey → payloadScope for linking. We iterate the schema
+      // attachment fields and find which keys are referenced in mergedSubmission.
+      const fieldToScope = form
+        ? (() => {
+            const fields = new Map<string, string>();
+            const props = (form.jsonSchema.properties ?? {}) as Record<string, Record<string, unknown>>;
+            for (const [k, v] of Object.entries(props)) {
+              if (v['x-flowstile-attachment']) fields.set(k, 'submission');
+            }
+            return fields;
+          })()
+        : new Map<string, string>();
+
+      // Build attachmentId → fieldKey reverse lookup from mergedSubmission
+      const attIdToField = new Map<string, string>();
+      if (form) {
+        const props = (form.jsonSchema.properties ?? {}) as Record<string, Record<string, unknown>>;
+        for (const key of Object.keys(props)) {
+          const val = mergedSubmission[key];
+          if (val === undefined || val === null) continue;
+          const refs = Array.isArray(val) ? val : [val];
+          for (const ref of refs) {
+            if (ref && typeof ref === 'object' && typeof (ref as Record<string, unknown>).attachmentId === 'string') {
+              attIdToField.set((ref as Record<string, unknown>).attachmentId as string, key);
+            }
+          }
+        }
+      }
+
+      // Persist the task, link attachments, and the signal intent atomically.
       const savedTask = await app.db.transaction(async (manager) => {
         const saved = await manager.getRepository(Task).save(task);
+
+        // Flip pending → linked for all referenced attachments
+        for (const attId of attachmentIdsToLink) {
+          const fieldKey = attIdToField.get(attId) ?? null;
+          await manager.getRepository(Attachment).update(
+            { id: attId },
+            {
+              status: AttachmentStatus.LINKED,
+              fieldKey,
+              payloadScope: 'submission',
+              processInstanceId: saved.processInstanceId,
+              linkedAt,
+            },
+          );
+        }
+
         if (enqueue) {
           await enqueueSignal(manager, {
             taskId: saved.id,

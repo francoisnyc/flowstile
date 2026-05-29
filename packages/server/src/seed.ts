@@ -20,7 +20,7 @@ async function seed() {
 
   // Truncate all tables (cascade) so seed is idempotent
   await db.query(`
-    TRUNCATE tasks, task_definitions, process_definitions, form_definitions,
+    TRUNCATE attachments, tasks, task_definitions, process_definitions, form_definitions,
              group_members, user_roles, users, groups, roles
     CASCADE
   `);
@@ -72,7 +72,7 @@ async function seed() {
     roles: [taskUserRole],
   });
 
-  // Form: Loan Application
+  // Form: Loan Application (includes a file-upload field for supporting documents)
   const loanForm = await db.getRepository(FormDefinition).save({
     code: 'LOAN_APPLICATION',
     version: 1,
@@ -83,6 +83,14 @@ async function seed() {
         AMOUNT: { type: 'number', minimum: 0 },
         DECISION: { type: 'string', enum: ['APPROVED', 'REJECTED'] },
         NOTES: { type: 'string' },
+        // Attachment field: loan officers can attach supporting documents (e.g. credit reports, ID scans)
+        SUPPORTING_DOCUMENTS: {
+          'x-flowstile-attachment': {
+            multiple: true,
+            accept: ['application/pdf', 'image/jpeg', 'image/png'],
+            maxSize: 10 * 1024 * 1024, // 10 MB per file
+          },
+        },
       },
       required: ['CUSTOMER_NAME', 'AMOUNT', 'DECISION'],
     },
@@ -93,6 +101,7 @@ async function seed() {
         { type: 'Control', scope: '#/properties/AMOUNT' },
         { type: 'Control', scope: '#/properties/DECISION' },
         { type: 'Control', scope: '#/properties/NOTES', options: { multi: true } },
+        { type: 'Control', scope: '#/properties/SUPPORTING_DOCUMENTS', label: 'Supporting Documents' },
       ],
     },
     status: FormDefinitionStatus.PUBLISHED,
@@ -163,6 +172,14 @@ async function seed() {
         DECISION: { type: 'string', enum: ['CONFIRMED', 'REJECTED'] },
         REASON: { type: 'string' },
         TRACKING_NUMBER: { type: 'string' },
+        // Warehouse staff can upload a proof of shipment (carrier receipt, photo)
+        PROOF_OF_SHIPMENT: {
+          'x-flowstile-attachment': {
+            multiple: false,
+            accept: ['image/jpeg', 'image/png', 'application/pdf'],
+            maxSize: 5 * 1024 * 1024, // 5 MB
+          },
+        },
       },
       required: ['ORDER_ID', 'ORDER_ITEMS', 'SHIPPING_ADDRESS', 'DECISION'],
     },
@@ -176,6 +193,7 @@ async function seed() {
         { type: 'Control', scope: '#/properties/TRANSACTION_ID', options: { readonly: true } },
         { type: 'Control', scope: '#/properties/DECISION' },
         { type: 'Control', scope: '#/properties/TRACKING_NUMBER' },
+        { type: 'Control', scope: '#/properties/PROOF_OF_SHIPMENT', label: 'Proof of Shipment' },
         { type: 'Control', scope: '#/properties/REASON', options: { multi: true } },
       ],
     },

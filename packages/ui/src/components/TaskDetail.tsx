@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { JsonForms } from '@jsonforms/react';
 import { vanillaRenderers, vanillaCells } from '@jsonforms/vanilla-renderers';
 import type { UISchemaElement } from '@jsonforms/core';
-import type { Task } from '../types.js';
+import type { Task, AttachmentRef, AttachmentFieldConfig } from '../types.js';
 import { claimTask, unclaimTask, completeTask } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.js';
+import FileField from './FileField.js';
 
 interface Props {
   task: Task | null;
@@ -51,6 +52,17 @@ export default function TaskDetail({ task, onTaskUpdated }: Props) {
       setBusy(false);
     }
   };
+
+  // Collect attachment fields from the form schema for custom rendering
+  const attachmentFields = new Map<string, AttachmentFieldConfig>();
+  if (task.form?.jsonSchema?.properties) {
+    const props = task.form.jsonSchema.properties as Record<string, Record<string, unknown>>;
+    for (const [key, fieldSchema] of Object.entries(props)) {
+      if (fieldSchema['x-flowstile-attachment']) {
+        attachmentFields.set(key, (fieldSchema['x-flowstile-attachment'] as AttachmentFieldConfig) ?? {});
+      }
+    }
+  }
 
   const outcomes = task.form?.outcomes ?? null;
   const outcomeKey = task.form?.outcomeKey ?? 'DECISION';
@@ -118,6 +130,23 @@ export default function TaskDetail({ task, onTaskUpdated }: Props) {
             onChange={({ data }) => setFormData(data as Record<string, unknown>)}
             readonly={!isEditable}
           />
+          {attachmentFields.size > 0 && (
+            <div className="attachment-fields" style={{ marginTop: 16 }}>
+              {[...attachmentFields.entries()].map(([key, cfg]) => (
+                <div key={key} style={{ marginBottom: 12 }}>
+                  <label style={{ display: 'block', marginBottom: 4, fontWeight: 500 }}>{key}</label>
+                  <FileField
+                    taskId={task.id}
+                    fieldKey={key}
+                    config={cfg}
+                    value={formData[key] as AttachmentRef | AttachmentRef[] | null}
+                    readOnly={!isEditable}
+                    onChange={(next) => setFormData((prev) => ({ ...prev, [key]: next }))}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       ) : (
         <p className="empty">No form attached to this task</p>

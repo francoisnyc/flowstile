@@ -1,4 +1,4 @@
-import type { Task, User, Group, RoleRef, FormSummary, FormDefinition, Page } from '../types.js';
+import type { Task, User, Group, RoleRef, FormSummary, FormDefinition, Page, AttachmentRef } from '../types.js';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers: Record<string, string> = { ...init?.headers as Record<string, string> };
@@ -60,6 +60,26 @@ export const updateGroup = (id: string, body: { name?: string; memberIds?: strin
 
 // Admin — Roles
 export const listRoles = () => request<RoleRef[]>('/roles');
+
+// Attachments
+export async function uploadAttachment(taskId: string, file: File): Promise<AttachmentRef> {
+  const formData = new FormData();
+  formData.append('file', file, file.name);
+  const res = await fetch(`/api/tasks/${taskId}/attachments`, {
+    method: 'POST',
+    credentials: 'include',
+    body: formData,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: res.statusText })) as { error?: string };
+    throw new Error(body.error ?? `HTTP ${res.status}`);
+  }
+  return res.json() as Promise<AttachmentRef>;
+}
+
+export function getAttachmentUrl(taskId: string, attachmentId: string): string {
+  return `/api/tasks/${taskId}/attachments/${attachmentId}/content`;
+}
 
 // Forms
 export const listForms = () => request<Page<FormSummary>>('/forms');

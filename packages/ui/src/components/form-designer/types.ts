@@ -6,6 +6,7 @@ export type FieldType =
   | 'textarea'
   | 'date'
   | 'email'
+  | 'file'
   | 'section'
   | 'repeat'
   | 'unsupported';
@@ -77,6 +78,13 @@ export type RepeatField = BaseField & {
   children: FieldDefinition[];
 };
 
+export type FileField = BaseField & {
+  type: 'file';
+  multiple?: boolean;
+  accept?: string[];
+  maxSize?: number;
+};
+
 export type UnsupportedField = BaseField & {
   type: 'unsupported';
   jsonSchemaFragment: unknown;
@@ -91,6 +99,7 @@ export type FieldDefinition =
   | TextareaField
   | DateField
   | EmailField
+  | FileField
   | SectionField
   | RepeatField
   | UnsupportedField;
@@ -109,6 +118,7 @@ export const FIELD_TYPE_LABELS: Record<FieldType, string> = {
   textarea: 'Text Area',
   date: 'Date',
   email: 'Email',
+  file: 'File Upload',
   section: 'Section',
   repeat: 'Repeat Group',
   unsupported: 'Unsupported',

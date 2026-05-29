@@ -60,6 +60,28 @@ export interface FlowstileClientOptions {
   auth?: { email: string; password: string };
 }
 
+export interface AttachmentReference {
+  attachmentId: string;
+  fileName: string;
+  contentType: string;
+  size: number;
+  checksum: string;
+  uploadedBy: string | null;
+  uploadedAt: string;
+}
+
+export interface UploadAttachmentInput {
+  fileName: string;
+  contentType: string;
+  content: Buffer | Blob | ReadableStream;
+}
+
+export type AttachmentFieldConfig = {
+  multiple?: boolean;
+  accept?: string[];
+  maxSize?: number;
+};
+
 // Signal payload sent by the server when a task is completed
 export interface TaskCompletedSignalPayload {
   data: Record<string, unknown>;
