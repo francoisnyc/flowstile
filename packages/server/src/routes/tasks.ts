@@ -72,7 +72,7 @@ const CompleteTaskBody = z.object({
 const VariableFilter = z.object({
   name: z.string().min(1),
   operator: z.enum(['eq', 'like']).default('eq'),
-  value: z.union([z.string(), z.number()]),
+  value: z.union([z.string(), z.number(), z.boolean()]),
 }).refine(
   (f) => f.operator !== 'like' || (typeof f.value === 'string' && f.value.includes('%')),
   { message: 'like operator requires a string value containing at least one % wildcard' },
@@ -148,7 +148,7 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
 
     let paramCounter = 0;
     const applyVariableFilters = (
-      filters: { name: string; operator: string; value: string | number }[] | undefined,
+      filters: { name: string; operator: 'eq' | 'like'; value: string | number | boolean }[] | undefined,
       column: string,
     ) => {
       if (!filters?.length) return;

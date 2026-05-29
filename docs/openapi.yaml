@@ -748,6 +748,7 @@ paths:
                         anyOf:
                           - type: string
                           - type: number
+                          - type: boolean
                     required:
                       - name
                       - value
@@ -769,6 +770,7 @@ paths:
                         anyOf:
                           - type: string
                           - type: number
+                          - type: boolean
                     required:
                       - name
                       - value
@@ -790,6 +792,7 @@ paths:
                         anyOf:
                           - type: string
                           - type: number
+                          - type: boolean
                     required:
                       - name
                       - value

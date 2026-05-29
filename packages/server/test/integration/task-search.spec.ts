@@ -90,6 +90,20 @@ describe('POST /tasks/search', () => {
     expect(body.items.map((t) => t.id)).toContain(matchId);
   });
 
+  it('filters by boolean eq', async () => {
+    const matchId = await createTask({ inputData: { EXPEDITED: true } });
+    await createTask({ inputData: { EXPEDITED: false } });
+
+    const res = await search({
+      inputVariables: [{ name: 'EXPEDITED', operator: 'eq', value: true }],
+    });
+    expect(res.statusCode).toBe(200);
+
+    const body = res.json<{ items: { id: string; inputData: Record<string, unknown> }[] }>();
+    expect(body.items.map((t) => t.id)).toContain(matchId);
+    expect(body.items.every((t) => t.inputData.EXPEDITED === true)).toBe(true);
+  });
+
   it('filters by contextVariables', async () => {
     const matchId = await createTask({ contextData: { REGION: 'US-EAST' } });
     await createTask({ contextData: { REGION: 'EU-WEST' } });
