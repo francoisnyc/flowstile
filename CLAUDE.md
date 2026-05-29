@@ -89,6 +89,25 @@ pnpm --filter @flowstile/server test:integration    # requires Docker postgres
 npx playwright test                                 # e2e (requires running stack)
 ```
 
+## Git Workflow
+
+This is a solo project. The default is **commit and push straight to `master`** — no PR ceremony. CI (`.github/workflows/ci.yml`) runs on every push to `master` as well as on PRs, so direct pushes are still gated by the full test suite.
+
+Before pushing, **reproduce the CI pipeline locally** — it catches essentially everything `ci.yml` would, with no network or PR needed:
+
+```bash
+pnpm build
+pnpm --filter @flowstile/server openapi:generate && git diff --exit-code docs/openapi.yaml  # spec must be in sync
+pnpm test                                            # unit
+pnpm --filter @flowstile/server test:integration     # integration (requires postgres)
+```
+
+Open a branch + PR only when you specifically want one of:
+- **CI watched/autofixed in-session** — the PR webhook stream is the only way the agent can observe GitHub Actions results from its environment (no `gh`, no network, no Actions MCP tool). Use this when stepping away and you want a red build caught and fixed.
+- **Staging a risky or large change** — somewhere to let CI run and review the full diff in GitHub's UI before merging deliberately.
+
+For everything else, push to `master`.
+
 ## Documentation
 
 - `docs/developer-guide.md` — concepts and integration guide
