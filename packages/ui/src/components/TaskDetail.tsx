@@ -52,6 +52,15 @@ export default function TaskDetail({ task, onTaskUpdated }: Props) {
     }
   };
 
+  const outcomes = task.form?.outcomes ?? null;
+  const outcomeKey = task.form?.outcomeKey ?? 'DECISION';
+  const hasOutcomes = Array.isArray(outcomes) && outcomes.length > 0;
+
+  const completeWithOutcome = (value?: string) =>
+    act(() =>
+      completeTask(task.id, value !== undefined ? { ...formData, [outcomeKey]: value } : formData),
+    );
+
   return (
     <div className="task-detail">
       <div className="task-detail-header">
@@ -74,11 +83,21 @@ export default function TaskDetail({ task, onTaskUpdated }: Props) {
               Unassign
             </button>
           )}
-          {isEditable && (
+          {isEditable && hasOutcomes && outcomes!.map((o) => (
+            <button
+              key={o.value}
+              className={o.style ?? 'secondary'}
+              disabled={busy}
+              onClick={() => completeWithOutcome(o.value)}
+            >
+              {o.label}
+            </button>
+          ))}
+          {isEditable && !hasOutcomes && (
             <button
               className="primary"
               disabled={busy}
-              onClick={() => act(() => completeTask(task.id, formData))}
+              onClick={() => completeWithOutcome()}
             >
               Complete
             </button>

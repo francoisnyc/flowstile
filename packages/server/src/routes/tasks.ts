@@ -3,7 +3,7 @@ import type { Repository, SelectQueryBuilder } from 'typeorm';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { Task } from '../entities/task.entity.js';
 import { TaskDefinition } from '../entities/task-definition.entity.js';
-import { FormDefinition } from '../entities/form-definition.entity.js';
+import { FormDefinition, DEFAULT_OUTCOME_KEY } from '../entities/form-definition.entity.js';
 import { TaskStatus, FormDefinitionStatus, Priority, SignalStatus } from '../common/enums.js';
 import { TaskStateMachine, InvalidTransitionError } from '../common/task-state-machine.js';
 import { filterFormSchemas, filterSubmissionData, getWritableFields } from '../common/visibility.js';
@@ -312,6 +312,8 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
         canCancel: hasWrite && TaskStateMachine.canTransition(task.status, 'cancel') && (task.status === 'created' || isAssignee || hasManage),
       };
 
+      const hasOutcomes = Array.isArray(form.outcomes) && form.outcomes.length > 0;
+
       return {
         ...serializeTask(task),
         form: {
@@ -320,6 +322,8 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
           jsonSchema,
           uiSchema,
           formMessages: form.formMessages,
+          outcomes: hasOutcomes ? form.outcomes : null,
+          outcomeKey: hasOutcomes ? (form.outcomeKey ?? DEFAULT_OUTCOME_KEY) : null,
         },
         submissionData: filteredData,
         actions,
@@ -441,6 +445,37 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
             error: 'submissionData validation failed',
             details: validation.errors,
           });
+        }
+
+        // If the form declares outcome buttons, enforce that the submitted
+        // outcome value is one we recognise and that its requireFields are
+        // present. Defense in depth — the schema enum covers the value too.
+        if (Array.isArray(form.outcomes) && form.outcomes.length > 0) {
+          const outcomeKey = form.outcomeKey ?? DEFAULT_OUTCOME_KEY;
+          const chosen = mergedSubmission[outcomeKey];
+          const outcome = form.outcomes.find((o) => o.value === chosen);
+          if (!outcome) {
+            return reply.code(422).send({
+              error: 'submissionData validation failed',
+              details: [{
+                path: `/${outcomeKey}`,
+                message: `must be one of the declared outcomes: ${form.outcomes.map((o) => o.value).join(', ')}`,
+              }],
+            });
+          }
+          const missing = (outcome.requireFields ?? []).filter((field) => {
+            const v = mergedSubmission[field];
+            return v === undefined || v === null || v === '';
+          });
+          if (missing.length > 0) {
+            return reply.code(422).send({
+              error: 'submissionData validation failed',
+              details: missing.map((field) => ({
+                path: `/${field}`,
+                message: `required for outcome '${outcome.value}'`,
+              })),
+            });
+          }
         }
       }
 

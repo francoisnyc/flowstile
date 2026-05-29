@@ -9,6 +9,7 @@ import FormPreview from '../components/FormPreview.js';
 import DesignerToolbar from '../components/form-designer/DesignerToolbar.js';
 import type { DesignerTab } from '../components/form-designer/DesignerToolbar.js';
 import VisualBuilder from '../components/form-designer/VisualBuilder.js';
+import OutcomesPanel from '../components/form-designer/OutcomesPanel.js';
 import { useHistory } from '../components/form-designer/useHistory.js';
 import { toSchema } from '../components/form-designer/toSchema.js';
 import { fromSchema } from '../components/form-designer/fromSchema.js';
@@ -20,6 +21,21 @@ const EMPTY_SCHEMA: Record<string, unknown> = {
   'x-flowstile-builder': true,
 };
 const EMPTY_UI: Record<string, unknown> = { type: 'VerticalLayout', elements: [] };
+
+// Keep validation honest: when a form declares outcome buttons, the chosen
+// value must be a real string-enum property in the schema so the server's
+// existing schema validation rejects unknown outcomes.
+function withOutcomeEnum(
+  jsonSchema: Record<string, unknown>,
+  draft: FormDefinition,
+): Record<string, unknown> {
+  const outcomes = draft.outcomes;
+  if (!Array.isArray(outcomes) || outcomes.length === 0) return jsonSchema;
+  const key = draft.outcomeKey || 'DECISION';
+  const properties = { ...(jsonSchema.properties as Record<string, unknown> | undefined ?? {}) };
+  properties[key] = { type: 'string', enum: outcomes.map((o) => o.value) };
+  return { ...jsonSchema, properties };
+}
 
 export default function FormDesignerPage() {
   const { code: routeCode } = useParams<{ code?: string }>();
@@ -200,18 +216,23 @@ export default function FormDesignerPage() {
     try {
       // Sync visual builder state into draft before saving
       const schemaOut = activeTab === 'designer' ? toSchema(history.state) : null;
+      const baseSchema = schemaOut ? schemaOut.jsonSchema : draft.jsonSchema;
       const payload = schemaOut
         ? {
-          jsonSchema: schemaOut.jsonSchema,
+          jsonSchema: withOutcomeEnum(schemaOut.jsonSchema, draft),
           uiSchema: schemaOut.uiSchema,
           visibilityRules: schemaOut.visibilityRules,
           formMessages: draft.formMessages,
+          outcomes: draft.outcomes,
+          outcomeKey: draft.outcomeKey,
         }
         : {
-          jsonSchema: draft.jsonSchema,
+          jsonSchema: withOutcomeEnum(baseSchema, draft),
           uiSchema: draft.uiSchema,
           visibilityRules: draft.visibilityRules,
           formMessages: draft.formMessages,
+          outcomes: draft.outcomes,
+          outcomeKey: draft.outcomeKey,
         };
       const saved = await updateDraft(selectedCode, payload);
       setDraft(saved);
@@ -338,6 +359,15 @@ export default function FormDesignerPage() {
                   onChange={(updated) => setDraft((d) => d ? { ...d, ...updated } : d)}
                 />
               </div>
+            )}
+            {activeTab === 'outcomes' && (
+              <OutcomesPanel
+                outcomes={draft.outcomes}
+                outcomeKey={draft.outcomeKey}
+                onChange={({ outcomes, outcomeKey }) =>
+                  setDraft((d) => (d ? { ...d, outcomes, outcomeKey } : d))
+                }
+              />
             )}
             {activeTab === 'preview' && (
               <div className="preview-full">

@@ -34,12 +34,23 @@ export interface TaskDefinitionRef {
   defaultPriority: Priority;
 }
 
+export type OutcomeStyle = 'primary' | 'secondary' | 'danger';
+
+export interface FormOutcome {
+  value: string;
+  label: string;
+  style?: OutcomeStyle;
+  requireFields?: string[];
+}
+
 export interface TaskForm {
   code: string;
   version: number;
   jsonSchema: Record<string, unknown>;
   uiSchema: Record<string, unknown>;
   formMessages: Record<string, unknown>;
+  outcomes?: FormOutcome[] | null;
+  outcomeKey?: string | null;
 }
 
 export interface Task {
@@ -73,6 +84,8 @@ export interface FormDefinition {
   uiSchema: Record<string, unknown>;
   visibilityRules: Record<string, unknown>;
   formMessages: Record<string, unknown>;
+  outcomes: FormOutcome[] | null;
+  outcomeKey: string | null;
   createdAt: string;
   updatedAt: string;
 }

@@ -39,3 +39,9 @@ export enum OutboxStatus {
   DELIVERED = 'delivered',
   FAILED    = 'failed',
 }
+
+export enum OutcomeStyle {
+  PRIMARY   = 'primary',
+  SECONDARY = 'secondary',
+  DANGER    = 'danger',
+}

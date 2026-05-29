@@ -378,6 +378,16 @@ Completing a task should:
 4. record completion metadata
 5. trigger reliable delivery back into Temporal
 
+The validation order is fixed: the state-machine transition is checked first (a non-completable task returns `409` before any payload is examined), then non-writable fields are stripped, then `submissionData` is validated against the locked `jsonSchema` (`422` on failure).
+
+### Outcome Buttons
+
+A form may declare an optional `outcomes` array with an `outcomeKey` (default `DECISION`). These render as explicit completion buttons (e.g. Approve / Reject) instead of a single Complete button, but they do not change the completion contract:
+
+- Clicking an outcome completes the task through the same endpoint with `data[outcomeKey] = value`. No new lifecycle states, endpoints, or signal payloads.
+- `outcomeKey` is a real string-enum property in `jsonSchema`, so the schema validation above already rejects unknown outcome values (`422`).
+- As defense in depth, when a form declares outcomes the server additionally verifies the submitted value is one of the declared outcomes and that the chosen outcome's `requireFields` are present (`422` otherwise). This runs after schema validation, so it never overrides a `409` state error.
+
 ### Completion Envelope
 
 The workflow should not receive only an unstructured blob. It should receive a completion envelope with enough metadata to remain stable over time.

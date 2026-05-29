@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { FormDefinition } from '../entities/form-definition.entity.js';
-import { FormDefinitionStatus } from '../common/enums.js';
+import { FormDefinitionStatus, OutcomeStyle } from '../common/enums.js';
 import { requireAuth, requirePermission } from '../plugins/auth.js';
 import { Permissions } from '../common/permissions.js';
 import { PaginationQuery, paginate } from '../common/pagination.js';
@@ -9,12 +9,25 @@ import { PaginationQuery, paginate } from '../common/pagination.js';
 const CodeParam = z.object({ code: z.string().min(1) });
 const JsonObject = z.record(z.string(), z.unknown());
 
+const OutcomeSchema = z.object({
+  value: z.string().min(1),
+  label: z.string().min(1),
+  style: z.nativeEnum(OutcomeStyle).optional(),
+  requireFields: z.array(z.string().min(1)).optional(),
+});
+const OutcomesArray = z.array(OutcomeSchema).refine(
+  (outcomes) => new Set(outcomes.map((o) => o.value)).size === outcomes.length,
+  { message: 'outcome values must be unique' },
+);
+
 const CreateFormBody = z.object({
   code: z.string().min(1),
   jsonSchema: JsonObject,
   uiSchema: JsonObject.optional(),
   visibilityRules: JsonObject.optional(),
   formMessages: JsonObject.optional(),
+  outcomes: OutcomesArray.nullable().optional(),
+  outcomeKey: z.string().min(1).nullable().optional(),
 });
 
 const DraftFormBody = z.object({
@@ -22,6 +35,8 @@ const DraftFormBody = z.object({
   uiSchema: JsonObject.optional(),
   visibilityRules: JsonObject.optional(),
   formMessages: JsonObject.optional(),
+  outcomes: OutcomesArray.nullable().optional(),
+  outcomeKey: z.string().min(1).nullable().optional(),
 });
 
 export const formRoutes: FastifyPluginAsyncZod = async (app) => {
@@ -58,7 +73,7 @@ export const formRoutes: FastifyPluginAsyncZod = async (app) => {
   });
 
   app.post('/forms', { ...write, schema: { body: CreateFormBody, tags: ['Forms'] } }, async (request, reply) => {
-    const { code, jsonSchema, uiSchema, visibilityRules, formMessages } = request.body;
+    const { code, jsonSchema, uiSchema, visibilityRules, formMessages, outcomes, outcomeKey } = request.body;
 
     const existing = await repo().findOne({ where: { code } });
     if (existing) return reply.code(409).send({ error: `Form code '${code}' already exists` });
@@ -70,6 +85,8 @@ export const formRoutes: FastifyPluginAsyncZod = async (app) => {
       uiSchema: uiSchema ?? {},
       visibilityRules: visibilityRules ?? {},
       formMessages: formMessages ?? {},
+      outcomes: outcomes ?? null,
+      outcomeKey: outcomeKey ?? null,
       status: FormDefinitionStatus.DRAFT,
     });
 
@@ -113,7 +130,7 @@ export const formRoutes: FastifyPluginAsyncZod = async (app) => {
     { ...write, schema: { params: CodeParam, body: DraftFormBody, tags: ['Forms'] } },
     async (request, reply) => {
       const { code } = request.params;
-      const { jsonSchema, uiSchema, visibilityRules, formMessages } = request.body;
+      const { jsonSchema, uiSchema, visibilityRules, formMessages, outcomes, outcomeKey } = request.body;
 
       let draft = await repo().findOne({
         where: { code, status: FormDefinitionStatus.DRAFT },
@@ -124,6 +141,8 @@ export const formRoutes: FastifyPluginAsyncZod = async (app) => {
         if (uiSchema !== undefined) draft.uiSchema = uiSchema;
         if (visibilityRules !== undefined) draft.visibilityRules = visibilityRules;
         if (formMessages !== undefined) draft.formMessages = formMessages;
+        if (outcomes !== undefined) draft.outcomes = outcomes;
+        if (outcomeKey !== undefined) draft.outcomeKey = outcomeKey;
         await repo().save(draft);
       } else {
         const published = await repo().find({
@@ -140,6 +159,8 @@ export const formRoutes: FastifyPluginAsyncZod = async (app) => {
           uiSchema: uiSchema ?? published[0].uiSchema,
           visibilityRules: visibilityRules ?? published[0].visibilityRules,
           formMessages: formMessages ?? published[0].formMessages,
+          outcomes: outcomes !== undefined ? outcomes : published[0].outcomes,
+          outcomeKey: outcomeKey !== undefined ? outcomeKey : published[0].outcomeKey,
           status: FormDefinitionStatus.DRAFT,
         });
         return reply.code(201).send(draft);

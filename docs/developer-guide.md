@@ -140,10 +140,30 @@ A `FormDefinition` is a versioned, reusable form contract. It is built from:
 - `uiSchema`: layout and widget hints
 - `visibilityRules`: field-level access rules based on roles and groups
 - `formMessages`: validation and helper text
+- `outcomes` (optional): declarative completion buttons (see below)
 
 Forms are first-class entities and are versioned independently from processes. A task definition references a form by stable `code`, not by a database ID. When a runtime task is created, it locks to the currently published form version. In-flight tasks are never retroactively changed by later form edits.
 
 That independence is a product choice as much as a data-model choice. Flowstile uses forms primarily in support of human tasks, but the form system is designed to remain useful on its own terms: portable, versioned, and not bound to a Temporal-specific representation.
+
+#### Outcome Buttons
+
+By default a task renders a single **Complete** button and any decision is captured as an ordinary form field. For the common approval shape, a form can instead declare **outcomes** — explicit buttons such as **Approve** / **Reject**:
+
+```json
+{
+  "outcomes": [
+    { "value": "approved", "label": "Approve", "style": "primary" },
+    { "value": "rejected", "label": "Reject", "style": "danger", "requireFields": ["NOTES"] }
+  ],
+  "outcomeKey": "DECISION"
+}
+```
+
+- `outcomeKey` (defaults to `DECISION`) is the `submissionData` key the chosen `value` is written to. It must be a real string-enum property in `jsonSchema` so existing validation rejects unknown values — the form designer keeps this in sync automatically.
+- Each outcome has a `value`, a button `label`, an optional `style` (`primary` | `secondary` | `danger`), and optional `requireFields` that must be present when that outcome is chosen.
+- Outcome buttons are **sugar over completion**: clicking one calls the normal `POST /tasks/:id/complete` with `data[outcomeKey] = value`. There are no new lifecycle states, endpoints, or signal-contract changes — the workflow still branches on `result.data[outcomeKey]` exactly as before.
+- If `outcomes` is absent or empty, behavior is unchanged (single Complete button).
 
 ### Process Definitions
 

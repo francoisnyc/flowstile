@@ -45,14 +45,18 @@ export function FlowstileTask({
     }
   }, [claim, onClaim, onError]);
 
-  const handleSubmit = useCallback(async () => {
+  const handleSubmit = useCallback(async (outcomeValue?: string) => {
+    const outcomeKey = task?.form?.outcomeKey ?? 'DECISION';
+    const payload = outcomeValue !== undefined
+      ? { ...formData, [outcomeKey]: outcomeValue }
+      : formData;
     try {
-      await complete(formData);
-      onComplete?.(formData);
+      await complete(payload);
+      onComplete?.(payload);
     } catch (err) {
       onError?.(err as FlowstileApiError);
     }
-  }, [complete, formData, onComplete, onError]);
+  }, [complete, formData, onComplete, onError, task?.form?.outcomeKey]);
 
   if (status === 'loading') {
     return <div className="flowstile-task flowstile-task--loading">Loading...</div>;
@@ -67,6 +71,8 @@ export function FlowstileTask({
   }
 
   const { actions } = task;
+  const outcomes = form.outcomes ?? null;
+  const hasOutcomes = Array.isArray(outcomes) && outcomes.length > 0;
 
   return (
     <div className="flowstile-task">
@@ -88,10 +94,20 @@ export function FlowstileTask({
             Claim
           </button>
         )}
-        {actions.canComplete && (
+        {actions.canComplete && hasOutcomes && outcomes!.map((o) => (
+          <button
+            key={o.value}
+            className={`flowstile-btn flowstile-btn--outcome flowstile-btn--${o.style ?? 'secondary'}`}
+            onClick={() => handleSubmit(o.value)}
+            disabled={isMutating}
+          >
+            {o.label}
+          </button>
+        ))}
+        {actions.canComplete && !hasOutcomes && (
           <button
             className="flowstile-btn flowstile-btn--submit"
-            onClick={handleSubmit}
+            onClick={() => handleSubmit()}
             disabled={isMutating}
           >
             Submit

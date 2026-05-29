@@ -1,6 +1,6 @@
 import React from 'react';
 
-export type DesignerTab = 'designer' | 'source' | 'preview';
+export type DesignerTab = 'designer' | 'source' | 'outcomes' | 'preview';
 
 interface Props {
   activeTab: DesignerTab;
@@ -19,6 +19,7 @@ interface Props {
 const TABS: { key: DesignerTab; label: string }[] = [
   { key: 'designer', label: 'Designer' },
   { key: 'source', label: 'Source' },
+  { key: 'outcomes', label: 'Outcomes' },
   { key: 'preview', label: 'Preview' },
 ];
 
