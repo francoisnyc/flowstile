@@ -396,39 +396,51 @@ This keeps workflow code from depending on hidden context and improves auditabil
 
 ## Delivery and Retry Semantics
 
-Completion delivery back into Temporal should be reliable, not a best-effort inline side effect.
+Completion delivery back into Temporal is reliable, not a best-effort inline side effect. It is implemented as a **transactional outbox** with at-least-once delivery.
 
 The important failure case is:
 
 - task completion is persisted successfully
-- but signal delivery to the workflow does not succeed immediately
+- but signal delivery to the workflow does not succeed immediately (Temporal down, network partition, process crash)
 
-Flowstile should be designed so this is recoverable without data loss or user confusion.
+The outbox ensures this is always recoverable without data loss or user confusion.
+
+### Transactional Outbox
+
+When a task reaches a terminal state (`completed` or `cancelled`) and Temporal is configured, the server writes a `signal_outbox` row **in the same database transaction** that persists the task state change. Task state and delivery intent therefore commit atomically: if the task is durably terminal, the signal is durably queued. A crash at any point cannot leave a completed task with no queued signal.
+
+A background **signal relay** drains the outbox:
+
+- it polls for `pending` rows whose `nextAttemptAt` is due
+- it locks rows with `FOR UPDATE SKIP LOCKED`, so multiple server instances can run the relay without double-delivering
+- on success the row is marked `delivered`
+- on a transient error the attempt count increments and the row is rescheduled with exponential backoff
+- when the workflow no longer exists, or `maxAttempts` is exhausted, the row is marked `failed`
+
+Because the relay retries across process restarts and Temporal outages, delivery is **at-least-once**. Workflow signal handlers are keyed by `taskId` and should be idempotent.
 
 ### Signal Delivery Lifecycle
 
-Every task that reaches a terminal state (`completed` or `cancelled`) tracks its Temporal signal delivery in a `signalStatus` field:
+Each terminal task carries a `signalStatus` field that projects the outbox outcome for easy querying:
 
 | Status | Meaning |
 |---|---|
-| `not_applicable` | Task has no `workflowId` or Temporal is not configured |
-| `pending` | Delivery attempt in progress (or server crashed mid-delivery) |
+| `not_applicable` | Temporal is not configured (no signal is queued) |
+| `pending` | Queued in the outbox; delivery in progress or awaiting retry |
 | `delivered` | Signal acknowledged by Temporal |
-| `failed` | All delivery retries exhausted; workflow is out of sync |
+| `failed` | Workflow gone or all retries exhausted; workflow is out of sync |
 
-The server persists `signalStatus = pending` before attempting delivery, then updates to `delivered` or `failed` after the result is known. A task stuck in `pending` (e.g., after a server crash) should be treated as `failed` for recovery purposes.
-
-`signalDeliveredAt` and `signalFailedAt` timestamps are set accordingly.
+`signalDeliveredAt` and `signalFailedAt` timestamps are set accordingly. The relay updates both the outbox row and this projection as outcomes resolve.
 
 ### Recovery
 
-An operator with `tasks:manage` can retry a failed or stuck delivery:
+An operator with `tasks:manage` can re-queue a failed or stuck delivery:
 
 ```
 POST /tasks/:id/retry-signal
 ```
 
-This reconstructs the signal payload from the stored task data and reattempts delivery. The endpoint returns the updated task with the new `signalStatus`.
+This resets the task's outbox row to `pending` (attempts cleared) so the relay re-attempts delivery. It does not deliver inline — the endpoint returns immediately with `signalStatus: pending`.
 
 ### Monitoring
 

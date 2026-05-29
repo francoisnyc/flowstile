@@ -228,14 +228,24 @@ Action authorization is enforced server-side too. The `tasks:write` permission g
 
 ## Signal Delivery Durability
 
-When a task is completed or cancelled, Flowstile fires a Temporal signal to resume the waiting workflow. Task state is the source of truth and is always durable; signal delivery is retried with backoff but can still fail (workflow gone, Temporal unavailable). To make this observable, each terminal task carries a `signalStatus`:
+When a task is completed or cancelled, Flowstile resumes the waiting workflow with a Temporal signal. Delivery is **at-least-once**, implemented with a transactional outbox so a completed task can never silently fail to reach its workflow.
 
-- `not_applicable` — the task had no associated workflow
-- `pending` — delivery is in progress (or the server crashed mid-delivery)
-- `delivered` — the signal was acknowledged by Temporal
-- `failed` — all retries were exhausted; the workflow is out of sync
+How it works:
 
-Operators can list broken deliveries with `GET /tasks?signalStatus=failed` (or the same filter on `POST /tasks/search`) and replay them with `POST /tasks/:id/retry-signal`, which reconstructs the original signal payload from stored task data and reattempts delivery.
+- On completion/cancellation, the server writes a `signal_outbox` row in the **same transaction** as the task state change. Task state and delivery intent commit atomically.
+- A background relay drains the outbox: it delivers due signals, marks them `delivered`, retries transient failures with exponential backoff, and marks a signal `failed` only when the workflow is gone or retries are exhausted. It locks rows with `FOR UPDATE SKIP LOCKED`, so running multiple server instances is safe.
+- Because the relay retries across process restarts and Temporal outages, signals survive both. Workflow handlers are keyed by `taskId` and should be idempotent.
+
+Each terminal task exposes a `signalStatus` projection of the outbox outcome:
+
+- `not_applicable` — Temporal is not configured
+- `pending` — queued; delivery in progress or awaiting retry
+- `delivered` — acknowledged by Temporal
+- `failed` — workflow gone or retries exhausted; out of sync
+
+Operators can list broken deliveries with `GET /tasks?signalStatus=failed` (or the same filter on `POST /tasks/search`) and re-queue them with `POST /tasks/:id/retry-signal`, which resets the outbox row to `pending` for the relay to re-attempt (it does not deliver inline).
+
+The relay poll interval is configurable via `SIGNAL_RELAY_POLL_MS` (default 2000).
 
 ## API Surface
 

@@ -9,6 +9,7 @@ import csrfPlugin from './plugins/csrf.js';
 import typeormPlugin from './plugins/typeorm.js';
 import authPlugin from './plugins/auth.js';
 import temporalPlugin from './plugins/temporal.js';
+import signalRelayPlugin from './plugins/signal-relay.js';
 import { healthRoutes } from './routes/health.js';
 import { authRoutes } from './routes/auth.js';
 import { userRoutes } from './routes/users.js';
@@ -37,6 +38,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(authPlugin);
   await app.register(csrfPlugin);
   await app.register(temporalPlugin);
+  await app.register(signalRelayPlugin);
 
   await app.register(healthRoutes);
   await app.register(authRoutes);

@@ -6,6 +6,7 @@ import { FormDefinition } from '../entities/form-definition.entity.js';
 import { ProcessDefinition } from '../entities/process-definition.entity.js';
 import { TaskDefinition } from '../entities/task-definition.entity.js';
 import { Task } from '../entities/task.entity.js';
+import { SignalOutbox } from '../entities/signal-outbox.entity.js';
 
 export const dataSourceOptions: DataSourceOptions = {
   type: 'postgres',
@@ -14,7 +15,7 @@ export const dataSourceOptions: DataSourceOptions = {
   database: process.env.DATABASE_NAME ?? 'flowstile',
   username: process.env.DATABASE_USER ?? 'flowstile',
   password: process.env.DATABASE_PASSWORD ?? 'flowstile',
-  entities: [User, Group, Role, FormDefinition, ProcessDefinition, TaskDefinition, Task],
+  entities: [User, Group, Role, FormDefinition, ProcessDefinition, TaskDefinition, Task, SignalOutbox],
   migrations: [],
   synchronize: process.env.NODE_ENV !== 'production',
   logging: process.env.NODE_ENV !== 'production',

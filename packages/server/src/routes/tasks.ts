@@ -11,7 +11,13 @@ import { requirePermission } from '../plugins/auth.js';
 import { Permissions } from '../common/permissions.js';
 import { PaginationQuery, paginate } from '../common/pagination.js';
 import { validateAgainstSchema, validateInputData } from '../validation/schema-validator.js';
-import { deliverSignal } from '../signals/deliver-signal.js';
+import {
+  enqueueSignal,
+  reenqueueForTask,
+  buildCompletedPayload,
+  completedSignalName,
+  cancelledSignalName,
+} from '../signals/outbox.js';
 
 function serializeTask(task: Task) {
   return {
@@ -440,39 +446,29 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
 
       task.submissionData = mergedSubmission;
       task.completedAt = new Date();
-      task.signalStatus = (app.temporal && task.workflowId) ? SignalStatus.PENDING : SignalStatus.NOT_APPLICABLE;
-      const savedTask = await repo().save(task);
 
-      if (app.temporal && task.workflowId) {
-        const user = request.currentUser!;
-        const delivered = await deliverSignal({
-          temporal: app.temporal,
-          workflowId: task.workflowId,
-          signalName: `flowstile:task:completed:${task.id}`,
-          payload: {
-            data: savedTask.submissionData,
-            completedBy: {
-              id: user.id,
-              email: user.email,
-              displayName: user.displayName,
-            },
-            completedAt: savedTask.completedAt!.toISOString(),
-            formVersion: savedTask.formDefinitionVersion,
-          },
-          logger: request.log,
-        });
-        savedTask.signalStatus = delivered ? SignalStatus.DELIVERED : SignalStatus.FAILED;
-        if (delivered) {
-          savedTask.signalDeliveredAt = new Date();
-        } else {
-          savedTask.signalFailedAt = new Date();
-          request.log.error(
-            { taskId: savedTask.id, workflowId: savedTask.workflowId, signalStatus: 'failed' },
-            'Completion signal was not delivered — workflow may be out of sync',
-          );
+      const enqueue = app.temporalEnabled && Boolean(task.workflowId);
+      task.signalStatus = enqueue ? SignalStatus.PENDING : SignalStatus.NOT_APPLICABLE;
+
+      const user = request.currentUser!;
+      // Persist the task and the signal intent atomically. The relay delivers.
+      const savedTask = await app.db.transaction(async (manager) => {
+        const saved = await manager.getRepository(Task).save(task);
+        if (enqueue) {
+          await enqueueSignal(manager, {
+            taskId: saved.id,
+            workflowId: saved.workflowId,
+            signalName: completedSignalName(saved.id),
+            payload: buildCompletedPayload({
+              submissionData: saved.submissionData,
+              completedAt: saved.completedAt,
+              formDefinitionVersion: saved.formDefinitionVersion,
+              assignee: { id: user.id, email: user.email, displayName: user.displayName },
+            }),
+          });
         }
-        await repo().save(savedTask);
-      }
+        return saved;
+      });
 
       return serializeTask(savedTask);
     },
@@ -501,31 +497,23 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
         return reply.code(403).send({ error: 'Only the assignee or a manager can cancel this task' });
       }
 
-      task.signalStatus = (app.temporal && task.workflowId) ? SignalStatus.PENDING : SignalStatus.NOT_APPLICABLE;
-      await repo().save(task);
+      const enqueue = app.temporalEnabled && Boolean(task.workflowId);
+      task.signalStatus = enqueue ? SignalStatus.PENDING : SignalStatus.NOT_APPLICABLE;
 
-      if (app.temporal && task.workflowId) {
-        const delivered = await deliverSignal({
-          temporal: app.temporal,
-          workflowId: task.workflowId,
-          signalName: `flowstile:task:cancelled:${task.id}`,
-          payload: undefined,
-          logger: request.log,
-        });
-        task.signalStatus = delivered ? SignalStatus.DELIVERED : SignalStatus.FAILED;
-        if (delivered) {
-          task.signalDeliveredAt = new Date();
-        } else {
-          task.signalFailedAt = new Date();
-          request.log.error(
-            { taskId: task.id, workflowId: task.workflowId, signalStatus: 'failed' },
-            'Cancellation signal was not delivered — workflow may be out of sync',
-          );
+      const savedTask = await app.db.transaction(async (manager) => {
+        const saved = await manager.getRepository(Task).save(task);
+        if (enqueue) {
+          await enqueueSignal(manager, {
+            taskId: saved.id,
+            workflowId: saved.workflowId,
+            signalName: cancelledSignalName(saved.id),
+            payload: null,
+          });
         }
-        await repo().save(task);
-      }
+        return saved;
+      });
 
-      return serializeTask(task);
+      return serializeTask(savedTask);
     },
   );
 
@@ -546,41 +534,20 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
           error: 'Signal retry only allowed when signalStatus is failed or pending',
         });
       }
-      if (!app.temporal || !task.workflowId) {
-        return reply.code(409).send({ error: 'No Temporal connection configured' });
+      if (!app.temporalEnabled || !task.workflowId) {
+        return reply.code(409).send({ error: 'Temporal integration is not configured' });
       }
 
-      const signalName = task.status === TaskStatus.COMPLETED
-        ? `flowstile:task:completed:${task.id}`
-        : `flowstile:task:cancelled:${task.id}`;
-
-      const payload = task.status === TaskStatus.COMPLETED ? {
-        data: task.submissionData,
-        completedBy: task.assignee
-          ? { id: task.assignee.id, email: task.assignee.email, displayName: task.assignee.displayName }
-          : null,
-        completedAt: task.completedAt?.toISOString(),
-        formVersion: task.formDefinitionVersion,
-      } : undefined;
-
-      task.signalStatus = SignalStatus.PENDING;
-      await repo().save(task);
-
-      const delivered = await deliverSignal({
-        temporal: app.temporal,
-        workflowId: task.workflowId,
-        signalName,
-        payload,
-        logger: request.log,
+      // Re-enqueue for the relay to deliver; reset the projection to pending.
+      await app.db.transaction(async (manager) => {
+        await reenqueueForTask(manager, task);
+        await manager.getRepository(Task).update(
+          { id: task.id },
+          { signalStatus: SignalStatus.PENDING, signalFailedAt: null },
+        );
       });
-
-      task.signalStatus = delivered ? SignalStatus.DELIVERED : SignalStatus.FAILED;
-      if (delivered) {
-        task.signalDeliveredAt = new Date();
-      } else {
-        task.signalFailedAt = new Date();
-      }
-      await repo().save(task);
+      task.signalStatus = SignalStatus.PENDING;
+      task.signalFailedAt = null;
 
       return serializeTask(task);
     },

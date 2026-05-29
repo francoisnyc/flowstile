@@ -33,3 +33,9 @@ export enum SignalStatus {
   DELIVERED      = 'delivered',
   FAILED         = 'failed',
 }
+
+export enum OutboxStatus {
+  PENDING   = 'pending',
+  DELIVERED = 'delivered',
+  FAILED    = 'failed',
+}
