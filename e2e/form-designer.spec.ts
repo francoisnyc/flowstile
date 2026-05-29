@@ -33,7 +33,10 @@ async function apiGet(path: string): Promise<unknown> {
   return res.json();
 }
 
-async function dragPaletteItemToCanvas(page: Page, fieldTypeLabel: string) {
+// @dnd-kit's PointerSensor activates on a movement threshold and is timing
+// sensitive, so a single synthetic drag is flaky across CI machines. This
+// helper performs one drag attempt with the stepping/pauses dnd-kit needs.
+async function attemptDrag(page: Page, fieldTypeLabel: string) {
   const paletteItem = page.locator('.palette-item', { hasText: fieldTypeLabel }).first();
   const canvas = page.locator('.form-canvas');
 
@@ -44,19 +47,35 @@ async function dragPaletteItemToCanvas(page: Page, fieldTypeLabel: string) {
   const canvasBox = await canvas.boundingBox();
   if (!paletteBox || !canvasBox) throw new Error('Could not get bounding boxes for drag');
 
-  // Pick up from palette item centre
   const fromX = paletteBox.x + paletteBox.width / 2;
   const fromY = paletteBox.y + paletteBox.height / 2;
-  // Drop onto canvas centre
   const toX = canvasBox.x + canvasBox.width / 2;
   const toY = canvasBox.y + canvasBox.height / 2;
 
   await page.mouse.move(fromX, fromY);
   await page.mouse.down();
-  // Move in small increments so @dnd-kit sensors register the drag
-  await page.mouse.move(fromX + 10, fromY, { steps: 5 });
-  await page.mouse.move(toX, toY, { steps: 20 });
+  // Cross the activation threshold first, then traverse to the drop target.
+  await page.mouse.move(fromX + 12, fromY + 12, { steps: 6 });
+  await page.waitForTimeout(50);
+  await page.mouse.move(toX, toY, { steps: 24 });
+  await page.waitForTimeout(50);
   await page.mouse.up();
+}
+
+// Drags a field type onto the canvas and confirms the field count increased,
+// retrying the synthetic drag if dnd-kit didn't register it.
+async function dragPaletteItemToCanvas(page: Page, fieldTypeLabel: string) {
+  const before = await page.locator('.canvas-field').count();
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await attemptDrag(page, fieldTypeLabel);
+    try {
+      await expect(page.locator('.canvas-field')).toHaveCount(before + 1, { timeout: 2000 });
+      return;
+    } catch {
+      // Drag didn't register — retry.
+    }
+  }
+  throw new Error(`Drag of "${fieldTypeLabel}" did not add a field after 3 attempts`);
 }
 
 test.describe('Form Designer', () => {
