@@ -233,4 +233,13 @@ describe('POST /tasks/search', () => {
     expect(body.items).toEqual([]);
     expect(body.total).toBe(0);
   });
+
+  it('rejects more than 10 variable filters across all scopes', async () => {
+    const filters = Array.from({ length: 6 }, (_, i) => ({ name: `KEY_${i}`, value: `val_${i}` }));
+    const res = await search({
+      inputVariables: filters,
+      contextVariables: filters,
+    });
+    expect(res.statusCode).toBe(400);
+  });
 });

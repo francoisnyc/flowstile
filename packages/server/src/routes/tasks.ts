@@ -155,6 +155,8 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
       for (const filter of filters) {
         const idx = paramCounter++;
         if (filter.operator === 'like') {
+          // jsonb_extract_path_text cannot use the GIN index — falls back to seq scan.
+          // Acceptable for low-frequency admin queries; add expression indexes for hot fields.
           qb.andWhere(
             `jsonb_extract_path_text(t."${column}", :vname_${idx}) LIKE :vval_${idx}`,
             { [`vname_${idx}`]: filter.name, [`vval_${idx}`]: filter.value },
