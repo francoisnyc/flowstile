@@ -7,10 +7,14 @@ import { createTaskAndWait } from '@flowstile/sdk/workflows';
 
 export interface LoanApprovalInput {
   processInstanceId: string;
-  // Portal-start fields (from the LOAN_APPLICATION_START form)
-  CUSTOMER_NAME: string;
-  AMOUNT: number;
-  // Optional metadata injected by the server on portal start
+  // Caller-supplied start-form payload (validated server-side against
+  // LOAN_APPLICATION_START). Nested under `data` so it can never collide with
+  // the server-injected fields below.
+  data: {
+    CUSTOMER_NAME: string;
+    AMOUNT: number;
+  };
+  // Metadata injected by the server on portal start (unforgeable by the caller).
   startedBy?: { id: string; email: string; displayName: string } | null;
 }
 
@@ -31,24 +35,25 @@ interface LoanDecision extends Record<string, unknown> {
 export async function loanApprovalWorkflow(
   input: LoanApprovalInput,
 ): Promise<LoanApprovalResult> {
+  const { CUSTOMER_NAME, AMOUNT } = input.data;
   const result = await createTaskAndWait<LoanDecision>({
     taskDefinitionCode: 'REVIEW_LOAN',
     processInstanceId: input.processInstanceId,
     priority: 'high',
     contextData: {
-      CUSTOMER_NAME: input.CUSTOMER_NAME,
+      CUSTOMER_NAME,
       APPLICATION_REFERENCE: input.processInstanceId,
     },
     inputData: {
-      AMOUNT: input.AMOUNT,
+      AMOUNT,
     },
   });
 
   return {
     decision: result.data.DECISION,
     notes: result.data.NOTES ?? null,
-    customerName: input.CUSTOMER_NAME,
-    amount: input.AMOUNT,
+    customerName: CUSTOMER_NAME,
+    amount: AMOUNT,
     completedBy: result.completedBy.email,
     completedAt: result.completedAt,
   };

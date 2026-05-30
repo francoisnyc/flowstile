@@ -9,9 +9,16 @@ import { ProcessDefinitionStatus, Priority, FormDefinitionStatus } from '../comm
 import { requireAuth, requirePermission } from '../plugins/auth.js';
 import { Permissions } from '../common/permissions.js';
 import { PaginationQuery, paginate } from '../common/pagination.js';
-import { validateInputData } from '../validation/schema-validator.js';
+import { validateAgainstSchema } from '../validation/schema-validator.js';
 
 const UuidParam = z.object({ id: z.string().uuid() });
+
+// Postgres unique-violation SQLSTATE, surfaced by TypeORM's QueryFailedError.
+function isUniqueViolation(err: unknown): boolean {
+  const code = (err as { code?: string; driverError?: { code?: string } })?.code
+    ?? (err as { driverError?: { code?: string } })?.driverError?.code;
+  return code === '23505';
+}
 
 const CreateProcessBody = z.object({
   name: z.string().min(1),
@@ -28,6 +35,20 @@ const PatchProcessBody = z.object({
 
 const StartProcessBody = z.object({
   data: z.record(z.string(), z.unknown()).default({}),
+  // Optional client-supplied key that makes a start request idempotent: two
+  // requests with the same key against the same process resolve to the same
+  // workflow / case instead of starting duplicates (e.g. on double-submit).
+  idempotencyKey: z.string().min(1).max(200).optional(),
+});
+
+const StartProcessResponse = z.object({
+  processInstanceId: z.string(),
+  caseId: z.string(),
+});
+
+const ErrorResponse = z.object({
+  error: z.string(),
+  details: z.unknown().optional(),
 });
 
 const CreateTaskDefBody = z.object({
@@ -48,6 +69,7 @@ const PatchTaskDefBody = z.object({
 export const processRoutes: FastifyPluginAsyncZod = async (app) => {
   const read = { preHandler: [requireAuth] };
   const write = { preHandler: [requirePermission(Permissions.PROCESSES_WRITE)] };
+  const start = { preHandler: [requirePermission(Permissions.PROCESSES_START)] };
   const pdRepo = () => app.db.getRepository(ProcessDefinition);
   const tdRepo = () => app.db.getRepository(TaskDefinition);
 
@@ -107,10 +129,26 @@ export const processRoutes: FastifyPluginAsyncZod = async (app) => {
 
   app.post(
     '/processes/:id/start',
-    { ...read, schema: { params: UuidParam, body: StartProcessBody, tags: ['Processes'] } },
+    {
+      ...start,
+      schema: {
+        params: UuidParam,
+        body: StartProcessBody,
+        response: {
+          200: StartProcessResponse,
+          201: StartProcessResponse,
+          404: ErrorResponse,
+          422: ErrorResponse,
+          502: ErrorResponse,
+          503: ErrorResponse,
+        },
+        tags: ['Processes'],
+      },
+    },
     async (request, reply) => {
       const { id } = request.params;
-      const { data } = request.body;
+      const { data, idempotencyKey } = request.body;
+      const caseRepo = app.db.getRepository(Case);
 
       const pd = await pdRepo().findOne({ where: { id } });
       if (!pd) return reply.code(404).send({ error: 'Process not found' });
@@ -121,7 +159,9 @@ export const processRoutes: FastifyPluginAsyncZod = async (app) => {
         });
       }
 
-      // Validate start form data if a start form is configured
+      // Validate start form data if a start form is configured. When no start
+      // form is configured the process accepts no caller input — reject any
+      // supplied data rather than passing it through unvalidated.
       if (pd.startFormCode) {
         const form = await app.db.getRepository(FormDefinition).findOne({
           where: { code: pd.startFormCode, status: FormDefinitionStatus.PUBLISHED },
@@ -130,42 +170,76 @@ export const processRoutes: FastifyPluginAsyncZod = async (app) => {
         if (!form) {
           return reply.code(422).send({ error: `Start form '${pd.startFormCode}' has no published version` });
         }
-        const validation = validateInputData(data, form.jsonSchema as Record<string, unknown>);
+        // Start-form data is a complete human submission — enforce required.
+        const validation = validateAgainstSchema(data, form.jsonSchema as Record<string, unknown>);
         if (!validation.valid) {
           return reply.code(422).send({ error: 'Start form validation failed', details: validation.errors });
         }
+      } else if (Object.keys(data).length > 0) {
+        return reply.code(422).send({ error: 'Process has no start form and does not accept start data' });
       }
 
       if (!app.temporalEnabled || !app.temporal) {
         return reply.code(503).send({ error: 'Temporal is not configured — portal start is unavailable' });
       }
 
-      const processInstanceId = randomUUID();
+      // A deterministic id derived from the idempotency key makes the whole
+      // operation replay-safe: the Case.processInstanceId unique constraint and
+      // Temporal's workflow-id reuse policy both reject duplicates.
+      const processInstanceId = idempotencyKey
+        ? `start-${pd.id}-${idempotencyKey}`
+        : randomUUID();
+
+      // Replay: a prior request with this key already produced a case.
+      if (idempotencyKey) {
+        const existing = await caseRepo.findOne({ where: { processInstanceId } });
+        if (existing) return reply.code(200).send({ processInstanceId, caseId: existing.id });
+      }
+
       const principal = request.principal;
       const startedBy = principal
         ? { id: principal.id, email: principal.user?.email ?? '', displayName: principal.displayName }
         : null;
 
+      // Persist the case *before* starting the workflow. An orphaned case (no
+      // workflow) is visible and cleanable; an orphaned workflow (no case) is
+      // invisible. If the start then fails we roll the case back.
+      let caseRow: Case;
+      try {
+        caseRow = await caseRepo.save({
+          processInstanceId,
+          processDefinitionId: pd.id,
+          startedById: principal?.id ?? null,
+          entity: Object.keys(data).length > 0 ? data : null,
+        });
+      } catch (err) {
+        // Unique-violation on processInstanceId means a concurrent idempotent
+        // request won the race — return its case.
+        if (isUniqueViolation(err) && idempotencyKey) {
+          const existing = await caseRepo.findOne({ where: { processInstanceId } });
+          if (existing) return reply.code(200).send({ processInstanceId, caseId: existing.id });
+        }
+        throw err;
+      }
+
       try {
         await app.temporal.workflow.start(pd.workflowType, {
           taskQueue: pd.taskQueue,
           workflowId: processInstanceId,
-          args: [{ processInstanceId, startedBy, ...data }],
+          // Reserved keys (processInstanceId, startedBy) live in their own slots
+          // so caller-supplied form fields can never forge or clobber them.
+          args: [{ processInstanceId, startedBy, data }],
         });
       } catch (err) {
-        app.log.error({ err, processId: id, workflowType: pd.workflowType }, 'Portal start: workflow failed to start');
-        return reply.code(503).send({
-          error: 'Failed to start workflow',
-          details: err instanceof Error ? err.message : String(err),
-        });
+        await caseRepo.delete({ id: caseRow.id }).catch(() => {});
+        app.log.error(
+          { err, processId: id, workflowType: pd.workflowType },
+          'Portal start: workflow failed to start',
+        );
+        // The request was well-formed; the failure is upstream (Temporal). Do
+        // not leak raw engine error text to the caller.
+        return reply.code(502).send({ error: 'Failed to start workflow' });
       }
-
-      const caseRow = await app.db.getRepository(Case).save({
-        processInstanceId,
-        processDefinitionId: pd.id,
-        startedById: principal?.id ?? null,
-        entity: Object.keys(data).length > 0 ? data : null,
-      });
 
       return reply.code(201).send({ processInstanceId, caseId: caseRow.id });
     },

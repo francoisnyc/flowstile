@@ -3,7 +3,7 @@ import { JsonForms } from '@jsonforms/react';
 import { vanillaRenderers, vanillaCells } from '@jsonforms/vanilla-renderers';
 import type { UISchemaElement } from '@jsonforms/core';
 import type { ProcessSummary, FormDefinition } from '../types.js';
-import { listProcesses, getFormLatestPublished, startCase } from '../api/client.js';
+import { listProcesses, getPublishedForm, startCase } from '../api/client.js';
 
 interface Props {
   onStarted: (caseId: string) => void;
@@ -22,6 +22,8 @@ export default function StartCaseModal({ onStarted, onClose }: Props) {
   const [step, setStep] = useState<Step>('pick');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Stable per-attempt key so a double-submit (or retry) resolves to one case.
+  const [idempotencyKey, setIdempotencyKey] = useState('');
 
   useEffect(() => {
     listProcesses({ status: 'active', limit: '200' })
@@ -33,10 +35,11 @@ export default function StartCaseModal({ onStarted, onClose }: Props) {
   const pickProcess = async (p: ProcessSummary) => {
     setSelected(p);
     setError(null);
+    setIdempotencyKey(crypto.randomUUID());
     if (p.startFormCode) {
       setLoadingForm(true);
       try {
-        const f = await getFormLatestPublished(p.startFormCode);
+        const f = await getPublishedForm(p.startFormCode);
         setForm(f ?? null);
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to load form');
@@ -55,7 +58,7 @@ export default function StartCaseModal({ onStarted, onClose }: Props) {
     setSubmitting(true);
     setError(null);
     try {
-      const result = await startCase(selected.id, formData);
+      const result = await startCase(selected.id, formData, idempotencyKey);
       onStarted(result.caseId);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to start case');

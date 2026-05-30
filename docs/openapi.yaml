@@ -91,6 +91,7 @@ paths:
                       - tasks:manage
                       - forms:write
                       - processes:write
+                      - processes:start
                       - users:manage
                 expiresAt: {}
               required:
@@ -644,6 +645,10 @@ paths:
                   propertyNames:
                     type: string
                   additionalProperties: {}
+                idempotencyKey:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
       parameters:
         - schema:
             type: string
@@ -655,6 +660,86 @@ paths:
       responses:
         "200":
           description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  processInstanceId:
+                    type: string
+                  caseId:
+                    type: string
+                required:
+                  - processInstanceId
+                  - caseId
+                additionalProperties: false
+        "201":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  processInstanceId:
+                    type: string
+                  caseId:
+                    type: string
+                required:
+                  - processInstanceId
+                  - caseId
+                additionalProperties: false
+        "404":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  details: {}
+                required:
+                  - error
+                additionalProperties: false
+        "422":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  details: {}
+                required:
+                  - error
+                additionalProperties: false
+        "502":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  details: {}
+                required:
+                  - error
+                additionalProperties: false
+        "503":
+          description: Default Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  details: {}
+                required:
+                  - error
+                additionalProperties: false
   /processes/{id}/tasks:
     get:
       tags:

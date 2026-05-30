@@ -42,11 +42,11 @@ async function seed() {
   // Roles
   const adminRole = await db.getRepository(Role).save({
     name: 'admin',
-    permissions: ['forms:write', 'processes:write', 'tasks:read', 'tasks:write', 'tasks:manage', 'users:manage'],
+    permissions: ['forms:write', 'processes:write', 'processes:start', 'tasks:read', 'tasks:write', 'tasks:manage', 'users:manage'],
   });
   const taskUserRole = await db.getRepository(Role).save({
     name: 'task-user',
-    permissions: ['tasks:read', 'tasks:write'],
+    permissions: ['tasks:read', 'tasks:write', 'processes:start'],
   });
 
   // Users (password is "password" — dev only)
@@ -85,7 +85,7 @@ async function seed() {
     name: 'dev-worker',
     keyHash: hashApiKey(DEV_API_KEY),
     prefix: DEV_API_KEY.slice(0, 12),
-    permissions: ['tasks:read', 'tasks:write'],
+    permissions: ['tasks:read', 'tasks:write', 'processes:start'],
   });
 
   // Form: Loan Application Start (portal entry point — just the applicant's details)

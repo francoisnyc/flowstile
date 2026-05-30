@@ -107,12 +107,11 @@ export const listProcesses = (params?: Record<string, string>) => {
   const qs = new URLSearchParams(params).toString();
   return request<Page<ProcessSummary>>(`/processes${qs ? `?${qs}` : ''}`);
 };
-export const getFormLatestPublished = (code: string) =>
-  getFormVersions(code).then((versions) =>
-    versions.filter((v) => v.status === 'published').at(-1) ?? versions.at(-1),
-  );
-export const startCase = (processId: string, data: Record<string, unknown>) =>
+// Returns the latest published version of a form (the server picks it).
+export const getPublishedForm = (code: string) =>
+  request<FormDefinition>(`/forms/${code}`);
+export const startCase = (processId: string, data: Record<string, unknown>, idempotencyKey?: string) =>
   request<StartCaseResult>(`/processes/${processId}/start`, {
     method: 'POST',
-    body: JSON.stringify({ data }),
+    body: JSON.stringify(idempotencyKey ? { data, idempotencyKey } : { data }),
   });
