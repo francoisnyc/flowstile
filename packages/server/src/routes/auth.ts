@@ -48,6 +48,11 @@ const CreateApiKeyBody = z.object({
 
 const ApiKeyParam = z.object({ id: z.string().uuid() });
 
+// A valid bcrypt hash (of a throwaway string) compared against when no user is
+// found, so a failed login costs the same whether or not the email exists.
+// Without it, bcrypt's short-circuit leaks account existence via response time.
+const DUMMY_PASSWORD_HASH = '$2b$10$ib8NPkmGSp69LgQqZ7Zp4Oow.knaijYVIcNO6rucmR85.8q/XTHVq';
+
 export const authRoutes: FastifyPluginAsyncZod = async (app) => {
   app.post(
     '/auth/login',
@@ -68,10 +73,10 @@ export const authRoutes: FastifyPluginAsyncZod = async (app) => {
         relations: ['groups', 'roles'],
       });
 
-      if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
-        return reply.code(401).send({ error: 'Invalid credentials' });
-      }
-      if (user.status !== UserStatus.ACTIVE) {
+      // Always run bcrypt — against a dummy hash when the user is absent — so the
+      // timing of a rejected login doesn't reveal whether the email exists.
+      const passwordMatches = await bcrypt.compare(password, user?.passwordHash ?? DUMMY_PASSWORD_HASH);
+      if (!user || !passwordMatches || user.status !== UserStatus.ACTIVE) {
         return reply.code(401).send({ error: 'Invalid credentials' });
       }
 

@@ -18,16 +18,27 @@ export class JsonPatchError extends Error {
   }
 }
 
+// Pointer tokens that could reach an object's prototype chain. Rejected
+// outright as defense-in-depth against prototype pollution, even though the
+// apply logic already clones the document and traverses via hasOwnProperty.
+const FORBIDDEN_TOKENS = new Set(['__proto__', 'prototype', 'constructor']);
+
 // Parses a JSON Pointer into its reference tokens, unescaping ~1 → / and ~0 → ~.
 function parsePointer(pointer: string): string[] {
   if (pointer === '') return [];
   if (!pointer.startsWith('/')) {
     throw new JsonPatchError(`Invalid JSON Pointer: ${JSON.stringify(pointer)}`);
   }
-  return pointer
+  const tokens = pointer
     .slice(1)
     .split('/')
     .map((t) => t.replace(/~1/g, '/').replace(/~0/g, '~'));
+  for (const token of tokens) {
+    if (FORBIDDEN_TOKENS.has(token)) {
+      throw new JsonPatchError(`Disallowed JSON Pointer token: ${token}`);
+    }
+  }
+  return tokens;
 }
 
 function deepEqual(a: unknown, b: unknown): boolean {

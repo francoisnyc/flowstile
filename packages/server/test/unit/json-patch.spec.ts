@@ -57,4 +57,23 @@ describe('applyJsonPatch', () => {
     ]);
     expect(result).toEqual({ a: 10 });
   });
+
+  describe('prototype-pollution guard', () => {
+    for (const token of ['__proto__', 'constructor', 'prototype']) {
+      it(`rejects a leaf ${token} token`, () => {
+        expect(() => applyJsonPatch({}, [{ op: 'add', path: `/${token}`, value: { polluted: true } }]))
+          .toThrow(JsonPatchError);
+      });
+      it(`rejects a nested ${token} token`, () => {
+        expect(() => applyJsonPatch({}, [{ op: 'add', path: `/${token}/x`, value: true }]))
+          .toThrow(JsonPatchError);
+      });
+    }
+
+    it('does not pollute Object.prototype', () => {
+      expect(() => applyJsonPatch({}, [{ op: 'add', path: '/__proto__/polluted', value: 'yes' }]))
+        .toThrow(JsonPatchError);
+      expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+    });
+  });
 });

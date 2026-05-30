@@ -73,6 +73,15 @@ const processName = args['process'] as string | undefined;
 const taskQueue = args['task-queue'] as string | undefined;
 const outPath = args['out'] as string | undefined;
 
+// Secrets passed as flags are visible in shell history and the process table.
+// Prefer the environment variables; warn when a flag is used instead.
+if (args['api-key'] || args['password']) {
+  console.warn(
+    'Warning: passing secrets via --api-key/--password exposes them in shell history and `ps`. ' +
+    'Prefer FLOWSTILE_API_KEY / FLOWSTILE_PASSWORD environment variables.',
+  );
+}
+
 if (!processName) {
   console.error('Error: --process is required');
   process.exit(1);

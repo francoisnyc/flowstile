@@ -1302,6 +1302,7 @@ paths:
               properties:
                 patch:
                   minItems: 1
+                  maxItems: 100
                   type: array
                   items:
                     type: object

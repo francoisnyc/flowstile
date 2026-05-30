@@ -31,7 +31,9 @@ const JsonPatchOp = z.object({
 });
 
 const PatchCaseEntityBody = z.object({
-  patch: z.array(JsonPatchOp).min(1),
+  // Bounded so one request can't queue an unreasonable number of ops (each is
+  // applied over a fresh structuredClone of the entity).
+  patch: z.array(JsonPatchOp).min(1).max(100),
   // Optimistic concurrency: reject with 409 if the stored version differs.
   expectedVersion: z.number().int().nonnegative().optional(),
 });
