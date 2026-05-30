@@ -3,7 +3,7 @@ import {
   CancellationScope,
   log,
 } from '@temporalio/workflow';
-import { orderProcess } from './process.js';
+import { orderFulfillmentProcess } from './process.js';
 import type * as orderActivities from './activities.js';
 
 const {
@@ -33,7 +33,7 @@ export type OrderResult =
 // --- Workflow ---
 
 export async function orderFulfillmentWorkflow(input: OrderInput): Promise<OrderResult> {
-  const { approveOrder, confirmShipment, handleException } = orderProcess.tasks;
+  const { approveOrder, confirmShipment, handleException } = orderFulfillmentProcess.tasks;
   const compensations: Array<() => Promise<void>> = [];
 
   try {
@@ -54,7 +54,7 @@ export async function orderFulfillmentWorkflow(input: OrderInput): Promise<Order
 
     if (approval.data.DECISION === 'REJECTED') {
       log.info('Order rejected at approval', { orderId: input.orderId, reason: approval.data.REASON });
-      return { status: 'rejected', orderId: input.orderId, reason: approval.data.REASON };
+      return { status: 'rejected', orderId: input.orderId, reason: approval.data.REASON ?? '' };
     }
 
     // Step 2: Process payment (automated)
@@ -111,11 +111,11 @@ export async function orderFulfillmentWorkflow(input: OrderInput): Promise<Order
         });
       });
 
-      return { status: 'rejected', orderId: input.orderId, reason: shipment.data.REASON };
+      return { status: 'rejected', orderId: input.orderId, reason: shipment.data.REASON ?? '' };
     }
 
     log.info('Order fulfilled', { orderId: input.orderId, trackingNumber: shipment.data.TRACKING_NUMBER });
-    return { status: 'shipped', orderId: input.orderId, trackingNumber: shipment.data.TRACKING_NUMBER };
+    return { status: 'shipped', orderId: input.orderId, trackingNumber: shipment.data.TRACKING_NUMBER ?? '' };
   } catch (err) {
     log.error('Unexpected error in order fulfillment — running compensation', { error: err });
     await CancellationScope.nonCancellable(async () => {

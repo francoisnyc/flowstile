@@ -4,6 +4,9 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "bin": {
+    "flowstile-codegen": "./dist/cli.js"
+  },
   "exports": {
     ".": {
       "import": "./dist/index.js",

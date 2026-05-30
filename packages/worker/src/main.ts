@@ -1,10 +1,10 @@
 import 'dotenv/config';
 import { createFlowstileWorker } from '@flowstile/sdk/worker';
-import { orderProcess } from './order-fulfillment/process.js';
+import { orderFulfillmentProcess } from './order-fulfillment/process.js';
 import { processPayment, refundPayment, cancelShipment } from './order-fulfillment/activities.js';
 
 createFlowstileWorker({
-  process: orderProcess,
+  process: orderFulfillmentProcess,
   flowstile: {
     baseUrl: process.env.FLOWSTILE_SERVER_URL ?? 'http://localhost:3000',
     apiKey: process.env.FLOWSTILE_API_KEY ?? 'fsk_dev_local_worker_DO_NOT_USE_IN_PROD',

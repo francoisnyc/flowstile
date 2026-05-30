@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { Connection, Client } from '@temporalio/client';
-import { orderProcess } from './order-fulfillment/process.js';
+import { orderFulfillmentProcess } from './order-fulfillment/process.js';
 
 const TEMPORAL_ADDRESS = process.env.TEMPORAL_ADDRESS ?? 'localhost:7233';
 
@@ -11,7 +11,7 @@ async function main() {
   const orderId = `ORD-${new Date().getFullYear()}-${String(Date.now()).slice(-4)}`;
 
   const handle = await client.workflow.start('orderFulfillmentWorkflow', {
-    taskQueue: orderProcess.taskQueue,
+    taskQueue: orderFulfillmentProcess.taskQueue,
     workflowId: `order-fulfillment-${orderId}`,
     args: [{
       orderId,

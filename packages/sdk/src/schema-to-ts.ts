@@ -1,0 +1,203 @@
+// Minimal JSON Schema → TypeScript converter for Flowstile form schemas.
+// Handles the patterns found in form definitions: scalars, enums, arrays,
+// nested objects, and the x-flowstile-attachment extension.
+
+export interface ConvertedInterface {
+  name: string;
+  body: string; // full `export interface Name extends Record<string,unknown> { ... }` text
+}
+
+// "APPROVE_ORDER" → "ApproveOrder", "confirm-shipment" → "ConfirmShipment"
+export function toPascalCase(code: string): string {
+  return code
+    .toLowerCase()
+    .replace(/[_-]([a-z0-9])/g, (_, c: string) => c.toUpperCase())
+    .replace(/^[a-z]/, (c) => c.toUpperCase());
+}
+
+// "APPROVE_ORDER" → "approveOrder", "confirm-shipment" → "confirmShipment"
+export function toCamelCase(code: string): string {
+  const pascal = toPascalCase(code);
+  return pascal.charAt(0).toLowerCase() + pascal.slice(1);
+}
+
+type JsonSchemaNode = Record<string, unknown>;
+
+function propToTypeString(prop: JsonSchemaNode, indent: number): string {
+  // Attachment extension — renders as a reference type, multiple → array
+  if ('x-flowstile-attachment' in prop) {
+    const cfg = prop['x-flowstile-attachment'] as { multiple?: boolean } | undefined;
+    return cfg?.multiple ? 'AttachmentReference[]' : 'AttachmentReference';
+  }
+
+  const enumValues = prop.enum as string[] | undefined;
+  if (enumValues && enumValues.length > 0) {
+    return enumValues.map((v) => `'${v}'`).join(' | ');
+  }
+
+  const type = prop.type as string | undefined;
+
+  switch (type) {
+    case 'string': return 'string';
+    case 'number':
+    case 'integer': return 'number';
+    case 'boolean': return 'boolean';
+    case 'null': return 'null';
+
+    case 'array': {
+      const items = prop.items as JsonSchemaNode | undefined;
+      const itemType = items ? propToTypeString(items, indent) : 'unknown';
+      return `Array<${itemType}>`;
+    }
+
+    case 'object':
+      return inlineObjectType(prop, indent);
+
+    default:
+      // allOf / anyOf / oneOf: not emitted in detail — use unknown
+      if (prop.allOf || prop.anyOf || prop.oneOf) return 'unknown';
+      return 'unknown';
+  }
+}
+
+function inlineObjectType(schema: JsonSchemaNode, indent: number): string {
+  const properties = schema.properties as Record<string, JsonSchemaNode> | undefined;
+  if (!properties || Object.keys(properties).length === 0) return 'Record<string, unknown>';
+
+  const required = new Set<string>((schema.required as string[]) ?? []);
+  const pad = '  '.repeat(indent);
+  const innerPad = '  '.repeat(indent + 1);
+
+  const fields = Object.entries(properties).map(([key, prop]) => {
+    const opt = required.has(key) ? '' : '?';
+    const typeStr = propToTypeString(prop, indent + 1);
+    return `${innerPad}${key}${opt}: ${typeStr};`;
+  });
+
+  return `{\n${fields.join('\n')}\n${pad}}`;
+}
+
+/**
+ * Convert a JSON Schema object (the `properties` wrapper) into a TypeScript
+ * interface declaration string.
+ *
+ * Example:
+ *   schemaToInterface('ApproveOrderOutput', { type: 'object', properties: { DECISION: { type: 'string', enum: ['APPROVED','REJECTED'] }, REASON: { type: 'string' } }, required: ['DECISION'] })
+ *   // → export interface ApproveOrderOutput extends Record<string, unknown> {\n  DECISION: 'APPROVED' | 'REJECTED';\n  REASON?: string;\n}
+ */
+export function schemaToInterface(name: string, schema: JsonSchemaNode): string {
+  const properties = schema.properties as Record<string, JsonSchemaNode> | undefined;
+  if (!properties || Object.keys(properties).length === 0) {
+    return `export interface ${name} extends Record<string, unknown> {}`;
+  }
+
+  const required = new Set<string>((schema.required as string[]) ?? []);
+  const fields = Object.entries(properties).map(([key, prop]) => {
+    const opt = required.has(key) ? '' : '?';
+    const typeStr = propToTypeString(prop, 1);
+    return `  ${key}${opt}: ${typeStr};`;
+  });
+
+  return `export interface ${name} extends Record<string, unknown> {\n${fields.join('\n')}\n}`;
+}
+
+export interface TaskInfo {
+  code: string;
+  formCode: string;
+  defaultPriority?: string;
+}
+
+export interface FormInfo {
+  code: string;
+  version: number;
+  jsonSchema: JsonSchemaNode;
+}
+
+/**
+ * Generate a complete process file — interface declarations for each form's
+ * submission data, plus a typed `defineProcess` call.
+ */
+export function generateProcessFile(options: {
+  processName: string;
+  taskQueue: string;
+  tasks: TaskInfo[];
+  forms: Map<string, FormInfo>;
+  serverUrl: string;
+}): string {
+  const { processName, taskQueue, tasks, forms, serverUrl } = options;
+  const now = new Date().toISOString().slice(0, 10);
+
+  // Determine if any form uses attachments (need the import)
+  const needsAttachmentImport = tasks.some((t) => {
+    const form = forms.get(t.formCode);
+    if (!form) return false;
+    return schemaHasAttachments(form.jsonSchema);
+  });
+
+  const lines: string[] = [];
+
+  lines.push(`// Generated by flowstile codegen — do not edit manually.`);
+  lines.push(`// Source: ${serverUrl}  |  Process: ${processName}  |  ${now}`);
+  lines.push(`// Regenerate: flowstile-codegen --process "${processName}" --task-queue ${taskQueue}`);
+  lines.push('');
+  lines.push(`import { defineProcess, defineTask } from '@flowstile/sdk/process';`);
+  if (needsAttachmentImport) {
+    lines.push(`import type { AttachmentReference } from '@flowstile/sdk';`);
+  }
+
+  lines.push('');
+  lines.push('// ---------------------------------------------------------------------------');
+  lines.push('// Form output types (typed submission data returned by createAndWait)');
+  lines.push('// ---------------------------------------------------------------------------');
+
+  const typeNames = new Map<string, string>(); // taskCode → interface name
+
+  for (const task of tasks) {
+    const form = forms.get(task.formCode);
+    const typeName = `${toPascalCase(task.code)}Output`;
+    typeNames.set(task.code, typeName);
+
+    lines.push('');
+    if (form) {
+      lines.push(`/** Form: ${form.code} (v${form.version}) */`);
+      lines.push(schemaToInterface(typeName, form.jsonSchema));
+    } else {
+      lines.push(`/** Form: ${task.formCode} (schema unavailable) */`);
+      lines.push(`export interface ${typeName} extends Record<string, unknown> {}`);
+    }
+  }
+
+  lines.push('');
+  lines.push('// ---------------------------------------------------------------------------');
+  lines.push('// Process definition');
+  lines.push('// ---------------------------------------------------------------------------');
+  lines.push('');
+
+  const processVarName = `${toCamelCase(processName.replace(/\s+/g, '_'))}Process`;
+  const sq = (s: string) => `'${s.replace(/'/g, "\\'")}'`;
+
+  lines.push(`export const ${processVarName} = defineProcess(${sq(processName)}, {`);
+  lines.push(`  taskQueue: ${sq(taskQueue)},`);
+  lines.push(`  tasks: {`);
+
+  for (const task of tasks) {
+    const key = toCamelCase(task.code);
+    const typeName = typeNames.get(task.code) ?? 'Record<string, unknown>';
+    const priority = task.defaultPriority && task.defaultPriority !== 'normal'
+      ? `, { priority: '${task.defaultPriority}' }`
+      : '';
+    lines.push(`    ${key}: defineTask<${typeName}>(${sq(task.code)}${priority}),`);
+  }
+
+  lines.push(`  },`);
+  lines.push(`});`);
+  lines.push('');
+
+  return lines.join('\n');
+}
+
+function schemaHasAttachments(schema: JsonSchemaNode): boolean {
+  const props = schema.properties as Record<string, JsonSchemaNode> | undefined;
+  if (!props) return false;
+  return Object.values(props).some((p) => 'x-flowstile-attachment' in p);
+}
