@@ -33,6 +33,19 @@ export class ProcessDefinition {
   @Column({ type: 'jsonb', nullable: true })
   caseEntitySchema: Record<string, unknown> | null;
 
+  // Portal start: the code of the published form users fill to initiate this
+  // process from the Tasklist UI. Null = process cannot be portal-started.
+  @Column({ type: 'varchar', nullable: true })
+  startFormCode: string | null;
+
+  // The Temporal workflow function name to invoke on portal start.
+  @Column({ type: 'varchar', nullable: true })
+  workflowType: string | null;
+
+  // The Temporal task queue on which the worker is registered.
+  @Column({ type: 'varchar', nullable: true })
+  taskQueue: string | null;
+
   @OneToMany(() => TaskDefinition, (td) => td.processDefinition)
   taskDefinitions: TaskDefinition[];
 

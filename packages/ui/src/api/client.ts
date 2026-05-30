@@ -1,4 +1,4 @@
-import type { Task, User, Group, RoleRef, FormSummary, FormDefinition, Page, AttachmentRef, CaseSummary, CaseDetail } from '../types.js';
+import type { Task, User, Group, RoleRef, FormSummary, FormDefinition, Page, AttachmentRef, CaseSummary, CaseDetail, ProcessSummary, StartCaseResult } from '../types.js';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers: Record<string, string> = { ...init?.headers as Record<string, string> };
@@ -101,3 +101,18 @@ export const updateDraft = (code: string, body: Partial<FormDefinition>) =>
   request<FormDefinition>(`/forms/${code}/draft`, { method: 'PUT', body: JSON.stringify(body) });
 export const publishForm = (code: string) =>
   request<FormDefinition>(`/forms/${code}/publish`, { method: 'POST' });
+
+// Processes
+export const listProcesses = (params?: Record<string, string>) => {
+  const qs = new URLSearchParams(params).toString();
+  return request<Page<ProcessSummary>>(`/processes${qs ? `?${qs}` : ''}`);
+};
+export const getFormLatestPublished = (code: string) =>
+  getFormVersions(code).then((versions) =>
+    versions.filter((v) => v.status === 'published').at(-1) ?? versions.at(-1),
+  );
+export const startCase = (processId: string, data: Record<string, unknown>) =>
+  request<StartCaseResult>(`/processes/${processId}/start`, {
+    method: 'POST',
+    body: JSON.stringify({ data }),
+  });

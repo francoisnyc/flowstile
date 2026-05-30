@@ -601,6 +601,49 @@ paths:
                   enum:
                     - active
                     - inactive
+                startFormCode:
+                  anyOf:
+                    - type: string
+                      minLength: 1
+                    - type: "null"
+                workflowType:
+                  anyOf:
+                    - type: string
+                      minLength: 1
+                    - type: "null"
+                taskQueue:
+                  anyOf:
+                    - type: string
+                      minLength: 1
+                    - type: "null"
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+            pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+          in: path
+          name: id
+          required: true
+      responses:
+        "200":
+          description: Default Response
+  /processes/{id}/start:
+    post:
+      tags:
+        - Processes
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                data:
+                  default: {}
+                  type: object
+                  propertyNames:
+                    type: string
+                  additionalProperties: {}
       parameters:
         - schema:
             type: string

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { listCases } from '../api/client.js';
 import type { CaseSummary, CaseStatus } from '../types.js';
+import StartCaseModal from '../components/StartCaseModal.js';
 
 type StatusFilter = 'all' | CaseStatus;
 
@@ -34,6 +35,7 @@ export default function CasesPage() {
   const [cases, setCases] = useState<CaseSummary[]>([]);
   const [filter, setFilter] = useState<StatusFilter>('all');
   const [loading, setLoading] = useState(false);
+  const [showStartModal, setShowStartModal] = useState(false);
   const navigate = useNavigate();
 
   const fetchCases = useCallback(async () => {
@@ -51,10 +53,26 @@ export default function CasesPage() {
 
   useEffect(() => { fetchCases(); }, [fetchCases]);
 
+  const handleCaseStarted = (caseId: string) => {
+    setShowStartModal(false);
+    navigate(`/cases/${caseId}`);
+  };
+
   return (
     <div className="cases-page">
+      {showStartModal && (
+        <StartCaseModal
+          onStarted={handleCaseStarted}
+          onClose={() => setShowStartModal(false)}
+        />
+      )}
       <div className="cases-header">
-        <h1>Cases</h1>
+        <div className="cases-header-top">
+          <h1>Cases</h1>
+          <button className="primary" onClick={() => setShowStartModal(true)}>
+            New Case
+          </button>
+        </div>
         <div className="filters">
           {STATUS_FILTERS.map((f) => (
             <button

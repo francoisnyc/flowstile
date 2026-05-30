@@ -710,7 +710,8 @@ label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color:
 
 /* ── Cases ── */
 .cases-page { padding: 20px 24px; overflow-y: auto; }
-.cases-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 12px; }
+.cases-header { display: flex; flex-direction: column; margin-bottom: 16px; gap: 10px; }
+.cases-header-top { display: flex; align-items: center; justify-content: space-between; }
 .cases-header h1 { font-size: 20px; font-weight: 600; }
 .cases-list { display: flex; flex-direction: column; gap: 8px; }
 .case-card {
@@ -765,3 +766,35 @@ label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color:
 .case-doc-field, .case-doc-size { font-size: 12px; color: var(--text-muted); }
 .case-doc-row a { flex: 1; color: var(--accent-hover); text-decoration: none; }
 .case-doc-row a:hover { text-decoration: underline; }
+
+/* ── Modal ── */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.55);
+  display: flex; align-items: center; justify-content: center; z-index: 200;
+}
+.modal {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+  width: 480px; max-width: 95vw; max-height: 85vh;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px; border-bottom: 1px solid var(--border);
+}
+.modal-header h2 { font-size: 16px; font-weight: 600; margin: 0; }
+.modal-close { background: none; border: none; color: var(--text-muted); padding: 2px 6px; font-size: 16px; }
+.modal-body { padding: 16px 20px; overflow-y: auto; flex: 1; }
+.modal-footer {
+  display: flex; justify-content: flex-end; gap: 8px;
+  padding: 12px 20px; border-top: 1px solid var(--border);
+}
+.process-pick-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.process-pick-item {
+  display: flex; align-items: center; justify-content: space-between;
+  width: 100%; text-align: left; padding: 10px 14px;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+}
+.process-pick-item:hover { border-color: #484f58; }
+.process-pick-name { font-weight: 500; }
+.process-pick-hint { font-size: 12px; color: var(--text-muted); }
+.form-error { color: var(--danger); font-size: 13px; padding: 0 20px 8px; margin: 0; }

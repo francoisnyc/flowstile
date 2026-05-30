@@ -1,81 +1,53 @@
 import 'dotenv/config';
-import { Connection, Client } from '@temporalio/client';
 
-const TEMPORAL_ADDRESS = process.env.TEMPORAL_ADDRESS ?? 'localhost:7233';
-const TASK_QUEUE = process.env.TASK_QUEUE ?? 'flowstile';
+// Demonstrates programmatic portal start — the same flow the UI uses.
+// For the interactive demo, open http://localhost:5173/cases and click "New Case".
+
 const FLOWSTILE_SERVER_URL = process.env.FLOWSTILE_SERVER_URL ?? 'http://localhost:3000';
+const FLOWSTILE_API_KEY = process.env.FLOWSTILE_API_KEY ?? 'fsk_dev_local_worker_DO_NOT_USE_IN_PROD';
 
 async function main() {
-  // Look up the REVIEW_LOAN task definition ID from the Flowstile server
-  const loginRes = await fetch(`${FLOWSTILE_SERVER_URL}/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      email: process.env.FLOWSTILE_EMAIL ?? 'service@flowstile.local',
-      password: process.env.FLOWSTILE_PASSWORD ?? 'password',
-    }),
+  // Find the Loan Processing process
+  const processesRes = await fetch(`${FLOWSTILE_SERVER_URL}/processes?limit=50`, {
+    headers: { Authorization: `Bearer ${FLOWSTILE_API_KEY}` },
   });
-  if (!loginRes.ok) throw new Error(`Login failed: ${loginRes.status}`);
-
-  const setCookie = loginRes.headers.get('set-cookie') ?? '';
-  const tokenMatch = setCookie.match(/flowstile_token=([^;]+)/);
-  if (!tokenMatch) throw new Error('No token in login response');
-  const token = tokenMatch[1];
-
-  // Find the REVIEW_LOAN task definition
-  const processRes = await fetch(`${FLOWSTILE_SERVER_URL}/processes`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!processRes.ok) throw new Error(`Failed to fetch processes: ${processRes.status}`);
-  const processes = (await processRes.json()) as { items: { id: string; name: string }[] };
+  if (!processesRes.ok) throw new Error(`Failed to fetch processes: ${processesRes.status}`);
+  const processes = await processesRes.json() as { items: { id: string; name: string }[] };
   const loanProcess = processes.items.find((p) => p.name === 'Loan Processing');
   if (!loanProcess) throw new Error('Loan Processing process not found — run db:seed first');
 
-  const taskDefsRes = await fetch(`${FLOWSTILE_SERVER_URL}/processes/${loanProcess.id}/tasks`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!taskDefsRes.ok) throw new Error(`Failed to fetch task definitions: ${taskDefsRes.status}`);
-  const taskDefs = (await taskDefsRes.json()) as { items: { id: string; code: string }[] };
-  const reviewLoan = taskDefs.items.find((td) => td.code === 'REVIEW_LOAN');
-  if (!reviewLoan) throw new Error('REVIEW_LOAN task definition not found — run db:seed first');
-
-  console.log(`Found REVIEW_LOAN task definition: ${reviewLoan.id}`);
-
-  // Start the workflow
-  const connection = await Connection.connect({ address: TEMPORAL_ADDRESS });
-  const client = new Client({ connection });
-
-  const processInstanceId = `LN-${new Date().getFullYear()}-${String(Date.now()).slice(-4)}`;
-
-  const handle = await client.workflow.start('loanApprovalWorkflow', {
-    taskQueue: TASK_QUEUE,
-    workflowId: `loan-approval-${processInstanceId}`,
-    args: [{
-      taskDefinitionId: reviewLoan.id,
-      customerName: 'John Doe',
-      amount: 50000,
-      processInstanceId,
-    }],
+  // Start via portal start endpoint
+  const startRes = await fetch(`${FLOWSTILE_SERVER_URL}/processes/${loanProcess.id}/start`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${FLOWSTILE_API_KEY}`,
+    },
+    body: JSON.stringify({
+      data: {
+        CUSTOMER_NAME: 'John Doe',
+        AMOUNT: 50000,
+      },
+    }),
   });
 
-  console.log(`\nWorkflow started!`);
-  console.log(`  Workflow ID: ${handle.workflowId}`);
+  if (!startRes.ok) {
+    const body = await startRes.text();
+    throw new Error(`Portal start failed (${startRes.status}): ${body}`);
+  }
+
+  const { processInstanceId, caseId } = await startRes.json() as { processInstanceId: string; caseId: string };
+
+  console.log(`\nLoan application started!`);
   console.log(`  Process Instance: ${processInstanceId}`);
+  console.log(`  Case ID:          ${caseId}`);
   console.log(`\nNext steps:`);
-  console.log(`  1. Open http://localhost:5173 and login as alice@example.com / password`);
-  console.log(`  2. Find the task for ${processInstanceId} in the inbox`);
-  console.log(`  3. Claim it, fill in the form, click Complete`);
-  console.log(`  4. Watch the worker terminal — it will log the workflow result`);
-  console.log(`\nWaiting for workflow to complete...`);
-
-  const result = await handle.result();
-  console.log(`\nWorkflow completed!`);
-  console.log(`  Result:`, JSON.stringify(result, null, 2));
-
-  await connection.close();
+  console.log(`  1. Open http://localhost:5173/cases/${caseId}`);
+  console.log(`  2. Login as bob@example.com / password (loan officer)`);
+  console.log(`  3. Find the review task in the inbox and complete it`);
 }
 
 main().catch((err) => {
-  console.error('Failed to start workflow:', err);
+  console.error('Failed to start loan workflow:', err);
   process.exit(1);
 });

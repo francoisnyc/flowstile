@@ -88,6 +88,28 @@ async function seed() {
     permissions: ['tasks:read', 'tasks:write'],
   });
 
+  // Form: Loan Application Start (portal entry point — just the applicant's details)
+  const loanStartForm = await db.getRepository(FormDefinition).save({
+    code: 'LOAN_APPLICATION_START',
+    version: 1,
+    jsonSchema: {
+      type: 'object',
+      properties: {
+        CUSTOMER_NAME: { type: 'string' },
+        AMOUNT: { type: 'number', minimum: 0 },
+      },
+      required: ['CUSTOMER_NAME', 'AMOUNT'],
+    },
+    uiSchema: {
+      type: 'VerticalLayout',
+      elements: [
+        { type: 'Control', scope: '#/properties/CUSTOMER_NAME', label: 'Applicant Name' },
+        { type: 'Control', scope: '#/properties/AMOUNT', label: 'Loan Amount' },
+      ],
+    },
+    status: FormDefinitionStatus.PUBLISHED,
+  });
+
   // Form: Loan Application (includes a file-upload field for supporting documents)
   const loanForm = await db.getRepository(FormDefinition).save({
     code: 'LOAN_APPLICATION',
@@ -248,9 +270,12 @@ async function seed() {
     status: FormDefinitionStatus.PUBLISHED,
   });
 
-  // Process: Loan Processing
+  // Process: Loan Processing (portal-startable — users can submit a loan application from the UI)
   const loanProcess = await db.getRepository(ProcessDefinition).save({
     name: 'Loan Processing',
+    startFormCode: loanStartForm.code,
+    workflowType: 'loanApprovalWorkflow',
+    taskQueue: 'flowstile',
   });
 
   // Task Definition: Review Loan
@@ -384,7 +409,7 @@ async function seed() {
   console.log('  2 roles: admin, task-user');
   console.log('  4 users: alice (admin), bob (loan officer + warehouse), carol (customer service), service (worker)');
   console.log(`  1 dev API key (name "dev-worker"): ${DEV_API_KEY}`);
-  console.log('  4 forms: LOAN_APPLICATION, ORDER_APPROVAL, SHIPMENT_CONFIRMATION, ORDER_EXCEPTION');
+  console.log('  5 forms: LOAN_APPLICATION_START, LOAN_APPLICATION, ORDER_APPROVAL, SHIPMENT_CONFIRMATION, ORDER_EXCEPTION');
   console.log('  2 processes: Loan Processing, Order Fulfillment');
   console.log('  4 task definitions: REVIEW_LOAN, APPROVE_ORDER, CONFIRM_SHIPMENT, HANDLE_EXCEPTION');
   console.log('  4 tasks: 2 loan tasks, 2 order tasks');

@@ -1,11 +1,15 @@
+import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { ProcessDefinition } from '../entities/process-definition.entity.js';
 import { TaskDefinition } from '../entities/task-definition.entity.js';
-import { ProcessDefinitionStatus, Priority } from '../common/enums.js';
+import { FormDefinition } from '../entities/form-definition.entity.js';
+import { Case } from '../entities/case.entity.js';
+import { ProcessDefinitionStatus, Priority, FormDefinitionStatus } from '../common/enums.js';
 import { requireAuth, requirePermission } from '../plugins/auth.js';
 import { Permissions } from '../common/permissions.js';
 import { PaginationQuery, paginate } from '../common/pagination.js';
+import { validateInputData } from '../validation/schema-validator.js';
 
 const UuidParam = z.object({ id: z.string().uuid() });
 
@@ -17,6 +21,13 @@ const CreateProcessBody = z.object({
 const PatchProcessBody = z.object({
   name: z.string().min(1).optional(),
   status: z.nativeEnum(ProcessDefinitionStatus).optional(),
+  startFormCode: z.string().min(1).nullable().optional(),
+  workflowType: z.string().min(1).nullable().optional(),
+  taskQueue: z.string().min(1).nullable().optional(),
+});
+
+const StartProcessBody = z.object({
+  data: z.record(z.string(), z.unknown()).default({}),
 });
 
 const CreateTaskDefBody = z.object({
@@ -79,15 +90,84 @@ export const processRoutes: FastifyPluginAsyncZod = async (app) => {
     { ...write, schema: { params: UuidParam, body: PatchProcessBody, tags: ['Processes'] } },
     async (request, reply) => {
       const { id } = request.params;
-      const { name, status } = request.body;
+      const { name, status, startFormCode, workflowType, taskQueue } = request.body;
 
       const pd = await pdRepo().findOne({ where: { id } });
       if (!pd) return reply.code(404).send({ error: 'Process not found' });
 
       if (name !== undefined) pd.name = name;
       if (status !== undefined) pd.status = status;
+      if (startFormCode !== undefined) pd.startFormCode = startFormCode;
+      if (workflowType !== undefined) pd.workflowType = workflowType;
+      if (taskQueue !== undefined) pd.taskQueue = taskQueue;
       await pdRepo().save(pd);
       return pd;
+    },
+  );
+
+  app.post(
+    '/processes/:id/start',
+    { ...read, schema: { params: UuidParam, body: StartProcessBody, tags: ['Processes'] } },
+    async (request, reply) => {
+      const { id } = request.params;
+      const { data } = request.body;
+
+      const pd = await pdRepo().findOne({ where: { id } });
+      if (!pd) return reply.code(404).send({ error: 'Process not found' });
+
+      if (!pd.workflowType || !pd.taskQueue) {
+        return reply.code(422).send({
+          error: 'Process is not configured for portal start — set workflowType and taskQueue',
+        });
+      }
+
+      // Validate start form data if a start form is configured
+      if (pd.startFormCode) {
+        const form = await app.db.getRepository(FormDefinition).findOne({
+          where: { code: pd.startFormCode, status: FormDefinitionStatus.PUBLISHED },
+          order: { version: 'DESC' },
+        });
+        if (!form) {
+          return reply.code(422).send({ error: `Start form '${pd.startFormCode}' has no published version` });
+        }
+        const validation = validateInputData(data, form.jsonSchema as Record<string, unknown>);
+        if (!validation.valid) {
+          return reply.code(422).send({ error: 'Start form validation failed', details: validation.errors });
+        }
+      }
+
+      if (!app.temporalEnabled || !app.temporal) {
+        return reply.code(503).send({ error: 'Temporal is not configured — portal start is unavailable' });
+      }
+
+      const processInstanceId = randomUUID();
+      const principal = request.principal;
+      const startedBy = principal
+        ? { id: principal.id, email: principal.user?.email ?? '', displayName: principal.displayName }
+        : null;
+
+      try {
+        await app.temporal.workflow.start(pd.workflowType, {
+          taskQueue: pd.taskQueue,
+          workflowId: processInstanceId,
+          args: [{ processInstanceId, startedBy, ...data }],
+        });
+      } catch (err) {
+        app.log.error({ err, processId: id, workflowType: pd.workflowType }, 'Portal start: workflow failed to start');
+        return reply.code(503).send({
+          error: 'Failed to start workflow',
+          details: err instanceof Error ? err.message : String(err),
+        });
+      }
+
+      const caseRow = await app.db.getRepository(Case).save({
+        processInstanceId,
+        processDefinitionId: pd.id,
+        startedById: principal?.id ?? null,
+        entity: Object.keys(data).length > 0 ? data : null,
+      });
+
+      return reply.code(201).send({ processInstanceId, caseId: caseRow.id });
     },
   );
 

@@ -1,6 +1,22 @@
 export type Priority = 'low' | 'normal' | 'high' | 'urgent';
 export type TaskStatus = 'created' | 'claimed' | 'completed' | 'cancelled';
 export type FormStatus = 'draft' | 'published';
+export type ProcessStatus = 'active' | 'inactive';
+
+export interface ProcessSummary {
+  id: string;
+  name: string;
+  status: ProcessStatus;
+  startFormCode: string | null;
+  workflowType: string | null;
+  taskQueue: string | null;
+  createdAt: string;
+}
+
+export interface StartCaseResult {
+  processInstanceId: string;
+  caseId: string;
+}
 
 export interface UserRef {
   id: string;

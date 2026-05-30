@@ -6,10 +6,12 @@ export { createTaskAndWait } from '@flowstile/sdk/workflows';
 import { createTaskAndWait } from '@flowstile/sdk/workflows';
 
 export interface LoanApprovalInput {
-  taskDefinitionId: string;
-  customerName: string;
-  amount: number;
   processInstanceId: string;
+  // Portal-start fields (from the LOAN_APPLICATION_START form)
+  CUSTOMER_NAME: string;
+  AMOUNT: number;
+  // Optional metadata injected by the server on portal start
+  startedBy?: { id: string; email: string; displayName: string } | null;
 }
 
 export interface LoanApprovalResult {
@@ -30,23 +32,23 @@ export async function loanApprovalWorkflow(
   input: LoanApprovalInput,
 ): Promise<LoanApprovalResult> {
   const result = await createTaskAndWait<LoanDecision>({
-    taskDefinitionId: input.taskDefinitionId,
+    taskDefinitionCode: 'REVIEW_LOAN',
     processInstanceId: input.processInstanceId,
     priority: 'high',
     contextData: {
-      CUSTOMER_NAME: input.customerName,
+      CUSTOMER_NAME: input.CUSTOMER_NAME,
       APPLICATION_REFERENCE: input.processInstanceId,
     },
     inputData: {
-      AMOUNT: input.amount,
+      AMOUNT: input.AMOUNT,
     },
   });
 
   return {
     decision: result.data.DECISION,
     notes: result.data.NOTES ?? null,
-    customerName: input.customerName,
-    amount: input.amount,
+    customerName: input.CUSTOMER_NAME,
+    amount: input.AMOUNT,
     completedBy: result.completedBy.email,
     completedAt: result.completedAt,
   };
