@@ -10,7 +10,14 @@ import { FormDefinition } from './entities/form-definition.entity.js';
 import { ProcessDefinition } from './entities/process-definition.entity.js';
 import { TaskDefinition } from './entities/task-definition.entity.js';
 import { Task } from './entities/task.entity.js';
+import { ApiKey } from './entities/api-key.entity.js';
 import { FormDefinitionStatus, TaskStatus, Priority } from './common/enums.js';
+import { hashApiKey } from './common/api-keys.js';
+
+// Stable, well-known development service credential so the demo worker can
+// authenticate out of the box. NEVER provision a fixed key like this in prod —
+// mint one via POST /auth/api-keys and inject it as FLOWSTILE_API_KEY.
+const DEV_API_KEY = 'fsk_dev_local_worker_DO_NOT_USE_IN_PROD';
 
 async function seed() {
   const db = new DataSource(dataSourceOptions);
@@ -21,7 +28,7 @@ async function seed() {
   // Truncate all tables (cascade) so seed is idempotent
   await db.query(`
     TRUNCATE attachments, tasks, task_definitions, process_definitions, form_definitions,
-             group_members, user_roles, users, groups, roles
+             group_members, user_roles, users, groups, roles, api_keys
     CASCADE
   `);
 
@@ -70,6 +77,15 @@ async function seed() {
     passwordHash: devHash,
     groups: [customerService],
     roles: [taskUserRole],
+  });
+
+  // Development service credential for the demo worker. The worker authenticates
+  // with this token (FLOWSTILE_API_KEY) instead of a human login.
+  await db.getRepository(ApiKey).save({
+    name: 'dev-worker',
+    keyHash: hashApiKey(DEV_API_KEY),
+    prefix: DEV_API_KEY.slice(0, 12),
+    permissions: ['tasks:read', 'tasks:write'],
   });
 
   // Form: Loan Application (includes a file-upload field for supporting documents)
@@ -367,6 +383,7 @@ async function seed() {
   console.log('  5 groups: loan-officers, hr-team, order-reviewers, warehouse, customer-service');
   console.log('  2 roles: admin, task-user');
   console.log('  4 users: alice (admin), bob (loan officer + warehouse), carol (customer service), service (worker)');
+  console.log(`  1 dev API key (name "dev-worker"): ${DEV_API_KEY}`);
   console.log('  4 forms: LOAN_APPLICATION, ORDER_APPROVAL, SHIPMENT_CONFIRMATION, ORDER_EXCEPTION');
   console.log('  2 processes: Loan Processing, Order Fulfillment');
   console.log('  4 task definitions: REVIEW_LOAN, APPROVE_ORDER, CONFIRM_SHIPMENT, HANDLE_EXCEPTION');

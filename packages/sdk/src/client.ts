@@ -13,16 +13,26 @@ import type {
 
 export class FlowstileClient {
   private baseUrl: string;
+  private apiKey?: string;
   private auth?: { email: string; password: string };
   private jwt: string | null = null;
 
   constructor(options: FlowstileClientOptions) {
     this.baseUrl = options.baseUrl.replace(/\/$/, '');
+    this.apiKey = options.apiKey;
     this.auth = options.auth;
   }
 
+  // The Authorization header value for the current credential, or null if none.
+  private authHeader(): string | null {
+    if (this.apiKey) return `Bearer ${this.apiKey}`;
+    if (this.jwt) return `Bearer ${this.jwt}`;
+    return null;
+  }
+
   private async ensureAuth(): Promise<void> {
-    if (this.jwt || !this.auth) return;
+    // API key auth needs no login round-trip; password auth logs in once.
+    if (this.apiKey || this.jwt || !this.auth) return;
 
     const response = await fetch(`${this.baseUrl}/auth/login`, {
       method: 'POST',
@@ -52,8 +62,9 @@ export class FlowstileClient {
         'Content-Type': 'application/json',
         ...init?.headers as Record<string, string>,
       };
-      if (this.jwt) {
-        headers['Authorization'] = `Bearer ${this.jwt}`;
+      const authHeader = this.authHeader();
+      if (authHeader) {
+        headers['Authorization'] = authHeader;
       }
 
       return fetch(`${this.baseUrl}${path}`, {
@@ -64,8 +75,9 @@ export class FlowstileClient {
 
     let response = await doRequest();
 
-    // Retry once on 401 — token may have expired or been invalidated
-    if (response.status === 401 && this.auth) {
+    // Retry once on 401 for password auth — the JWT may have expired. API keys
+    // cannot be re-derived, so a 401 there is surfaced directly.
+    if (response.status === 401 && this.auth && !this.apiKey) {
       this.jwt = null;
       await this.ensureAuth();
       response = await doRequest();
@@ -135,7 +147,8 @@ export class FlowstileClient {
 
     const doRequest = async () => {
       const headers: Record<string, string> = {};
-      if (this.jwt) headers['Authorization'] = `Bearer ${this.jwt}`;
+      const authHeader = this.authHeader();
+      if (authHeader) headers['Authorization'] = authHeader;
 
       return fetch(`${this.baseUrl}/tasks/${taskId}/attachments`, {
         method: 'POST',
@@ -145,7 +158,7 @@ export class FlowstileClient {
     };
 
     let response = await doRequest();
-    if (response.status === 401 && this.auth) {
+    if (response.status === 401 && this.auth && !this.apiKey) {
       this.jwt = null;
       await this.ensureAuth();
       response = await doRequest();
@@ -164,12 +177,13 @@ export class FlowstileClient {
 
     const doRequest = async () => {
       const headers: Record<string, string> = {};
-      if (this.jwt) headers['Authorization'] = `Bearer ${this.jwt}`;
+      const authHeader = this.authHeader();
+      if (authHeader) headers['Authorization'] = authHeader;
       return fetch(`${this.baseUrl}/tasks/${taskId}/attachments/${attachmentId}/content`, { headers });
     };
 
     let response = await doRequest();
-    if (response.status === 401 && this.auth) {
+    if (response.status === 401 && this.auth && !this.apiKey) {
       this.jwt = null;
       await this.ensureAuth();
       response = await doRequest();

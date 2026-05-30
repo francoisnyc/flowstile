@@ -57,6 +57,10 @@ export interface TaskResult<
 
 export interface FlowstileClientOptions {
   baseUrl: string;
+  // Service-credential auth (recommended for workers/server-to-server). When set,
+  // the client sends `Authorization: Bearer <apiKey>` directly and never logs in.
+  apiKey?: string;
+  // Human credential auth (logs in to obtain a JWT). Prefer `apiKey` for workers.
   auth?: { email: string; password: string };
 }
 

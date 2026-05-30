@@ -4,6 +4,10 @@ import * as allActivities from './activities.js';
 
 const FLOWSTILE_SERVER_URL =
   process.env.FLOWSTILE_SERVER_URL ?? 'http://localhost:3000';
+// Preferred: a service credential (API key). Falls back to the dev key in local
+// development, and to human email/password only if no key is configured.
+const FLOWSTILE_API_KEY =
+  process.env.FLOWSTILE_API_KEY ?? 'fsk_dev_local_worker_DO_NOT_USE_IN_PROD';
 const FLOWSTILE_EMAIL =
   process.env.FLOWSTILE_EMAIL ?? 'service@flowstile.local';
 const FLOWSTILE_PASSWORD = process.env.FLOWSTILE_PASSWORD ?? 'password';
@@ -26,9 +30,12 @@ async function run() {
 
   // --- Step 2: Configure Flowstile activities ---
   const { configureFlowstileActivities, ...activities } = allActivities;
+  const useApiKey = Boolean(FLOWSTILE_API_KEY);
   configureFlowstileActivities({
     baseUrl: FLOWSTILE_SERVER_URL,
-    auth: { email: FLOWSTILE_EMAIL, password: FLOWSTILE_PASSWORD },
+    ...(useApiKey
+      ? { apiKey: FLOWSTILE_API_KEY }
+      : { auth: { email: FLOWSTILE_EMAIL, password: FLOWSTILE_PASSWORD } }),
   });
 
   // --- Step 3: Connect to Temporal ---
@@ -56,7 +63,7 @@ async function run() {
     `\nFlowstile worker started` +
       `\n  Temporal:  ${TEMPORAL_ADDRESS}` +
       `\n  Server:    ${FLOWSTILE_SERVER_URL}` +
-      `\n  Auth:      ${FLOWSTILE_EMAIL}` +
+      `\n  Auth:      ${useApiKey ? `api key ${FLOWSTILE_API_KEY.slice(0, 12)}…` : FLOWSTILE_EMAIL}` +
       `\n  Queue:     ${TASK_QUEUE}` +
       `\n  Workflows: ./workflows.ts\n`,
   );

@@ -9,6 +9,7 @@ import { ProcessDefinition } from '../../src/entities/process-definition.entity.
 import { TaskDefinition } from '../../src/entities/task-definition.entity.js';
 import { Task } from '../../src/entities/task.entity.js';
 import { Case } from '../../src/entities/case.entity.js';
+import { ApiKey } from '../../src/entities/api-key.entity.js';
 import { FormDefinitionStatus, Priority } from '../../src/common/enums.js';
 
 export const TEST_PASSWORD = 'test-password-123';
@@ -139,4 +140,6 @@ export async function cleanupTestData(app: FastifyInstance) {
     .delete().where('name LIKE :p', { p: 'test-role-%' }).execute();
   await db.getRepository(Group).createQueryBuilder()
     .delete().where('name LIKE :p', { p: 'test-group-%' }).execute();
+  await db.getRepository(ApiKey).createQueryBuilder()
+    .delete().where('name LIKE :p', { p: 'test-key-%' }).execute();
 }

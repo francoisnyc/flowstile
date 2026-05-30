@@ -76,6 +76,38 @@ describe('FlowstileClient', () => {
     });
   });
 
+  describe('API key auth', () => {
+    it('sends the key as a Bearer header without logging in', async () => {
+      const client = new FlowstileClient({
+        baseUrl: 'http://localhost:3000',
+        apiKey: 'fsk_test_key',
+      });
+
+      mockFetch.mockResolvedValueOnce(jsonResponse({ id: 't1', status: 'created' }));
+
+      await client.getTask('t1');
+
+      // No /auth/login call — exactly one request, the GET itself
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const [url, init] = mockFetch.mock.calls[0];
+      expect(url).toBe('http://localhost:3000/tasks/t1');
+      expect(init.headers['Authorization']).toBe('Bearer fsk_test_key');
+    });
+
+    it('does not retry on 401 (a key cannot be re-derived)', async () => {
+      const client = new FlowstileClient({
+        baseUrl: 'http://localhost:3000',
+        apiKey: 'fsk_revoked',
+      });
+
+      mockFetch.mockResolvedValueOnce(new Response('Unauthorized', { status: 401 }));
+
+      await expect(client.getTask('t1')).rejects.toThrow(FlowstileApiError);
+      // Single attempt, no re-auth loop
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('401 retry', () => {
     it('retries once on 401 by re-authenticating', async () => {
       const client = new FlowstileClient({

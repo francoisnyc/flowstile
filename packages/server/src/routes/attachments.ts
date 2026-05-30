@@ -6,7 +6,7 @@ import { Task } from '../entities/task.entity.js';
 import { AttachmentStatus, TaskStatus } from '../common/enums.js';
 import { toReference, findAttachmentFields } from '../common/attachments.js';
 import { filterFormSchemas } from '../common/visibility.js';
-import { requirePermission } from '../plugins/auth.js';
+import { requirePermission, requireUser } from '../plugins/auth.js';
 import { Permissions } from '../common/permissions.js';
 
 const UuidParam = z.object({ id: z.string().uuid() });
@@ -28,7 +28,8 @@ export const attachmentRoutes: FastifyPluginAsyncZod = async (app) => {
     },
     async (request, reply) => {
       const { id: taskId } = request.params;
-      const user = request.currentUser!;
+      const user = requireUser(request, reply);
+      if (!user) return reply;
 
       const task = await app.db.getRepository(Task).findOne({
         where: { id: taskId },
@@ -94,7 +95,8 @@ export const attachmentRoutes: FastifyPluginAsyncZod = async (app) => {
     { ...read, schema: { params: AttachmentParam, tags: ['Attachments'] } },
     async (request, reply) => {
       const { id: taskId, attachmentId } = request.params;
-      const user = request.currentUser!;
+      const user = requireUser(request, reply);
+      if (!user) return reply;
 
       const att = await app.db.getRepository(Attachment).findOne({
         where: { id: attachmentId },

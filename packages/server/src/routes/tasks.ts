@@ -7,7 +7,7 @@ import { FormDefinition, DEFAULT_OUTCOME_KEY } from '../entities/form-definition
 import { TaskStatus, FormDefinitionStatus, Priority, SignalStatus } from '../common/enums.js';
 import { TaskStateMachine, InvalidTransitionError } from '../common/task-state-machine.js';
 import { filterFormSchemas, filterSubmissionData, getWritableFields } from '../common/visibility.js';
-import { requirePermission } from '../plugins/auth.js';
+import { requirePermission, requireUser } from '../plugins/auth.js';
 import { Permissions } from '../common/permissions.js';
 import { PaginationQuery, paginate } from '../common/pagination.js';
 import { validateAgainstSchema, validateInputData } from '../validation/schema-validator.js';
@@ -299,7 +299,8 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
     { ...read, schema: { params: UuidParam, tags: ['Tasks'] } },
     async (request, reply) => {
       const { id } = request.params;
-      const user = request.currentUser!;
+      const user = requireUser(request, reply);
+      if (!user) return reply;
 
       const task = await repo().findOne({
         where: { id },
@@ -361,7 +362,8 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
     { ...write, schema: { params: UuidParam, tags: ['Tasks'] } },
     async (request, reply) => {
       const { id } = request.params;
-      const user = request.currentUser!;
+      const user = requireUser(request, reply);
+      if (!user) return reply;
 
       const task = await repo().findOne({ where: { id }, relations: ['taskDefinition'] });
       if (!task) return reply.code(404).send({ error: 'Task not found' });
@@ -390,7 +392,8 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
     { ...write, schema: { params: UuidParam, tags: ['Tasks'] } },
     async (request, reply) => {
       const { id } = request.params;
-      const user = request.currentUser!;
+      const user = requireUser(request, reply);
+      if (!user) return reply;
 
       const task = await repo().findOne({ where: { id } });
       if (!task) return reply.code(404).send({ error: 'Task not found' });
@@ -421,6 +424,9 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
       const { id } = request.params;
       const { data } = request.body;
 
+      const user = requireUser(request, reply);
+      if (!user) return reply;
+
       const task = await repo().findOne({
         where: { id },
         relations: ['taskDefinition'],
@@ -448,7 +454,6 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
       // Strip non-writable fields from submitted data before merging
       let acceptedData = data ?? {};
       if (form) {
-        const user = request.currentUser!;
         const userRoleNames = user.roles.map((r) => r.name);
         const userGroupNames = user.groups.map((g) => g.name);
         const writableFields = getWritableFields(form, userRoleNames, userGroupNames);
@@ -543,7 +548,6 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
       const enqueue = app.temporalEnabled && Boolean(task.workflowId);
       task.signalStatus = enqueue ? SignalStatus.PENDING : SignalStatus.NOT_APPLICABLE;
 
-      const user = request.currentUser!;
       const linkedAt = new Date();
 
       // Build a map of fieldKey → payloadScope for linking. We iterate the schema
@@ -619,7 +623,7 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
     { ...write, schema: { params: UuidParam, tags: ['Tasks'] } },
     async (request, reply) => {
       const { id } = request.params;
-      const user = request.currentUser!;
+      const actor = request.principal!;
 
       const task = await repo().findOne({ where: { id } });
       if (!task) return reply.code(404).send({ error: 'Task not found' });
@@ -633,7 +637,11 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
         throw err;
       }
 
-      if (task.assigneeId && task.assigneeId !== user.id && !userHasPermission(user, Permissions.TASKS_MANAGE)) {
+      // Human callers may only cancel their own claimed task (or any with manage).
+      // Service principals are the workflow engine itself (e.g. timeout/cancellation
+      // cleanup from createTaskAndWait) and may cancel any task they have write on.
+      const canManage = actor.permissions.includes(Permissions.TASKS_MANAGE);
+      if (actor.user && task.assigneeId && task.assigneeId !== actor.user.id && !canManage) {
         return reply.code(403).send({ error: 'Only the assignee or a manager can cancel this task' });
       }
 

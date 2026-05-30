@@ -7,7 +7,7 @@ import { FormDefinition } from '../entities/form-definition.entity.js';
 import { Attachment } from '../entities/attachment.entity.js';
 import { ProcessDefinition } from '../entities/process-definition.entity.js';
 import { AttachmentStatus } from '../common/enums.js';
-import { requirePermission } from '../plugins/auth.js';
+import { requirePermission, requireUser } from '../plugins/auth.js';
 import { Permissions } from '../common/permissions.js';
 import { PaginationQuery, paginate } from '../common/pagination.js';
 import { filterFormSchemas } from '../common/visibility.js';
@@ -245,7 +245,8 @@ export const caseRoutes: FastifyPluginAsyncZod = async (app) => {
     { ...read, schema: { params: PidParam, tags: ['Cases'] } },
     async (request, reply) => {
       const { processInstanceId } = request.params;
-      const user = request.currentUser!;
+      const user = requireUser(request, reply);
+      if (!user) return reply;
 
       const c = await caseRepo().findOne({ where: { processInstanceId } });
       if (!c) return reply.code(404).send({ error: 'Case not found' });
@@ -264,7 +265,8 @@ export const caseRoutes: FastifyPluginAsyncZod = async (app) => {
     { ...read, schema: { params: UuidParam, tags: ['Cases'] } },
     async (request, reply) => {
       const { id } = request.params;
-      const user = request.currentUser!;
+      const user = requireUser(request, reply);
+      if (!user) return reply;
 
       const c = await caseRepo().findOne({ where: { id } });
       if (!c) return reply.code(404).send({ error: 'Case not found' });

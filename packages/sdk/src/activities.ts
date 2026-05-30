@@ -10,7 +10,7 @@ let _client: FlowstileClient | null = null;
  *   import { configureFlowstileActivities } from '@flowstile/sdk/activities';
  *   configureFlowstileActivities({
  *     baseUrl: 'http://localhost:3000',
- *     auth: { email: 'service@flowstile.local', password: 'password' },
+ *     apiKey: process.env.FLOWSTILE_API_KEY, // service credential — preferred for workers
  *   });
  */
 export function configureFlowstileActivities(options: FlowstileClientOptions): void {
