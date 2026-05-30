@@ -3,6 +3,7 @@ import type { Repository, SelectQueryBuilder } from 'typeorm';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { Task } from '../entities/task.entity.js';
 import { TaskDefinition } from '../entities/task-definition.entity.js';
+import { ProcessDefinition } from '../entities/process-definition.entity.js';
 import { FormDefinition, DEFAULT_OUTCOME_KEY } from '../entities/form-definition.entity.js';
 import { TaskStatus, FormDefinitionStatus, Priority, SignalStatus } from '../common/enums.js';
 import { TaskStateMachine, InvalidTransitionError } from '../common/task-state-machine.js';
@@ -279,11 +280,21 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
       const caseRepo = app.db.getRepository(Case);
       const existing = await caseRepo.findOne({ where: { processInstanceId } });
       if (!existing) {
+        // If the process declares a case entity schema, initialize the entity to
+        // null and let the workflow populate it (a scalar snapshot would likely
+        // violate the schema). Otherwise snapshot top-level scalars for display.
+        const pd = td.processDefinitionId
+          ? await app.db.getRepository(ProcessDefinition).findOne({
+              where: { id: td.processDefinitionId },
+              select: ['id', 'caseEntitySchema'],
+            })
+          : null;
+        const entity = pd?.caseEntitySchema ? null : extractScalarVariables(inputData ?? {});
         try {
           await caseRepo.save({
             processInstanceId,
             processDefinitionId: td.processDefinitionId,
-            variables: extractScalarVariables(inputData ?? {}),
+            entity,
           });
         } catch {
           // Concurrent insert on the unique key — the case row already exists.

@@ -55,8 +55,8 @@ export default function CaseDetailPage() {
   if (error) return <div className="case-detail-page"><p className="error-banner">{error}</p></div>;
   if (!caseDetail) return null;
 
-  const variables = caseDetail.variables ?? {};
-  const variableEntries = Object.entries(variables);
+  const entity = caseDetail.entity ?? {};
+  const variableEntries = Object.entries(entity);
 
   return (
     <div className="case-detail-page">

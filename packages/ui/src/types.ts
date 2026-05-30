@@ -133,7 +133,8 @@ export interface CaseSummary {
   processInstanceId: string;
   processDefinitionName: string | null;
   title: string | null;
-  variables: Record<string, unknown> | null;
+  entity: Record<string, unknown> | null;
+  entityVersion: number;
   status: CaseStatus;
   startedById: string | null;
   createdAt: string;
@@ -167,7 +168,8 @@ export interface CaseDetail {
   processInstanceId: string;
   processDefinitionName: string | null;
   title: string | null;
-  variables: Record<string, unknown> | null;
+  entity: Record<string, unknown> | null;
+  entityVersion: number;
   status: CaseStatus;
   startedById: string | null;
   createdAt: string;

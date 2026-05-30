@@ -1146,7 +1146,20 @@ paths:
       responses:
         "200":
           description: Default Response
-  /cases/by-process-instance/{processInstanceId}/variables:
+  /cases/by-process-instance/{processInstanceId}/entity:
+    get:
+      tags:
+        - Cases
+      parameters:
+        - schema:
+            type: string
+            minLength: 1
+          in: path
+          name: processInstanceId
+          required: true
+      responses:
+        "200":
+          description: Default Response
     patch:
       tags:
         - Cases
@@ -1157,13 +1170,66 @@ paths:
             schema:
               type: object
               properties:
-                variables:
+                patch:
+                  minItems: 1
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      op:
+                        type: string
+                        enum:
+                          - add
+                          - remove
+                          - replace
+                          - move
+                          - copy
+                          - test
+                      path:
+                        type: string
+                      value: {}
+                      from:
+                        type: string
+                    required:
+                      - op
+                      - path
+                expectedVersion:
+                  type: integer
+                  minimum: 0
+                  maximum: 9007199254740991
+              required:
+                - patch
+      parameters:
+        - schema:
+            type: string
+            minLength: 1
+          in: path
+          name: processInstanceId
+          required: true
+      responses:
+        "200":
+          description: Default Response
+    put:
+      tags:
+        - Cases
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                entity:
                   type: object
                   propertyNames:
                     type: string
                   additionalProperties: {}
+                expectedVersion:
+                  type: integer
+                  minimum: 0
+                  maximum: 9007199254740991
               required:
-                - variables
+                - entity
       parameters:
         - schema:
             type: string

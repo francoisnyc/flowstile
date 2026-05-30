@@ -13,6 +13,8 @@ export type {
   CaseTask,
   CaseAttachment,
   CaseStatus,
+  CaseEntityResult,
+  JsonPatchOperation,
   ListCasesInput,
   Paginated,
   AttachmentReference,

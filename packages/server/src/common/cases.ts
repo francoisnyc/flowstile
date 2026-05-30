@@ -12,8 +12,9 @@ export function deriveCaseStatus(tasks: Task[]): CaseStatus {
   return 'completed';
 }
 
-// Snapshot top-level scalar values from a data object for use as initial case variables.
-// Skips objects/arrays to avoid accidentally surfacing large blobs or attachment refs.
+// Snapshot top-level scalar values from a data object for use as the initial case
+// entity when the process declares no caseEntitySchema. Skips objects/arrays to
+// avoid accidentally surfacing large blobs or attachment refs.
 export function extractScalarVariables(
   data: Record<string, unknown>,
 ): Record<string, unknown> | null {

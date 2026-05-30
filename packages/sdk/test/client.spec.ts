@@ -226,18 +226,48 @@ describe('FlowstileClient', () => {
       );
     });
 
-    it('setCaseVariables sends PATCH with a merge body', async () => {
-      mockFetch.mockResolvedValueOnce(
-        jsonResponse({ id: 'c1', processInstanceId: 'wf-1', variables: { stage: 'review' } }),
-      );
+    it('getCaseEntity sends GET /entity and returns entity + version', async () => {
+      mockFetch.mockResolvedValueOnce(jsonResponse({ entity: { amount: 1000 }, entityVersion: 3 }));
 
-      const result = await client.setCaseVariables('wf-1', { stage: 'review' });
-      expect(result.variables).toEqual({ stage: 'review' });
+      const result = await client.getCaseEntity('wf-1');
+      expect(result).toEqual({ entity: { amount: 1000 }, entityVersion: 3 });
+      expect(mockFetch.mock.calls[1][0]).toBe(
+        'http://localhost:3000/cases/by-process-instance/wf-1/entity',
+      );
+    });
+
+    it('patchCaseEntity sends PATCH with the JSON Patch ops and expectedVersion', async () => {
+      mockFetch.mockResolvedValueOnce(jsonResponse({ entity: { amount: 2000 }, entityVersion: 4 }));
+
+      const ops = [{ op: 'replace' as const, path: '/amount', value: 2000 }];
+      const result = await client.patchCaseEntity('wf-1', ops, 3);
+      expect(result.entityVersion).toBe(4);
 
       const call = mockFetch.mock.calls[1];
-      expect(call[0]).toBe('http://localhost:3000/cases/by-process-instance/wf-1/variables');
+      expect(call[0]).toBe('http://localhost:3000/cases/by-process-instance/wf-1/entity');
       expect(call[1].method).toBe('PATCH');
-      expect(JSON.parse(call[1].body)).toEqual({ variables: { stage: 'review' } });
+      expect(JSON.parse(call[1].body)).toEqual({ patch: ops, expectedVersion: 3 });
+    });
+
+    it('setCaseEntity sends PUT with a full-replace body', async () => {
+      mockFetch.mockResolvedValueOnce(jsonResponse({ entity: { only: 'this' }, entityVersion: 1 }));
+
+      const result = await client.setCaseEntity('wf-1', { only: 'this' });
+      expect(result.entity).toEqual({ only: 'this' });
+
+      const call = mockFetch.mock.calls[1];
+      expect(call[0]).toBe('http://localhost:3000/cases/by-process-instance/wf-1/entity');
+      expect(call[1].method).toBe('PUT');
+      expect(JSON.parse(call[1].body)).toEqual({ entity: { only: 'this' }, expectedVersion: undefined });
+    });
+
+    it('deprecated setCaseVariables delegates to setCaseEntity (PUT)', async () => {
+      mockFetch.mockResolvedValueOnce(jsonResponse({ entity: { stage: 'review' }, entityVersion: 1 }));
+
+      await client.setCaseVariables('wf-1', { stage: 'review' });
+      const call = mockFetch.mock.calls[1];
+      expect(call[0]).toBe('http://localhost:3000/cases/by-process-instance/wf-1/entity');
+      expect(call[1].method).toBe('PUT');
     });
   });
 });

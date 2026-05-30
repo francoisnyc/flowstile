@@ -13,6 +13,8 @@ import { PaginationQuery, paginate } from '../common/pagination.js';
 import { filterFormSchemas } from '../common/visibility.js';
 import { toReference } from '../common/attachments.js';
 import { deriveCaseStatus, type CaseStatus } from '../common/cases.js';
+import { validateAgainstSchema } from '../validation/schema-validator.js';
+import { applyJsonPatch, JsonPatchError, type JsonPatchOperation } from '../common/json-patch.js';
 
 const UuidParam = z.object({ id: z.string().uuid() });
 const PidParam = z.object({ processInstanceId: z.string().min(1) });
@@ -21,8 +23,22 @@ const CasesQuery = PaginationQuery.extend({
   status: z.enum(['pending', 'in_progress', 'completed', 'cancelled']).optional(),
 });
 
-const PatchCaseVariablesBody = z.object({
-  variables: z.record(z.string(), z.unknown()),
+const JsonPatchOp = z.object({
+  op: z.enum(['add', 'remove', 'replace', 'move', 'copy', 'test']),
+  path: z.string(),
+  value: z.unknown().optional(),
+  from: z.string().optional(),
+});
+
+const PatchCaseEntityBody = z.object({
+  patch: z.array(JsonPatchOp).min(1),
+  // Optimistic concurrency: reject with 409 if the stored version differs.
+  expectedVersion: z.number().int().nonnegative().optional(),
+});
+
+const PutCaseEntityBody = z.object({
+  entity: z.record(z.string(), z.unknown()),
+  expectedVersion: z.number().int().nonnegative().optional(),
 });
 
 function serializeCaseTask(task: Task) {
@@ -61,7 +77,8 @@ function serializeCaseSummary(
     processInstanceId: c.processInstanceId,
     processDefinitionName: processName,
     title: c.title,
-    variables: c.variables,
+    entity: c.entity,
+    entityVersion: c.entityVersion,
     status,
     startedById: c.startedById,
     createdAt: c.createdAt,
@@ -105,7 +122,8 @@ async function loadCaseDetail(
     processInstanceId: c.processInstanceId,
     processDefinitionName: processName,
     title: c.title,
-    variables: c.variables,
+    entity: c.entity,
+    entityVersion: c.entityVersion,
     status,
     startedById: c.startedById,
     createdAt: c.createdAt,
@@ -279,24 +297,114 @@ export const caseRoutes: FastifyPluginAsyncZod = async (app) => {
     },
   );
 
-  // PATCH /cases/by-process-instance/:processInstanceId/variables
-  app.patch(
-    '/cases/by-process-instance/:processInstanceId/variables',
-    { ...write, schema: { params: PidParam, body: PatchCaseVariablesBody, tags: ['Cases'] } },
+  // Loads the caseEntitySchema for a process definition, if one is configured.
+  async function resolveCaseEntitySchema(
+    processDefinitionId: string | null,
+  ): Promise<Record<string, unknown> | null> {
+    if (!processDefinitionId) return null;
+    const pd = await app.db
+      .getRepository(ProcessDefinition)
+      .findOne({ where: { id: processDefinitionId }, select: ['id', 'caseEntitySchema'] });
+    return pd?.caseEntitySchema ?? null;
+  }
+
+  // GET /cases/by-process-instance/:processInstanceId/entity  — read-back
+  app.get(
+    '/cases/by-process-instance/:processInstanceId/entity',
+    { ...read, schema: { params: PidParam, tags: ['Cases'] } },
     async (request, reply) => {
       const { processInstanceId } = request.params;
-
       const c = await caseRepo().findOne({ where: { processInstanceId } });
       if (!c) return reply.code(404).send({ error: 'Case not found' });
+      return { entity: c.entity, entityVersion: c.entityVersion };
+    },
+  );
 
-      c.variables = { ...(c.variables ?? {}), ...request.body.variables };
-      const saved = await caseRepo().save(c);
+  // Persists a new entity value for a case under a row lock, validating against
+  // the process's caseEntitySchema and bumping entityVersion. `compute` derives
+  // the next entity from the current one (or throws for a bad patch).
+  async function writeEntity(
+    processInstanceId: string,
+    expectedVersion: number | undefined,
+    compute: (current: Record<string, unknown>) => Record<string, unknown>,
+    reply: import('fastify').FastifyReply,
+  ) {
+    const outcome = await app.db.transaction(async (manager) => {
+      const repo = manager.getRepository(Case);
+      const c = await repo.findOne({
+        where: { processInstanceId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!c) return { kind: 'not_found' as const };
 
-      return {
-        id: saved.id,
-        processInstanceId: saved.processInstanceId,
-        variables: saved.variables,
-      };
+      if (expectedVersion !== undefined && c.entityVersion !== expectedVersion) {
+        return { kind: 'conflict' as const, current: c.entityVersion };
+      }
+
+      let next: Record<string, unknown>;
+      try {
+        next = compute((c.entity ?? {}) as Record<string, unknown>);
+      } catch (err) {
+        if (err instanceof JsonPatchError) return { kind: 'patch_error' as const, message: err.message };
+        throw err;
+      }
+
+      const schema = await resolveCaseEntitySchema(c.processDefinitionId);
+      if (schema) {
+        const validation = validateAgainstSchema(next, schema);
+        if (!validation.valid) {
+          return { kind: 'invalid' as const, errors: validation.errors };
+        }
+      }
+
+      c.entity = next;
+      c.entityVersion += 1;
+      const saved = await repo.save(c);
+      return { kind: 'ok' as const, entity: saved.entity, entityVersion: saved.entityVersion };
+    });
+
+    switch (outcome.kind) {
+      case 'not_found':
+        return reply.code(404).send({ error: 'Case not found' });
+      case 'conflict':
+        return reply
+          .code(409)
+          .send({ error: 'Case entity version conflict', currentVersion: outcome.current });
+      case 'patch_error':
+        return reply.code(422).send({ error: 'Invalid JSON Patch', details: outcome.message });
+      case 'invalid':
+        return reply
+          .code(422)
+          .send({ error: 'Case entity validation failed', details: outcome.errors });
+      case 'ok':
+        return { entity: outcome.entity, entityVersion: outcome.entityVersion };
+    }
+  }
+
+  // PATCH /cases/by-process-instance/:processInstanceId/entity  — JSON Patch
+  app.patch(
+    '/cases/by-process-instance/:processInstanceId/entity',
+    { ...write, schema: { params: PidParam, body: PatchCaseEntityBody, tags: ['Cases'] } },
+    async (request, reply) => {
+      const { processInstanceId } = request.params;
+      const { patch, expectedVersion } = request.body;
+      return writeEntity(
+        processInstanceId,
+        expectedVersion,
+        (current) => applyJsonPatch(current, patch as JsonPatchOperation[]),
+        reply,
+      );
+    },
+  );
+
+  // PUT /cases/by-process-instance/:processInstanceId/entity  — full replace
+  app.put(
+    '/cases/by-process-instance/:processInstanceId/entity',
+    { ...write, schema: { params: PidParam, body: PutCaseEntityBody, tags: ['Cases'] } },
+    async (request, reply) => {
+      const { processInstanceId } = request.params;
+      const { entity, expectedVersion } = request.body;
+      return writeEntity(processInstanceId, expectedVersion, () => entity, reply);
     },
   );
 };

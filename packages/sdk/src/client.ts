@@ -7,6 +7,8 @@ import type {
   UploadAttachmentInput,
   Case,
   CaseSummary,
+  CaseEntityResult,
+  JsonPatchOperation,
   ListCasesInput,
   Paginated,
 } from './types.js';
@@ -123,17 +125,49 @@ export class FlowstileClient {
     return this.request<Case>(`/cases/by-process-instance/${encodeURIComponent(processInstanceId)}`);
   }
 
-  // Merges the given keys onto the case's variables (shallow). Case variables are
-  // a denormalized display projection — not schema-validated, and not a source of
-  // truth (the workflow and task submissionData remain authoritative).
+  // Reads back the authoritative case entity and its version. The case entity is
+  // a first-class, optionally schema-validated business-data record — the workflow
+  // may legitimately read it to drive logic (e.g. in patched/parallel branches).
+  getCaseEntity(processInstanceId: string): Promise<CaseEntityResult> {
+    return this.request<CaseEntityResult>(
+      `/cases/by-process-instance/${encodeURIComponent(processInstanceId)}/entity`,
+    );
+  }
+
+  // Applies an RFC 6902 JSON Patch to the case entity. Operations are applied
+  // server-side under a row lock, so concurrent branches writing disjoint fields
+  // do not conflict. Pass `expectedVersion` for optimistic concurrency on a
+  // same-field read-modify-write (409 on mismatch).
+  patchCaseEntity(
+    processInstanceId: string,
+    patch: JsonPatchOperation[],
+    expectedVersion?: number,
+  ): Promise<CaseEntityResult> {
+    return this.request<CaseEntityResult>(
+      `/cases/by-process-instance/${encodeURIComponent(processInstanceId)}/entity`,
+      { method: 'PATCH', body: JSON.stringify({ patch, expectedVersion }) },
+    );
+  }
+
+  // Replaces the entire case entity. Use for initialization or migration; prefer
+  // patchCaseEntity for incremental updates from concurrent branches.
+  setCaseEntity(
+    processInstanceId: string,
+    entity: Record<string, unknown>,
+    expectedVersion?: number,
+  ): Promise<CaseEntityResult> {
+    return this.request<CaseEntityResult>(
+      `/cases/by-process-instance/${encodeURIComponent(processInstanceId)}/entity`,
+      { method: 'PUT', body: JSON.stringify({ entity, expectedVersion }) },
+    );
+  }
+
+  /** @deprecated Use setCaseEntity (full replace) or patchCaseEntity (JSON Patch). */
   setCaseVariables(
     processInstanceId: string,
     variables: Record<string, unknown>,
-  ): Promise<{ id: string; processInstanceId: string; variables: Record<string, unknown> | null }> {
-    return this.request(
-      `/cases/by-process-instance/${encodeURIComponent(processInstanceId)}/variables`,
-      { method: 'PATCH', body: JSON.stringify({ variables }) },
-    );
+  ): Promise<CaseEntityResult> {
+    return this.setCaseEntity(processInstanceId, variables);
   }
 
   async uploadAttachment(taskId: string, input: UploadAttachmentInput): Promise<AttachmentReference> {

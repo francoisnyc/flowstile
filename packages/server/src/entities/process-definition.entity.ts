@@ -27,6 +27,12 @@ export class ProcessDefinition {
   })
   status: ProcessDefinitionStatus;
 
+  // Optional JSON Schema for the case entity (the authoritative cross-task
+  // business data). When present, every case entity write is validated against
+  // it. When absent, the case entity is unvalidated (free-form display facts).
+  @Column({ type: 'jsonb', nullable: true })
+  caseEntitySchema: Record<string, unknown> | null;
+
   @OneToMany(() => TaskDefinition, (td) => td.processDefinition)
   taskDefinitions: TaskDefinition[];
 

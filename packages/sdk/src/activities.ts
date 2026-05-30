@@ -1,5 +1,11 @@
 import { FlowstileClient } from './client.js';
-import type { CreateTaskInput, Task, FlowstileClientOptions } from './types.js';
+import type {
+  CreateTaskInput,
+  Task,
+  FlowstileClientOptions,
+  CaseEntityResult,
+  JsonPatchOperation,
+} from './types.js';
 
 let _client: FlowstileClient | null = null;
 
@@ -38,12 +44,39 @@ export async function cancelFlowstileTask(taskId: string): Promise<Task> {
   return client().cancelTask(taskId);
 }
 
-// Merges case-level display variables onto the case for the given workflow
-// instance. Call from a workflow (via proxyActivities) to surface key business
-// facts — applicant name, amount, stage — in the case overview header.
+// Reads back the authoritative case entity and its version. Call from a workflow
+// (via proxyActivities) to retrieve cross-task business data — including from a
+// patched-in or parallel branch that never received the data via local variables.
+export async function getFlowstileCaseEntity(
+  processInstanceId: string,
+): Promise<CaseEntityResult> {
+  return client().getCaseEntity(processInstanceId);
+}
+
+// Applies an RFC 6902 JSON Patch to the case entity. Disjoint-field patches from
+// concurrent branches do not conflict (applied server-side under a row lock).
+// Pass expectedVersion for optimistic concurrency on same-field updates.
+export async function patchFlowstileCaseEntity(
+  processInstanceId: string,
+  patch: JsonPatchOperation[],
+  expectedVersion?: number,
+): Promise<CaseEntityResult> {
+  return client().patchCaseEntity(processInstanceId, patch, expectedVersion);
+}
+
+// Replaces the entire case entity — for initialization or migration. Prefer
+// patchFlowstileCaseEntity for incremental updates.
+export async function setFlowstileCaseEntity(
+  processInstanceId: string,
+  entity: Record<string, unknown>,
+): Promise<CaseEntityResult> {
+  return client().setCaseEntity(processInstanceId, entity);
+}
+
+/** @deprecated Use setFlowstileCaseEntity or patchFlowstileCaseEntity. */
 export async function setFlowstileCaseVariables(
   processInstanceId: string,
   variables: Record<string, unknown>,
 ): Promise<void> {
-  await client().setCaseVariables(processInstanceId, variables);
+  await client().setCaseEntity(processInstanceId, variables);
 }

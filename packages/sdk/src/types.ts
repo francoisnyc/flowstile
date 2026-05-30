@@ -76,14 +76,30 @@ export interface AttachmentReference {
 
 export type CaseStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled';
 
+// An RFC 6902 JSON Patch operation, used to mutate a case entity.
+export type JsonPatchOperation =
+  | { op: 'add'; path: string; value: unknown }
+  | { op: 'remove'; path: string }
+  | { op: 'replace'; path: string; value: unknown }
+  | { op: 'move'; from: string; path: string }
+  | { op: 'copy'; from: string; path: string }
+  | { op: 'test'; path: string; value: unknown };
+
+// The case entity plus its optimistic-concurrency version.
+export interface CaseEntityResult {
+  entity: Record<string, unknown> | null;
+  entityVersion: number;
+}
+
 // A case is a projection over a workflow instance: every task and attachment
-// sharing a processInstanceId, plus thin case-level metadata.
+// sharing a processInstanceId, plus the authoritative case entity.
 export interface CaseSummary {
   id: string;
   processInstanceId: string;
   processDefinitionName: string | null;
   title: string | null;
-  variables: Record<string, unknown> | null;
+  entity: Record<string, unknown> | null;
+  entityVersion: number;
   status: CaseStatus;
   startedById: string | null;
   createdAt: string;
@@ -120,7 +136,8 @@ export interface Case {
   processInstanceId: string;
   processDefinitionName: string | null;
   title: string | null;
-  variables: Record<string, unknown> | null;
+  entity: Record<string, unknown> | null;
+  entityVersion: number;
   status: CaseStatus;
   startedById: string | null;
   createdAt: string;

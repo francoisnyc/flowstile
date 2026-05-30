@@ -3,7 +3,10 @@ import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../../src/app.js';
 import { Case } from '../../src/entities/case.entity.js';
 import { Task } from '../../src/entities/task.entity.js';
-import { TaskStatus } from '../../src/common/enums.js';
+import { ProcessDefinition } from '../../src/entities/process-definition.entity.js';
+import { FormDefinition } from '../../src/entities/form-definition.entity.js';
+import { TaskDefinition } from '../../src/entities/task-definition.entity.js';
+import { TaskStatus, FormDefinitionStatus, Priority } from '../../src/common/enums.js';
 import { Permissions } from '../../src/common/permissions.js';
 import {
   createTestUser,
@@ -83,12 +86,13 @@ describe('Case lazy upsert', () => {
     expect(count).toBe(1);
   });
 
-  it('snapshots top-level scalar inputData as initial case variables', async () => {
+  it('snapshots top-level scalar inputData as the initial case entity (no schema)', async () => {
     const pid = `test-pid-vars-${Date.now()}`;
     await createTask(pid, { applicantName: 'John Doe', amount: 50000, nested: { ignore: true } });
 
     const c = await app.db.getRepository(Case).findOne({ where: { processInstanceId: pid } });
-    expect(c!.variables).toEqual({ applicantName: 'John Doe', amount: 50000 });
+    expect(c!.entity).toEqual({ applicantName: 'John Doe', amount: 50000 });
+    expect(c!.entityVersion).toBe(0);
   });
 });
 
@@ -192,32 +196,152 @@ describe('GET /cases/by-process-instance/:processInstanceId', () => {
   });
 });
 
-describe('PATCH /cases/by-process-instance/:processInstanceId/variables', () => {
-  it('merges variables onto the case', async () => {
-    const pid = `test-vars-patch-${Date.now()}`;
+describe('Case entity (GET / PATCH / PUT /entity)', () => {
+  it('reads back the entity and version', async () => {
+    const pid = `test-entity-read-${Date.now()}`;
     await createTask(pid, { amount: 1000 });
 
-    // Initial variables from inputData snapshot
-    let c = await app.db.getRepository(Case).findOne({ where: { processInstanceId: pid } });
-    expect(c!.variables).toMatchObject({ amount: 1000 });
-
     const res = await authed(app, cookie, {
-      method: 'PATCH',
-      url: `/cases/by-process-instance/${pid}/variables`,
-      payload: { variables: { stage: 'underwriting', amount: 2000 } },
+      method: 'GET',
+      url: `/cases/by-process-instance/${pid}/entity`,
     });
     expect(res.statusCode).toBe(200);
     const body = JSON.parse(res.body);
-    // New key added, existing key overwritten
-    expect(body.variables).toMatchObject({ stage: 'underwriting', amount: 2000 });
+    expect(body.entity).toMatchObject({ amount: 1000 });
+    expect(body.entityVersion).toBe(0);
+  });
+
+  it('applies a JSON Patch and bumps the version', async () => {
+    const pid = `test-entity-patch-${Date.now()}`;
+    await createTask(pid, { amount: 1000 });
+
+    const res = await authed(app, cookie, {
+      method: 'PATCH',
+      url: `/cases/by-process-instance/${pid}/entity`,
+      payload: {
+        patch: [
+          { op: 'replace', path: '/amount', value: 2000 },
+          { op: 'add', path: '/stage', value: 'underwriting' },
+        ],
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.entity).toEqual({ amount: 2000, stage: 'underwriting' });
+    expect(body.entityVersion).toBe(1);
+  });
+
+  it('full-replaces the entity with PUT', async () => {
+    const pid = `test-entity-put-${Date.now()}`;
+    await createTask(pid, { amount: 1000 });
+
+    const res = await authed(app, cookie, {
+      method: 'PUT',
+      url: `/cases/by-process-instance/${pid}/entity`,
+      payload: { entity: { only: 'this' } },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.entity).toEqual({ only: 'this' });
+    expect(body.entityVersion).toBe(1);
+  });
+
+  it('rejects a stale expectedVersion with 409', async () => {
+    const pid = `test-entity-conflict-${Date.now()}`;
+    await createTask(pid, { amount: 1 });
+
+    // First write moves version 0 → 1
+    await authed(app, cookie, {
+      method: 'PUT',
+      url: `/cases/by-process-instance/${pid}/entity`,
+      payload: { entity: { amount: 2 } },
+    });
+
+    // Second write asserting version 0 (stale) must conflict
+    const res = await authed(app, cookie, {
+      method: 'PUT',
+      url: `/cases/by-process-instance/${pid}/entity`,
+      payload: { entity: { amount: 3 }, expectedVersion: 0 },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).currentVersion).toBe(1);
+  });
+
+  it('returns 422 for a JSON Patch against a missing path', async () => {
+    const pid = `test-entity-badpatch-${Date.now()}`;
+    await createTask(pid, {});
+
+    const res = await authed(app, cookie, {
+      method: 'PATCH',
+      url: `/cases/by-process-instance/${pid}/entity`,
+      payload: { patch: [{ op: 'replace', path: '/missing/deep', value: 1 }] },
+    });
+    expect(res.statusCode).toBe(422);
   });
 
   it('returns 404 for unknown processInstanceId', async () => {
     const res = await authed(app, cookie, {
-      method: 'PATCH',
-      url: '/cases/by-process-instance/no-such/variables',
-      payload: { variables: { foo: 'bar' } },
+      method: 'PUT',
+      url: '/cases/by-process-instance/no-such/entity',
+      payload: { entity: { foo: 'bar' } },
     });
     expect(res.statusCode).toBe(404);
+  });
+});
+
+describe('Case entity schema validation', () => {
+  it('rejects an entity that violates the process caseEntitySchema', async () => {
+    // A process whose case entity must have a numeric amount.
+    const process = await app.db.getRepository(ProcessDefinition).save({
+      name: `Test Process Schema ${Date.now()}`,
+      caseEntitySchema: {
+        type: 'object',
+        properties: { amount: { type: 'number' } },
+        required: ['amount'],
+      },
+    });
+    const form = await app.db.getRepository(FormDefinition).save({
+      code: `TEST_FORM_SCHEMA_${Date.now()}`,
+      version: 1,
+      jsonSchema: { type: 'object', properties: { DECISION: { type: 'string' } } },
+      uiSchema: { type: 'VerticalLayout', elements: [] },
+      status: FormDefinitionStatus.PUBLISHED,
+    });
+    const taskDef = await app.db.getRepository(TaskDefinition).save({
+      code: `TEST_TASK_SCHEMA_${Date.now()}`,
+      processDefinitionId: process.id,
+      formDefinitionCode: form.code,
+      candidateGroups: [],
+      candidateUsers: [],
+      defaultPriority: Priority.NORMAL,
+    });
+
+    const pid = `test-entity-schema-${Date.now()}`;
+    await authed(app, cookie, {
+      method: 'POST',
+      url: '/tasks',
+      payload: { taskDefinitionId: taskDef.id, workflowId: `wf-${Date.now()}`, processInstanceId: pid },
+    });
+
+    // With a schema present, the entity initializes to null (not a scalar snapshot).
+    const c = await app.db.getRepository(Case).findOne({ where: { processInstanceId: pid } });
+    expect(c!.entity).toBeNull();
+
+    // A non-conforming write is rejected …
+    const bad = await authed(app, cookie, {
+      method: 'PUT',
+      url: `/cases/by-process-instance/${pid}/entity`,
+      payload: { entity: { amount: 'not-a-number' } },
+    });
+    expect(bad.statusCode).toBe(422);
+
+    // … and a conforming write succeeds.
+    const good = await authed(app, cookie, {
+      method: 'PUT',
+      url: `/cases/by-process-instance/${pid}/entity`,
+      payload: { entity: { amount: 1234 } },
+    });
+    expect(good.statusCode).toBe(200);
+    expect(JSON.parse(good.body).entity).toEqual({ amount: 1234 });
   });
 });

@@ -21,8 +21,16 @@ export class Case {
   @Column({ type: 'varchar', nullable: true })
   title: string | null;
 
+  // The authoritative cross-task business data for this case. Read-back-able by
+  // the workflow and validated against the process definition's caseEntitySchema
+  // (when one is configured). Written via JSON Patch or full replace.
   @Column({ type: 'jsonb', nullable: true })
-  variables: Record<string, unknown> | null;
+  entity: Record<string, unknown> | null;
+
+  // Monotonic counter bumped on every entity write, for optimistic concurrency
+  // (If-Match) on same-field read-modify-write from concurrent workflow branches.
+  @Column({ type: 'int', default: 0 })
+  entityVersion: number;
 
   @Column({ type: 'uuid', nullable: true })
   startedById: string | null;
