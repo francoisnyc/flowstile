@@ -169,7 +169,13 @@ async function filterAttachmentsByVisibility(
       if (!att.taskId || !att.fieldKey) return false;
       return visibleFieldsByTask.get(att.taskId)?.has(att.fieldKey) ?? false;
     })
-    .map(toReference);
+    .map((att) => ({
+      ...toReference(att),
+      // The owning task + field, so the case view can build a download URL
+      // (/tasks/:taskId/attachments/:id/content) and group documents by field.
+      taskId: att.taskId,
+      fieldKey: att.fieldKey,
+    }));
 }
 
 export const caseRoutes: FastifyPluginAsyncZod = async (app) => {

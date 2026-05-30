@@ -70,6 +70,74 @@ export interface AttachmentReference {
   uploadedAt: string;
 }
 
+export type CaseStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled';
+
+// A case is a projection over a workflow instance: every task and attachment
+// sharing a processInstanceId, plus thin case-level metadata.
+export interface CaseSummary {
+  id: string;
+  processInstanceId: string;
+  processDefinitionName: string | null;
+  title: string | null;
+  variables: Record<string, unknown> | null;
+  status: CaseStatus;
+  startedById: string | null;
+  createdAt: string;
+  taskCount: number;
+  openTaskCount: number;
+}
+
+// A lean task view as it appears within a case overview (no form schema/data).
+export interface CaseTask {
+  id: string;
+  status: TaskStatus;
+  priority: Priority;
+  dueDate: string | null;
+  createdAt: string;
+  updatedAt: string;
+  completedAt: string | null;
+  taskDefinition?: {
+    id: string;
+    code: string;
+    formDefinitionCode: string;
+  };
+  assignee: { id: string; email: string; displayName: string } | null;
+}
+
+// An attachment as it appears in a case overview: the standard reference plus
+// the owning task and field, so consumers can build a download URL and group by field.
+export interface CaseAttachment extends AttachmentReference {
+  taskId: string;
+  fieldKey: string;
+}
+
+export interface Case {
+  id: string;
+  processInstanceId: string;
+  processDefinitionName: string | null;
+  title: string | null;
+  variables: Record<string, unknown> | null;
+  status: CaseStatus;
+  startedById: string | null;
+  createdAt: string;
+  tasks: CaseTask[];
+  attachments: CaseAttachment[];
+}
+
+export interface ListCasesInput {
+  status?: CaseStatus;
+  limit?: number;
+  offset?: number;
+}
+
+// Shape returned by all Flowstile list endpoints.
+export interface Paginated<T> {
+  items: T[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
 export interface UploadAttachmentInput {
   fileName: string;
   contentType: string;

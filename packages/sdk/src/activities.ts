@@ -37,3 +37,13 @@ export async function getFlowstileTask(taskId: string): Promise<Task> {
 export async function cancelFlowstileTask(taskId: string): Promise<Task> {
   return client().cancelTask(taskId);
 }
+
+// Merges case-level display variables onto the case for the given workflow
+// instance. Call from a workflow (via proxyActivities) to surface key business
+// facts — applicant name, amount, stage — in the case overview header.
+export async function setFlowstileCaseVariables(
+  processInstanceId: string,
+  variables: Record<string, unknown>,
+): Promise<void> {
+  await client().setCaseVariables(processInstanceId, variables);
+}

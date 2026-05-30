@@ -4,6 +4,8 @@ import { useAuth } from './context/AuthContext.js';
 import Layout from './components/Layout.js';
 import LoginPage from './pages/LoginPage.js';
 import InboxPage from './pages/InboxPage.js';
+import CasesPage from './pages/CasesPage.js';
+import CaseDetailPage from './pages/CaseDetailPage.js';
 import FormDesignerPage from './pages/FormDesignerPage.js';
 import AdminPage from './pages/AdminPage.js';
 
@@ -34,6 +36,8 @@ export default function App() {
       >
         <Route index element={<Navigate to="/inbox" replace />} />
         <Route path="inbox" element={<InboxPage />} />
+        <Route path="cases" element={<CasesPage />} />
+        <Route path="cases/:id" element={<CaseDetailPage />} />
         <Route path="forms" element={<FormDesignerPage />} />
         <Route path="forms/:code" element={<FormDesignerPage />} />
         <Route path="admin" element={<AdminPage />} />

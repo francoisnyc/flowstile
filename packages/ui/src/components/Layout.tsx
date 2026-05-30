@@ -20,6 +20,7 @@ export default function Layout() {
         <span className="brand">Flowstile</span>
         <nav className="topnav-links">
           <NavLink to="/inbox">Inbox</NavLink>
+          <NavLink to="/cases">Cases</NavLink>
           <NavLink to="/forms">Forms</NavLink>
           {canAdmin && <NavLink to="/admin">Admin</NavLink>}
         </nav>

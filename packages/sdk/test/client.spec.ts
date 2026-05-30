@@ -158,5 +158,54 @@ describe('FlowstileClient', () => {
       expect(err.statusCode).toBe(404);
       expect(err.path).toBe('/tasks/missing');
     });
+
+    it('listCases sends GET /cases with no query when no filters', async () => {
+      mockFetch.mockResolvedValueOnce(jsonResponse({ items: [], total: 0, limit: 50, offset: 0 }));
+
+      const result = await client.listCases();
+      expect(result).toEqual({ items: [], total: 0, limit: 50, offset: 0 });
+      expect(mockFetch.mock.calls[1][0]).toBe('http://localhost:3000/cases');
+    });
+
+    it('listCases encodes status, limit, and offset into the query string', async () => {
+      mockFetch.mockResolvedValueOnce(jsonResponse({ items: [], total: 0, limit: 10, offset: 20 }));
+
+      await client.listCases({ status: 'in_progress', limit: 10, offset: 20 });
+      expect(mockFetch.mock.calls[1][0]).toBe(
+        'http://localhost:3000/cases?status=in_progress&limit=10&offset=20',
+      );
+    });
+
+    it('getCase sends GET /cases/:id', async () => {
+      const detail = { id: 'c1', processInstanceId: 'wf-1', tasks: [], attachments: [] };
+      mockFetch.mockResolvedValueOnce(jsonResponse(detail));
+
+      const result = await client.getCase('c1');
+      expect(result).toEqual(detail);
+      expect(mockFetch.mock.calls[1][0]).toBe('http://localhost:3000/cases/c1');
+    });
+
+    it('getCaseByProcessInstance URL-encodes the processInstanceId', async () => {
+      mockFetch.mockResolvedValueOnce(jsonResponse({ id: 'c1', processInstanceId: 'loan/42' }));
+
+      await client.getCaseByProcessInstance('loan/42');
+      expect(mockFetch.mock.calls[1][0]).toBe(
+        'http://localhost:3000/cases/by-process-instance/loan%2F42',
+      );
+    });
+
+    it('setCaseVariables sends PATCH with a merge body', async () => {
+      mockFetch.mockResolvedValueOnce(
+        jsonResponse({ id: 'c1', processInstanceId: 'wf-1', variables: { stage: 'review' } }),
+      );
+
+      const result = await client.setCaseVariables('wf-1', { stage: 'review' });
+      expect(result.variables).toEqual({ stage: 'review' });
+
+      const call = mockFetch.mock.calls[1];
+      expect(call[0]).toBe('http://localhost:3000/cases/by-process-instance/wf-1/variables');
+      expect(call[1].method).toBe('PATCH');
+      expect(JSON.parse(call[1].body)).toEqual({ variables: { stage: 'review' } });
+    });
   });
 });

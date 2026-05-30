@@ -5,6 +5,10 @@ import type {
   Task,
   AttachmentReference,
   UploadAttachmentInput,
+  Case,
+  CaseSummary,
+  ListCasesInput,
+  Paginated,
 } from './types.js';
 
 export class FlowstileClient {
@@ -88,6 +92,36 @@ export class FlowstileClient {
 
   cancelTask(taskId: string): Promise<Task> {
     return this.request<Task>(`/tasks/${taskId}/cancel`, { method: 'POST' });
+  }
+
+  listCases(input: ListCasesInput = {}): Promise<Paginated<CaseSummary>> {
+    const params = new URLSearchParams();
+    if (input.status) params.set('status', input.status);
+    if (input.limit !== undefined) params.set('limit', String(input.limit));
+    if (input.offset !== undefined) params.set('offset', String(input.offset));
+    const qs = params.toString();
+    return this.request<Paginated<CaseSummary>>(`/cases${qs ? `?${qs}` : ''}`);
+  }
+
+  getCase(caseId: string): Promise<Case> {
+    return this.request<Case>(`/cases/${caseId}`);
+  }
+
+  getCaseByProcessInstance(processInstanceId: string): Promise<Case> {
+    return this.request<Case>(`/cases/by-process-instance/${encodeURIComponent(processInstanceId)}`);
+  }
+
+  // Merges the given keys onto the case's variables (shallow). Case variables are
+  // a denormalized display projection — not schema-validated, and not a source of
+  // truth (the workflow and task submissionData remain authoritative).
+  setCaseVariables(
+    processInstanceId: string,
+    variables: Record<string, unknown>,
+  ): Promise<{ id: string; processInstanceId: string; variables: Record<string, unknown> | null }> {
+    return this.request(
+      `/cases/by-process-instance/${encodeURIComponent(processInstanceId)}/variables`,
+      { method: 'PATCH', body: JSON.stringify({ variables }) },
+    );
   }
 
   async uploadAttachment(taskId: string, input: UploadAttachmentInput): Promise<AttachmentReference> {

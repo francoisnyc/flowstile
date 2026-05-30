@@ -125,3 +125,52 @@ export interface AttachmentFieldConfig {
   accept?: string[];
   maxSize?: number;
 }
+
+export type CaseStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled';
+
+export interface CaseSummary {
+  id: string;
+  processInstanceId: string;
+  processDefinitionName: string | null;
+  title: string | null;
+  variables: Record<string, unknown> | null;
+  status: CaseStatus;
+  startedById: string | null;
+  createdAt: string;
+  taskCount: number;
+  openTaskCount: number;
+}
+
+export interface CaseTask {
+  id: string;
+  status: TaskStatus;
+  priority: Priority;
+  dueDate: string | null;
+  createdAt: string;
+  updatedAt: string;
+  completedAt: string | null;
+  taskDefinition?: {
+    id: string;
+    code: string;
+    formDefinitionCode: string;
+  };
+  assignee: UserRef | null;
+}
+
+export interface CaseAttachment extends AttachmentRef {
+  taskId: string;
+  fieldKey: string;
+}
+
+export interface CaseDetail {
+  id: string;
+  processInstanceId: string;
+  processDefinitionName: string | null;
+  title: string | null;
+  variables: Record<string, unknown> | null;
+  status: CaseStatus;
+  startedById: string | null;
+  createdAt: string;
+  tasks: CaseTask[];
+  attachments: CaseAttachment[];
+}

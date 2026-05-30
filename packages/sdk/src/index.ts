@@ -8,6 +8,14 @@ export type {
   TaskCompletedSignalPayload,
   Priority,
   TaskStatus,
+  Case,
+  CaseSummary,
+  CaseTask,
+  CaseAttachment,
+  CaseStatus,
+  ListCasesInput,
+  Paginated,
+  AttachmentReference,
 } from './types.js';
 export { taskCompletedSignalName, taskCancelledSignalName } from './types.js';
 export { TaskTimeoutError, TaskCancelledError, FlowstileApiError } from './errors.js';
