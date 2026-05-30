@@ -21,7 +21,8 @@ export interface Task {
 }
 
 export interface CreateTaskInput {
-  taskDefinitionId: string;
+  taskDefinitionId?: string;
+  taskDefinitionCode?: string;
   workflowId: string;
   processInstanceId?: string;
   priority?: Priority;
@@ -33,7 +34,8 @@ export interface CreateTaskInput {
 }
 
 export interface CreateTaskAndWaitInput {
-  taskDefinitionId: string;
+  taskDefinitionId?: string;
+  taskDefinitionCode?: string;
   processInstanceId?: string;
   priority?: Priority;
   dueDate?: string;

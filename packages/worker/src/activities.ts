@@ -5,5 +5,8 @@ export {
   createFlowstileTask,
   getFlowstileTask,
   cancelFlowstileTask,
+  getFlowstileCaseEntity,
+  patchFlowstileCaseEntity,
+  setFlowstileCaseEntity,
 } from '@flowstile/sdk/activities';
 export { processPayment, refundPayment, cancelShipment } from './order-fulfillment/activities.js';

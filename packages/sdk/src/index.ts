@@ -1,4 +1,6 @@
 export { FlowstileClient } from './client.js';
+export { defineTask, defineProcess } from './process.js';
+export type { TaskDescriptor, TasksMap, ProcessDefinition } from './process.js';
 export type {
   FlowstileClientOptions,
   CreateTaskInput,

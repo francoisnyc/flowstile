@@ -16,14 +16,6 @@ import type {
 import { taskCompletedSignalName, taskCancelledSignalName } from './types.js';
 import { TaskTimeoutError, TaskCancelledError } from './errors.js';
 
-const {
-  createFlowstileTask,
-  cancelFlowstileTask,
-} = proxyActivities<typeof activities>({
-  startToCloseTimeout: '10 minutes',
-  retry: { maximumAttempts: 3 },
-});
-
 /**
  * Workflow function: creates a Flowstile task and durably waits for a human to
  * complete it. The workflow resumes when the Flowstile server sends the
@@ -48,6 +40,11 @@ export async function createTaskAndWait<
 >(
   input: CreateTaskAndWaitInput,
 ): Promise<TaskResult<TOutput>> {
+  const { createFlowstileTask, cancelFlowstileTask } = proxyActivities<typeof activities>({
+    startToCloseTimeout: '10 minutes',
+    retry: { maximumAttempts: 3 },
+  });
+
   const { workflowId } = workflowInfo();
 
   const task = await createFlowstileTask({

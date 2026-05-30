@@ -3,7 +3,7 @@ import {
   CancellationScope,
   log,
 } from '@temporalio/workflow';
-import { createTaskAndWait } from '@flowstile/sdk/workflows';
+import { orderProcess } from './process.js';
 import type * as orderActivities from './activities.js';
 
 const {
@@ -24,43 +24,23 @@ export interface OrderInput {
   shippingAddress: string;
   items: Array<{ name: string; quantity: number; price: number }>;
   total: number;
-  approveOrderTaskDefId: string;
-  confirmShipmentTaskDefId: string;
-  handleExceptionTaskDefId: string;
 }
 
 export type OrderResult =
   | { status: 'shipped'; orderId: string; trackingNumber: string }
   | { status: 'rejected'; orderId: string; reason: string };
 
-interface ApprovalDecision extends Record<string, unknown> {
-  DECISION: 'APPROVED' | 'REJECTED';
-  REASON: string;
-}
-
-interface ShipmentDecision extends Record<string, unknown> {
-  DECISION: 'CONFIRMED' | 'REJECTED';
-  REASON: string;
-  TRACKING_NUMBER: string;
-}
-
-interface ExceptionResolution extends Record<string, unknown> {
-  RESOLUTION: string;
-  NOTES: string;
-}
-
 // --- Workflow ---
 
 export async function orderFulfillmentWorkflow(input: OrderInput): Promise<OrderResult> {
+  const { approveOrder, confirmShipment, handleException } = orderProcess.tasks;
   const compensations: Array<() => Promise<void>> = [];
 
   try {
     // Step 1: Human approval (order-reviewers)
     log.info('Waiting for order approval', { orderId: input.orderId });
-    const approval = await createTaskAndWait<ApprovalDecision>({
-      taskDefinitionId: input.approveOrderTaskDefId,
+    const approval = await approveOrder.createAndWait({
       processInstanceId: input.orderId,
-      priority: 'high',
       inputData: {
         ORDER_ITEMS: input.items,
         TOTAL: input.total,
@@ -89,10 +69,8 @@ export async function orderFulfillmentWorkflow(input: OrderInput): Promise<Order
     // Step 3: Warehouse confirmation (warehouse group)
     log.info('Waiting for shipment confirmation', { orderId: input.orderId });
     compensations.push(() => cancelShipment(input.orderId).then(() => undefined));
-    const shipment = await createTaskAndWait<ShipmentDecision>({
-      taskDefinitionId: input.confirmShipmentTaskDefId,
+    const shipment = await confirmShipment.createAndWait({
       processInstanceId: input.orderId,
-      priority: 'normal',
       inputData: {
         ORDER_ITEMS: input.items,
         SHIPPING_ADDRESS: input.shippingAddress,
@@ -110,7 +88,6 @@ export async function orderFulfillmentWorkflow(input: OrderInput): Promise<Order
         reason: shipment.data.REASON,
       });
 
-      // Business rejection: compensate and route to customer service
       await CancellationScope.nonCancellable(async () => {
         for (const compensate of compensations.reverse()) {
           try {
@@ -120,11 +97,8 @@ export async function orderFulfillmentWorkflow(input: OrderInput): Promise<Order
           }
         }
 
-        // Handle exception (customer-service group)
-        await createTaskAndWait<ExceptionResolution>({
-          taskDefinitionId: input.handleExceptionTaskDefId,
+        await handleException.createAndWait({
           processInstanceId: input.orderId,
-          priority: 'urgent',
           inputData: {
             REASON: shipment.data.REASON,
             REFUNDED: true,
@@ -143,7 +117,6 @@ export async function orderFulfillmentWorkflow(input: OrderInput): Promise<Order
     log.info('Order fulfilled', { orderId: input.orderId, trackingNumber: shipment.data.TRACKING_NUMBER });
     return { status: 'shipped', orderId: input.orderId, trackingNumber: shipment.data.TRACKING_NUMBER };
   } catch (err) {
-    // Unexpected errors: compensate and re-throw
     log.error('Unexpected error in order fulfillment — running compensation', { error: err });
     await CancellationScope.nonCancellable(async () => {
       for (const compensate of compensations.reverse()) {

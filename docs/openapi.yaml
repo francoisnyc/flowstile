@@ -798,6 +798,9 @@ paths:
                   type: string
                   format: uuid
                   pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+                taskDefinitionCode:
+                  type: string
+                  minLength: 1
                 workflowId:
                   type: string
                   minLength: 1
@@ -829,7 +832,6 @@ paths:
                     type: string
                   additionalProperties: {}
               required:
-                - taskDefinitionId
                 - workflowId
       responses:
         "200":

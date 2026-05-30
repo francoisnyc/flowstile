@@ -16,6 +16,14 @@
     "./workflows": {
       "import": "./dist/workflows.js",
       "types": "./dist/workflows.d.ts"
+    },
+    "./process": {
+      "import": "./dist/process.js",
+      "types": "./dist/process.d.ts"
+    },
+    "./worker": {
+      "import": "./dist/worker.js",
+      "types": "./dist/worker.d.ts"
     }
   },
   "scripts": {
@@ -27,7 +35,14 @@
     "@temporalio/activity": "^1.16.1",
     "@temporalio/workflow": "^1.16.1"
   },
+  "peerDependencies": {
+    "@temporalio/worker": "^1.16.1"
+  },
+  "peerDependenciesMeta": {
+    "@temporalio/worker": { "optional": true }
+  },
   "devDependencies": {
+    "@temporalio/worker": "^1.16.1",
     "@types/node": "^22.0.0",
     "typescript": "^5.8.0",
     "vitest": "^3.0.0"

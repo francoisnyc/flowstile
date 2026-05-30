@@ -14,6 +14,7 @@ describe('Task routes', () => {
   let cookie: string;
   let userId: string;
   let taskDefId: string;
+  let taskDefCode: string;
 
   beforeAll(async () => {
     app = await buildApp();
@@ -25,6 +26,7 @@ describe('Task routes', () => {
 
     const { taskDef } = await createTestTaskSetup(app);
     taskDefId = taskDef.id;
+    taskDefCode = taskDef.code;
   });
 
   afterAll(async () => {
@@ -81,6 +83,44 @@ describe('Task routes', () => {
         payload: { taskDefinitionId: '00000000-0000-0000-0000-000000000000', workflowId: 'wf-x' },
       });
       expect(res.statusCode).toBe(404);
+    });
+
+    it('creates a task by taskDefinitionCode instead of UUID', async () => {
+      const res = await authed(app, cookie, {
+        method: 'POST',
+        url: '/tasks',
+        payload: {
+          taskDefinitionCode: taskDefCode,
+          workflowId: 'wf-by-code',
+        },
+      });
+      expect(res.statusCode).toBe(201);
+      const body = res.json<{ status: string; formDefinitionVersion: number }>();
+      expect(body.status).toBe('created');
+      // form version is only set if the right task definition (and its form) was resolved
+      expect(body.formDefinitionVersion).toBe(1);
+    });
+
+    it('returns 400 when both taskDefinitionId and taskDefinitionCode are given', async () => {
+      const res = await authed(app, cookie, {
+        method: 'POST',
+        url: '/tasks',
+        payload: {
+          taskDefinitionId: taskDefId,
+          taskDefinitionCode: taskDefCode,
+          workflowId: 'wf-both',
+        },
+      });
+      expect(res.statusCode).toBe(400);
+    });
+
+    it('returns 400 when neither taskDefinitionId nor taskDefinitionCode is given', async () => {
+      const res = await authed(app, cookie, {
+        method: 'POST',
+        url: '/tasks',
+        payload: { workflowId: 'wf-neither' },
+      });
+      expect(res.statusCode).toBe(400);
     });
 
     it('returns 401 when unauthenticated', async () => {

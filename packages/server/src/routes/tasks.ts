@@ -72,7 +72,8 @@ const TasksQuery = PaginationQuery.extend({
 });
 
 const CreateTaskBody = z.object({
-  taskDefinitionId: z.string().uuid(),
+  taskDefinitionId: z.string().uuid().optional(),
+  taskDefinitionCode: z.string().min(1).optional(),
   workflowId: z.string().min(1),
   processInstanceId: z.string().min(1).optional(),
   priority: z.nativeEnum(Priority).optional(),
@@ -81,7 +82,10 @@ const CreateTaskBody = z.object({
   inputData: z.record(z.string(), z.unknown()).optional(),
   contextData: z.record(z.string(), z.unknown()).optional(),
   submissionData: z.record(z.string(), z.unknown()).optional(),
-});
+}).refine(
+  (b) => Boolean(b.taskDefinitionId) !== Boolean(b.taskDefinitionCode),
+  { message: 'Provide exactly one of taskDefinitionId or taskDefinitionCode' },
+);
 
 const CompleteTaskBody = z.object({
   data: z.record(z.string(), z.unknown()).optional(),
@@ -223,6 +227,7 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
   app.post('/tasks', { ...write, schema: { body: CreateTaskBody, tags: ['Tasks'] } }, async (request, reply) => {
     const {
       taskDefinitionId,
+      taskDefinitionCode,
       workflowId,
       processInstanceId,
       priority,
@@ -234,7 +239,7 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
     } = request.body;
 
     const td = await app.db.getRepository(TaskDefinition).findOne({
-      where: { id: taskDefinitionId },
+      where: taskDefinitionId ? { id: taskDefinitionId } : { code: taskDefinitionCode },
     });
     if (!td) return reply.code(404).send({ error: 'Task definition not found' });
 
@@ -260,7 +265,7 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
     }
 
     const task = await repo().save({
-      taskDefinitionId,
+      taskDefinitionId: td.id,
       workflowId,
       ...(processInstanceId ? { processInstanceId } : {}),
       formDefinitionVersion: form.version,
