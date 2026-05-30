@@ -7,3 +7,4 @@ export { TaskDefinition } from './task-definition.entity.js';
 export { Task } from './task.entity.js';
 export { SignalOutbox } from './signal-outbox.entity.js';
 export { Attachment } from './attachment.entity.js';
+export { Case } from './case.entity.js';

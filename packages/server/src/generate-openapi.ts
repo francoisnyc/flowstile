@@ -16,6 +16,7 @@ import { formRoutes } from './routes/forms.js';
 import { processRoutes } from './routes/processes.js';
 import { taskRoutes } from './routes/tasks.js';
 import { attachmentRoutes } from './routes/attachments.js';
+import { caseRoutes } from './routes/cases.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -39,6 +40,7 @@ async function main() {
   await app.register(processRoutes);
   await app.register(taskRoutes);
   await app.register(attachmentRoutes);
+  await app.register(caseRoutes);
 
   await app.ready();
 

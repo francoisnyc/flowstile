@@ -22,6 +22,8 @@ import { validateAndCollectReferences } from '../common/attachments.js';
 import { Attachment } from '../entities/attachment.entity.js';
 import { AttachmentStatus } from '../common/enums.js';
 import { In } from 'typeorm';
+import { Case } from '../entities/case.entity.js';
+import { extractScalarVariables } from '../common/cases.js';
 
 function serializeTask(task: Task) {
   return {
@@ -269,6 +271,25 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
       contextData: contextData ?? {},
       submissionData: submissionData ?? {},
     });
+
+    // Lazily upsert a Case row the first time a task is created for a workflow instance.
+    // If two tasks race on the same processInstanceId the unique constraint causes one
+    // insert to fail — safe to ignore.
+    if (processInstanceId) {
+      const caseRepo = app.db.getRepository(Case);
+      const existing = await caseRepo.findOne({ where: { processInstanceId } });
+      if (!existing) {
+        try {
+          await caseRepo.save({
+            processInstanceId,
+            processDefinitionId: td.processDefinitionId,
+            variables: extractScalarVariables(inputData ?? {}),
+          });
+        } catch {
+          // Concurrent insert on the unique key — the case row already exists.
+        }
+      }
+    }
 
     return reply.code(201).send(serializeTask(task));
   });
