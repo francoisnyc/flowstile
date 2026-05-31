@@ -28,7 +28,8 @@ if (result.data.DECISION === 'approved') {
 - **SDK** — `createTaskAndWait` with typed generics, timeout, and cancellation
 - **Signal-based integration** — completion data delivered back to Temporal as signals
 - **Saga support** — compensation patterns with human exception handling
-- **Role-based visibility** — server-side field filtering based on user roles/groups
+- **Need-to-know visibility** — server-side task/case scoping: users see only tasks they're assigned to or a candidate for; cases inherit task visibility; oversight roles see all
+- **Field-level visibility** — server-side field filtering based on user roles/groups
 - **Task state machine** — explicit lifecycle (created, claimed, completed, cancelled)
 
 ## Project Structure

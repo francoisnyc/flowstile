@@ -92,6 +92,7 @@ paths:
                       - forms:write
                       - processes:write
                       - processes:start
+                      - cases:read
                       - users:manage
                 expiresAt: {}
               required:
@@ -935,6 +936,14 @@ paths:
                 processInstanceId:
                   type: string
                   minLength: 1
+                candidateGroups:
+                  type: array
+                  items:
+                    type: string
+                candidateUsers:
+                  type: array
+                  items:
+                    type: string
                 priority:
                   type: string
                   enum:

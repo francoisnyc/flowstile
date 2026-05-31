@@ -181,7 +181,9 @@ A `TaskDefinition` describes a reusable human task type within a process. It bin
 
 This is the template developers and operators configure once and reuse many times.
 
-Candidate users and groups are not just inbox hints — they gate who may claim a task. If both `candidateGroups` and `candidateUsers` are empty, the task is open to any user with `tasks:write`. If either is set, only matching users (by group membership or email) may claim it; everyone else receives `403`.
+Candidate users and groups are not just inbox hints — they are the **need-to-know boundary** for who may *see* a task, not only who may claim it. At task creation they are snapshotted onto the task instance (and can be overridden per-instance on `POST /tasks` / `createTaskAndWait`); changing the definition later never rebinds in-flight tasks.
+
+A non-oversight user can see a task only when they are its assignee, a candidate user (by email), or a member of a candidate group (by name). A task with **no** candidates and **no** assignee is visible only to oversight — it does not fall open to every `tasks:write` holder. List/search endpoints are SQL-scoped; single-task reads (and claim/unclaim/complete/cancel) return **`404`** — not `403` — for tasks the caller can't see, so existence is never leaked. Oversight (`tasks:manage`, or a service credential) bypasses this scoping.
 
 ### Tasks
 
@@ -232,9 +234,12 @@ Reassignment is modeled as `unclaim` followed by `claim`, rather than as a bespo
 
 ## Visibility And Security Model
 
-Flowstile applies role and group visibility rules on the server side.
+Flowstile enforces visibility on the server in two independent layers.
 
-When a user opens a task, the server evaluates the form's `visibilityRules` against that user's roles and groups. Fields the user should not see are removed from:
+**Layer 1 — which tasks/cases you can see (need-to-know instance scope).** A non-oversight user sees a task only if they are its assignee, a candidate user, or a candidate-group member; an uncandidated, unassigned task is visible only to oversight. Cases inherit this: a case is visible if you started it, can see one of its tasks, or hold case oversight (`cases:read` / `tasks:manage`). List/search endpoints are filtered in SQL; single-item reads return `404` (not `403`) for anything you can't see, so existence is never leaked. See *Task Definitions* and the runtime contract for the full rules.
+
+**Layer 2 — which fields within a task you can see (form visibility rules).**
+When a user opens a task they can see, the server evaluates the form's `visibilityRules` against that user's roles and groups. Fields the user should not see are removed from:
 
 - the JSON Schema
 - the UI Schema
@@ -281,15 +286,16 @@ The Flowstile API is organized around the resources the product exposes:
 
 The most important runtime endpoints are:
 
-- `POST /tasks` to create a task instance
-- `GET /tasks` to list tasks (filter by `status`, `assigneeId`, `group`, `signalStatus`)
-- `GET /tasks/:id` to retrieve a task with form schema filtered for the current user
-- `POST /tasks/search` to search tasks by business variables stored in `inputData`, `contextData`, or `submissionData`
-- `POST /tasks/:id/claim` (enforces candidate-user/group eligibility)
+- `POST /tasks` to create a task instance (accepts per-instance `candidateUsers`/`candidateGroups` overrides)
+- `GET /tasks` to list tasks (filter by `status`, `assigneeId`, `group`, `signalStatus`); results are scoped to the caller's need-to-know set
+- `GET /tasks/:id` to retrieve a task with form schema filtered for the current user — returns `404` if the caller can't see the task
+- `POST /tasks/search` to search tasks by business variables in `inputData`/`contextData`/`submissionData`; also need-to-know scoped (no search oracle)
+- `POST /tasks/:id/claim` (need-to-know scoped; `404` for tasks you can't see)
 - `POST /tasks/:id/unclaim`
 - `POST /tasks/:id/complete`
 - `POST /tasks/:id/cancel`
 - `POST /tasks/:id/retry-signal` to replay a failed Temporal signal (requires `tasks:manage`)
+- `GET /cases`, `GET /cases/:id`, `GET /cases/by-process-instance/:processInstanceId`, and the `/entity` endpoints — all scoped to cases you started, are involved in, or oversee (`cases:read` / `tasks:manage`)
 
 ### Task Variable Search
 

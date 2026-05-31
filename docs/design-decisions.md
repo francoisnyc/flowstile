@@ -108,6 +108,22 @@ Flowstile should keep the explicit `inputData`, `contextData`, and `submissionDa
 
 If future implementation pressure suggests collapsing these concepts for convenience, that change should be treated as a real architectural decision rather than a harmless simplification.
 
+## Why Visibility Is Need-to-Know, Not Just Permission-Gated
+
+A coarse permission like `tasks:read` answers "may this user use the inbox at all" — but it does not answer "*which* tasks." Treating `tasks:read` as "see every task" leaks the entire work queue to anyone who can open the inbox: who is being investigated, which customers have escalations, how many exceptions are open. For a human-task layer that sits in front of sensitive business processes, that is the wrong default.
+
+Flowstile instead follows the model Camunda established: a task is visible only to those with a reason to act on it — its assignee, its candidate users, or members of its candidate groups. Everyone else gets nothing, and a task with no candidates and no assignee is visible only to oversight rather than falling open to the whole tenant.
+
+Three decisions fall out of this:
+
+- **Candidates are per-instance, snapshotted at creation.** The task definition supplies defaults, but the read boundary lives on the task itself (`candidateUsers`/`candidateGroups` columns), overridable per `POST /tasks`. This mirrors form-version locking: changing a definition never silently re-scopes work already in flight, and a workflow can route a specific instance to a specific reviewer.
+
+- **Hidden means 404, not 403.** A `403` on `GET /tasks/:id` confirms the task exists — enough to enumerate IDs and map the queue. Returning `404` for anything outside your need-to-know set means existence itself is not leaked, and the same rule covers claim/unclaim/complete/cancel and the search endpoint (so filtering on business fields can't be used as an oracle).
+
+- **Case visibility is derived, not stored.** Rather than maintaining a separate per-case ACL (Camunda 7's authorization rows), a case is visible if you started it, can see one of its tasks, or hold oversight (`cases:read` / `tasks:manage`). One rule, evaluated at query time, keeps task and case scope consistent by construction.
+
+Oversight is the deliberate escape hatch: the workflow engine (a service credential) and human supervisors (`tasks:manage`, or `cases:read` for cases) bypass instance scope entirely, because triage, reassignment, and auditing require a queue-wide view. The boundary is *need-to-know for operators, full-visibility for oversight* — not all-or-nothing.
+
 ## The Case Entity: An Authoritative, Read-Back Business-Data Tier
 
 A case is a thin entity anchored on `processInstanceId` that aggregates the tasks and attachments sharing that key. Cases need somewhere to hold a small amount of cross-task business data — the facts that identify and summarize the case (applicant, amount, current stage) and that later steps may need to act on.

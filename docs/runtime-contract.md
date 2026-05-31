@@ -280,76 +280,87 @@ Flowstile v1 should separate capability authorization from task eligibility.
 
 Capability authorization answers: what actions may this user perform at all?
 
-Examples:
+The implemented permission set:
 
-- `tasks:read`
-- `tasks:claim`
-- `tasks:complete`
-- `tasks:cancel`
-- `forms:read`
-- `forms:write`
+- `tasks:read` — use the inbox (list/open tasks within need-to-know scope)
+- `tasks:write` — claim, unclaim, complete, cancel
+- `tasks:manage` — oversight: see and act on every task, bypassing instance scope
+- `cases:read` — oversight: see every case, bypassing case scope
+- `forms:write` — author and publish forms
+- `processes:write` — define processes and task definitions
+- `processes:start` — start a process instance from the portal
+- `users:manage` — administer users, roles, and groups
 
-These permissions come from roles.
+These permissions come from roles. A service credential (API key) is treated as full oversight for tasks and cases.
 
-### Task Eligibility
+### Task Eligibility (Need-to-Know)
 
-Task eligibility answers: which specific task instances may this user act on?
+Task eligibility answers: which specific task instances may this user see and act on?
 
-A user is task-eligible when one of the following is true:
+`candidateUsers` and `candidateGroups` are **per-instance** columns on the task. They are snapshotted from the task definition at creation time (and may be overridden on `POST /tasks`); in-flight tasks are never retroactively rebound when the definition's candidate lists change.
+
+A non-oversight user is task-eligible when one of the following is true:
 
 - the task is assigned to that user
-- the user is listed in `candidateUsers`
-- the user belongs to a group listed in `candidateGroups`
+- the user's email is listed in the task's `candidateUsers`
+- the user belongs to a group listed in the task's `candidateGroups`
 
-Eligibility is task-instance scope. Capability is product scope. Both must pass for task operations.
+This is a strict need-to-know boundary. A task with **no** candidates and **no** assignee is visible only to oversight — it does not fall open to every `tasks:read` holder.
 
-The same principle applies to context delivery. A user may be generally authorized to read tasks but still receive a narrower effective context view based on role/group visibility policy.
+Eligibility is task-instance scope. Capability (permissions) is product scope. Both must pass for task operations.
+
+**Oversight** bypasses instance scoping entirely:
+
+- a **service credential** (the workflow engine), or
+- a human holding `tasks:manage` (all tasks), or — for cases — `cases:read` (all cases).
+
+The same principle applies to context delivery. A user authorized to read a task still receives a narrower effective field view based on the form's role/group visibility policy.
 
 ## Task Access Rules
 
-The v1 task access rules should be explicit.
+These rules are enforced server-side, not in the browser.
 
-### List and Open
+### List and Search
 
-To list or open a task, the user must:
+`GET /tasks` and `POST /tasks/search` are **SQL-scoped**: the query is narrowed to rows the caller is eligible for (assignee, candidate user, or candidate group), so ineligible tasks are never returned. Oversight principals skip the narrowing. This also closes the search-oracle: a caller cannot probe for hidden tasks by filtering on their fields.
 
-- have `tasks:read`
-- and either be task-eligible or hold an explicit administrative override permission
+### Open
+
+`GET /tasks/:id` requires `tasks:read` **and** eligibility. When the task exists but the caller is not eligible, the server returns **`404 Not Found`** — not `403` — so that task existence is not leaked.
 
 ### Claim
 
 To claim a task, the user must:
 
-- have `tasks:claim`
-- be task-eligible (email listed in `candidateUsers`, or a member of a group listed in `candidateGroups`, or the task has no restrictions)
+- have `tasks:write`
+- be eligible — and the same `404` rule applies: an ineligible caller gets `404`, not `403`
 - and the task must be in `created` state
 
-If `candidateGroups` and `candidateUsers` are both empty, the task is open to any user with `tasks:write`. If either list is non-empty, the server enforces eligibility and returns `403 Forbidden` for ineligible callers. `candidateUsers` entries are matched against the user's email address.
+When `candidateGroups` and `candidateUsers` are both empty, the task is uncandidated and only oversight can see (and therefore claim) it.
 
 ### Unclaim
 
-To unclaim a task, the user must:
-
-- have `tasks:claim`
-- be the current assignee
-- or hold explicit administrative override permission
+To unclaim a task, the user must be eligible to see it (else `404`), have `tasks:write`, and either be the current assignee or hold `tasks:manage`.
 
 ### Complete
 
-To complete a task, the user must:
-
-- have `tasks:complete`
-- be the current assignee
-- and the task must pass submission validation
+To complete a task, the user must be eligible to see it (else `404`), have `tasks:write`, be the current assignee, and the submission must pass validation.
 
 ### Cancel
 
-To cancel a task, the user must:
+To cancel a task, the user must be eligible to see it (else `404`), have `tasks:write`, and either be the assignee, hold `tasks:manage`, or (for a `created` task) act through the trusted workflow/server path.
 
-- have `tasks:cancel`
-- and either hold explicit administrative override permission or act through a trusted system path defined by the workflow/server integration
+The `404`-over-`403` rule is deliberate: every single-task operation hides existence from non-eligible callers. Oversight (`tasks:manage` / service) sidesteps all of the above.
 
-Administrative override should be explicit. It should not be an accidental side effect of broad read/write access.
+## Case Access Rules
+
+A **case** inherits its visibility from its tasks. A case is visible to a caller who:
+
+- **started** it (`startedById` matches), or
+- can see **at least one** of its tasks (by the task eligibility rules above), or
+- holds case oversight — `cases:read` or `tasks:manage`, or is a service credential.
+
+This applies to `GET /cases` (list is filtered per case), `GET /cases/:id`, `GET /cases/by-process-instance/:processInstanceId`, and every `/entity` read and write endpoint. As with tasks, a case the caller may not see returns **`404`**, not `403`.
 
 ## Unclaim and Reclaim Semantics
 

@@ -18,7 +18,14 @@ Five packages in a pnpm monorepo:
 
 Full OpenAPI 3.1 spec: `docs/openapi.yaml`
 
-All list endpoints return `{ items, total, limit, offset }`. Auth is JWT via HttpOnly cookie or Bearer header. Permissions are string-based (`tasks:read`, `tasks:write`, `forms:write`, etc.) assigned through roles.
+All list endpoints return `{ items, total, limit, offset }`. Auth is JWT via HttpOnly cookie or Bearer header. Permissions are string-based (`tasks:read`, `tasks:write`, `tasks:manage`, `cases:read`, `forms:write`, `processes:write`, `processes:start`, `users:manage`) assigned through roles.
+
+### Visibility (Need-to-Know)
+
+Two independent server-side layers:
+
+- **Instance scope** — a non-oversight user sees a task only if they are its assignee, a candidate user (by email), or a candidate-group member (by name). Tasks carry per-instance `candidateUsers`/`candidateGroups`, snapshotted from the task definition at creation and overridable on `POST /tasks`. An uncandidated, unassigned task is visible only to oversight. List/search are SQL-scoped; single-task reads + claim/unclaim/complete/cancel return **`404`** (not `403`) for tasks the caller can't see, so existence is never leaked. Cases inherit: visible if you started it, can see one of its tasks, or hold case oversight. Oversight = service credential, `tasks:manage` (all tasks), or `cases:read` (all cases). Core logic in `packages/server/src/common/task-scope.ts`.
+- **Field scope** — the form's `visibilityRules` filter individual fields (schema + data) server-side before delivery.
 
 ### Task State Machine
 
@@ -59,7 +66,9 @@ const result = await createTaskAndWait<{ DECISION: 'approved' | 'rejected' }>({
   taskDefinitionId: '...',
   inputData: { ... },
   contextData: { ... },
-  timeoutMs: 86400000, // optional
+  candidateUsers: ['reviewer@example.com'],  // optional per-instance need-to-know override
+  candidateGroups: ['loan-officers'],        // optional
+  timeoutMs: 86400000,                       // optional
 });
 // result.data, result.completedBy, result.completedAt, result.formVersion
 ```
@@ -128,9 +137,11 @@ If you are reimplementing Flowstile in a different language or framework:
    - `packages/server/test/integration/` — 47 integration tests defining exact API behavior
    - `packages/sdk/test/` — 18 unit tests for client auth/retry and workflow timeout/cancellation logic
    - `e2e/order-fulfillment.spec.ts` — 9 end-to-end tests covering happy path, saga compensation, and early rejection
+   - `e2e/visibility-scope.spec.ts` — need-to-know task/case visibility (group/user/orphan scoping, 404-not-403, case inheritance)
 
 4. **Key implementation details:**
    - Task completion validates state machine BEFORE submission data (409 before 422)
+   - Need-to-know visibility: non-oversight users see a task only as assignee/candidate-user/candidate-group; list/search SQL-scoped; single-task reads + claim/unclaim/complete/cancel return 404 (not 403) for hidden tasks; cases inherit visibility from their tasks + `startedById`
    - Form visibility rules filter both schema and data server-side — the browser never receives hidden fields
    - Signal delivery to Temporal is retried with backoff but never fails the HTTP response
    - The `PUT /forms/:code/draft` endpoint returns 200 for update, 201 for create
