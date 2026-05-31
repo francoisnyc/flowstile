@@ -25,6 +25,7 @@ import { AttachmentStatus } from '../common/enums.js';
 import { In } from 'typeorm';
 import { Case } from '../entities/case.entity.js';
 import { extractScalarVariables } from '../common/cases.js';
+import { applyTaskScope, canSeeTask } from '../common/task-scope.js';
 
 function serializeTask(task: Task) {
   return {
@@ -76,6 +77,10 @@ const CreateTaskBody = z.object({
   taskDefinitionCode: z.string().min(1).optional(),
   workflowId: z.string().min(1),
   processInstanceId: z.string().min(1).optional(),
+  // Per-instance candidate overrides. When omitted, the task inherits the task
+  // definition's candidates. candidateUsers are emails; candidateGroups are names.
+  candidateGroups: z.array(z.string()).optional(),
+  candidateUsers: z.array(z.string()).optional(),
   priority: z.nativeEnum(Priority).optional(),
   dueDate: z.coerce.date().optional(),
   followUpDate: z.coerce.date().optional(),
@@ -147,8 +152,8 @@ function baseTaskQuery(
 
   if (filters.status) qb.andWhere('t.status = :status', { status: filters.status });
   if (filters.assigneeId) qb.andWhere('t.assigneeId = :assigneeId', { assigneeId: filters.assigneeId });
-  // Filter to tasks whose candidateGroups contains the given group name
-  if (filters.group) qb.andWhere(':group = ANY(td.candidateGroups)', { group: filters.group });
+  // Filter to tasks whose (instance) candidateGroups contains the given group name
+  if (filters.group) qb.andWhere(':group = ANY(t.candidateGroups)', { group: filters.group });
   if (filters.signalStatus) qb.andWhere('t.signalStatus = :signalStatus', { signalStatus: filters.signalStatus });
 
   return qb;
@@ -158,11 +163,11 @@ function baseTaskQuery(
 // An empty candidateGroups+candidateUsers means open to anyone with tasks:write.
 function isEligibleToClaim(
   user: { email: string; groups: { name: string }[] },
-  td: { candidateGroups: string[]; candidateUsers: string[] },
+  candidates: { candidateGroups: string[]; candidateUsers: string[] },
 ): boolean {
-  if (td.candidateGroups.length === 0 && td.candidateUsers.length === 0) return true;
+  if (candidates.candidateGroups.length === 0 && candidates.candidateUsers.length === 0) return true;
   const userGroupNames = user.groups.map((g) => g.name);
-  return td.candidateUsers.includes(user.email) || td.candidateGroups.some((g) => userGroupNames.includes(g));
+  return candidates.candidateUsers.includes(user.email) || candidates.candidateGroups.some((g) => userGroupNames.includes(g));
 }
 
 function applyVariableFilters(
@@ -201,6 +206,7 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
     const { status, assigneeId, group, signalStatus, limit, offset } = request.query;
 
     const qb = baseTaskQuery(repo(), { status, assigneeId, group, signalStatus }).limit(limit).offset(offset);
+    applyTaskScope(qb, request.principal!);
 
     const [items, total] = await qb.getManyAndCount();
     return paginate(items.map(serializeTask), total, limit, offset);
@@ -214,6 +220,9 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
     } = request.body;
 
     const qb = baseTaskQuery(repo(), { status, assigneeId, group, signalStatus }).limit(limit).offset(offset);
+    // Scope the search to tasks the caller may see, so variable filters can't be
+    // used as an oracle to probe values on tasks they can't read.
+    applyTaskScope(qb, request.principal!);
 
     const counter = { n: 0 };
     applyVariableFilters(qb, SEARCHABLE_COLUMNS.input, inputVariables, counter);
@@ -230,6 +239,8 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
       taskDefinitionCode,
       workflowId,
       processInstanceId,
+      candidateGroups,
+      candidateUsers,
       priority,
       dueDate,
       followUpDate,
@@ -268,6 +279,10 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
       taskDefinitionId: td.id,
       workflowId,
       ...(processInstanceId ? { processInstanceId } : {}),
+      // Snapshot candidates onto the instance so reads can be scoped without a
+      // join, and so a definition change never retroactively re-scopes live tasks.
+      candidateGroups: candidateGroups ?? td.candidateGroups,
+      candidateUsers: candidateUsers ?? td.candidateUsers,
       formDefinitionVersion: form.version,
       status: TaskStatus.CREATED,
       priority: priority ?? td.defaultPriority,
@@ -323,6 +338,9 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
         relations: ['taskDefinition', 'assignee'],
       });
       if (!task) return reply.code(404).send({ error: 'Task not found' });
+      // Need-to-know: a task the caller can't see is indistinguishable from one
+      // that doesn't exist (404, not 403, to avoid leaking existence).
+      if (!canSeeTask(task, request.principal!)) return reply.code(404).send({ error: 'Task not found' });
 
       const form = await app.db.getRepository(FormDefinition).findOne({
         where: {
@@ -348,7 +366,7 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
       const isAssignee = task.assigneeId === user.id;
 
       const actions = {
-        canClaim: hasWrite && TaskStateMachine.canTransition(task.status, 'claim') && isEligibleToClaim(user, task.taskDefinition),
+        canClaim: hasWrite && TaskStateMachine.canTransition(task.status, 'claim') && isEligibleToClaim(user, task),
         canUnclaim: TaskStateMachine.canTransition(task.status, 'unclaim') && (isAssignee || hasManage),
         canComplete: hasWrite && TaskStateMachine.canTransition(task.status, 'complete') && isAssignee,
         canCancel: hasWrite && TaskStateMachine.canTransition(task.status, 'cancel') && (task.status === 'created' || isAssignee || hasManage),
@@ -383,8 +401,9 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
 
       const task = await repo().findOne({ where: { id }, relations: ['taskDefinition'] });
       if (!task) return reply.code(404).send({ error: 'Task not found' });
+      if (!canSeeTask(task, request.principal!)) return reply.code(404).send({ error: 'Task not found' });
 
-      if (!isEligibleToClaim(user, task.taskDefinition)) {
+      if (!isEligibleToClaim(user, task)) {
         return reply.code(403).send({ error: 'You are not eligible to claim this task' });
       }
 
@@ -413,6 +432,7 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
 
       const task = await repo().findOne({ where: { id } });
       if (!task) return reply.code(404).send({ error: 'Task not found' });
+      if (!canSeeTask(task, request.principal!)) return reply.code(404).send({ error: 'Task not found' });
 
       try {
         task.status = TaskStateMachine.transition(task.status, 'unclaim');
@@ -448,6 +468,7 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
         relations: ['taskDefinition'],
       });
       if (!task) return reply.code(404).send({ error: 'Task not found' });
+      if (!canSeeTask(task, request.principal!)) return reply.code(404).send({ error: 'Task not found' });
 
       // Check state machine first — no point validating data for a non-completable task
       try {
@@ -643,6 +664,7 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
 
       const task = await repo().findOne({ where: { id } });
       if (!task) return reply.code(404).send({ error: 'Task not found' });
+      if (!canSeeTask(task, actor)) return reply.code(404).send({ error: 'Task not found' });
 
       try {
         task.status = TaskStateMachine.transition(task.status, 'cancel');

@@ -24,7 +24,7 @@ beforeAll(async () => {
   await app.ready();
 
   const user = await createTestUser(app, {
-    permissions: [Permissions.TASKS_READ, Permissions.TASKS_WRITE],
+    permissions: [Permissions.TASKS_READ, Permissions.TASKS_WRITE, Permissions.TASKS_MANAGE],
   });
   cookie = await loginAs(app, user.email);
 });

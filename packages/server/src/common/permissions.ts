@@ -5,6 +5,7 @@ export const Permissions = {
   FORMS_WRITE: 'forms:write',
   PROCESSES_WRITE: 'processes:write',
   PROCESSES_START: 'processes:start',
+  CASES_READ: 'cases:read',
   USERS_MANAGE: 'users:manage',
 } as const;
 

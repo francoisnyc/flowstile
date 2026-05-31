@@ -15,6 +15,8 @@ import { toReference } from '../common/attachments.js';
 import { deriveCaseStatus, type CaseStatus } from '../common/cases.js';
 import { validateAgainstSchema } from '../validation/schema-validator.js';
 import { applyJsonPatch, JsonPatchError, type JsonPatchOperation } from '../common/json-patch.js';
+import { canSeeCase, principalSeesAllCases } from '../common/task-scope.js';
+import type { AuthPrincipal } from '../plugins/auth.js';
 
 const UuidParam = z.object({ id: z.string().uuid() });
 const PidParam = z.object({ processInstanceId: z.string().min(1) });
@@ -95,6 +97,7 @@ async function loadCaseDetail(
   processName: string | null,
   userRoleNames: string[],
   userGroupNames: string[],
+  principal: AuthPrincipal,
 ) {
   const tasks = await app.db
     .getRepository(Task)
@@ -103,6 +106,10 @@ async function loadCaseDetail(
       relations: ['taskDefinition', 'assignee'],
       order: { createdAt: 'ASC' },
     });
+
+  // Need-to-know: visible only to those involved in the case (started it or can
+  // see one of its tasks) or holding oversight. null → handler returns 404.
+  if (!canSeeCase(c.startedById, tasks, principal)) return null;
 
   const status = deriveCaseStatus(tasks);
 
@@ -215,12 +222,13 @@ export const caseRoutes: FastifyPluginAsyncZod = async (app) => {
   // GET /cases
   app.get('/cases', { ...read, schema: { querystring: CasesQuery, tags: ['Cases'] } }, async (request) => {
     const { status: statusFilter, limit, offset } = request.query;
+    const principal = request.principal!;
 
-    const [allCases, total] = await caseRepo().findAndCount({
+    const [allCases] = await caseRepo().findAndCount({
       order: { createdAt: 'DESC' },
     });
 
-    // Batch-load tasks for all cases in one query
+    // Batch-load tasks for all cases in one query (needed for involvement scoping)
     const processInstanceIds = allCases.map((c) => c.processInstanceId);
     const allTasks =
       processInstanceIds.length > 0
@@ -245,12 +253,18 @@ export const caseRoutes: FastifyPluginAsyncZod = async (app) => {
         : [];
     const pdNameById = new Map(processDefs.map((p) => [p.id, p.name]));
 
-    let items = allCases.map((c) => {
-      const tasks = tasksByPid.get(c.processInstanceId) ?? [];
-      const status = deriveCaseStatus(tasks);
-      const processName = c.processDefinitionId ? (pdNameById.get(c.processDefinitionId) ?? null) : null;
-      return serializeCaseSummary(c, tasks, processName, status);
-    });
+    // Need-to-know: each case is visible only to those involved or holding oversight.
+    let items = allCases
+      .filter((c) => {
+        const tasks = tasksByPid.get(c.processInstanceId) ?? [];
+        return canSeeCase(c.startedById, tasks, principal);
+      })
+      .map((c) => {
+        const tasks = tasksByPid.get(c.processInstanceId) ?? [];
+        const status = deriveCaseStatus(tasks);
+        const processName = c.processDefinitionId ? (pdNameById.get(c.processDefinitionId) ?? null) : null;
+        return serializeCaseSummary(c, tasks, processName, status);
+      });
 
     if (statusFilter) {
       items = items.filter((i) => i.status === statusFilter);
@@ -275,7 +289,9 @@ export const caseRoutes: FastifyPluginAsyncZod = async (app) => {
       const userGroupNames = user.groups.map((g) => g.name);
       const processName = await resolveProcessName(c.processDefinitionId);
 
-      return loadCaseDetail(app, c, processName, userRoleNames, userGroupNames);
+      const detail = await loadCaseDetail(app, c, processName, userRoleNames, userGroupNames, request.principal!);
+      if (!detail) return reply.code(404).send({ error: 'Case not found' });
+      return detail;
     },
   );
 
@@ -295,7 +311,9 @@ export const caseRoutes: FastifyPluginAsyncZod = async (app) => {
       const userGroupNames = user.groups.map((g) => g.name);
       const processName = await resolveProcessName(c.processDefinitionId);
 
-      return loadCaseDetail(app, c, processName, userRoleNames, userGroupNames);
+      const detail = await loadCaseDetail(app, c, processName, userRoleNames, userGroupNames, request.principal!);
+      if (!detail) return reply.code(404).send({ error: 'Case not found' });
+      return detail;
     },
   );
 
@@ -318,6 +336,14 @@ export const caseRoutes: FastifyPluginAsyncZod = async (app) => {
       const { processInstanceId } = request.params;
       const c = await caseRepo().findOne({ where: { processInstanceId } });
       if (!c) return reply.code(404).send({ error: 'Case not found' });
+
+      if (!principalSeesAllCases(request.principal!)) {
+        const tasks = await app.db.getRepository(Task).find({ where: { processInstanceId } });
+        if (!canSeeCase(c.startedById, tasks, request.principal!)) {
+          return reply.code(404).send({ error: 'Case not found' });
+        }
+      }
+
       return { entity: c.entity, entityVersion: c.entityVersion };
     },
   );
@@ -390,6 +416,16 @@ export const caseRoutes: FastifyPluginAsyncZod = async (app) => {
     async (request, reply) => {
       const { processInstanceId } = request.params;
       const { patch, expectedVersion } = request.body;
+
+      if (!principalSeesAllCases(request.principal!)) {
+        const c = await caseRepo().findOne({ where: { processInstanceId } });
+        if (!c) return reply.code(404).send({ error: 'Case not found' });
+        const tasks = await app.db.getRepository(Task).find({ where: { processInstanceId } });
+        if (!canSeeCase(c.startedById, tasks, request.principal!)) {
+          return reply.code(404).send({ error: 'Case not found' });
+        }
+      }
+
       return writeEntity(
         processInstanceId,
         expectedVersion,
@@ -406,6 +442,16 @@ export const caseRoutes: FastifyPluginAsyncZod = async (app) => {
     async (request, reply) => {
       const { processInstanceId } = request.params;
       const { entity, expectedVersion } = request.body;
+
+      if (!principalSeesAllCases(request.principal!)) {
+        const c = await caseRepo().findOne({ where: { processInstanceId } });
+        if (!c) return reply.code(404).send({ error: 'Case not found' });
+        const tasks = await app.db.getRepository(Task).find({ where: { processInstanceId } });
+        if (!canSeeCase(c.startedById, tasks, request.principal!)) {
+          return reply.code(404).send({ error: 'Case not found' });
+        }
+      }
+
       return writeEntity(processInstanceId, expectedVersion, () => entity, reply);
     },
   );

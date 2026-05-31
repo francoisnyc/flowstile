@@ -22,7 +22,7 @@ describe('Form outcome buttons', () => {
     await app.ready();
 
     const user = await createTestUser(app, {
-      permissions: ['tasks:read', 'tasks:write', 'forms:write'],
+      permissions: ['tasks:read', 'tasks:write', 'tasks:manage', 'forms:write'],
     });
     cookie = await loginAs(app, user.email);
 

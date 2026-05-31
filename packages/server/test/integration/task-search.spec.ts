@@ -18,7 +18,7 @@ describe('POST /tasks/search', () => {
     app = await buildApp();
     await app.ready();
 
-    const user = await createTestUser(app, { permissions: ['tasks:read', 'tasks:write'] });
+    const user = await createTestUser(app, { permissions: ['tasks:read', 'tasks:write', 'tasks:manage'] });
     cookie = await loginAs(app, user.email);
 
     const { taskDef } = await createTestTaskSetup(app);

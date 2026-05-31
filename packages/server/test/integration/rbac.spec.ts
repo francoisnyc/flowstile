@@ -26,18 +26,24 @@ describe('RBAC permission enforcement', () => {
     const { taskDef } = await createTestTaskSetup(app);
     taskDefId = taskDef.id;
 
-    // Create a task via DB shortcut so we have an id to test GET /tasks/:id
-    const fullUser = await createTestUser(app, { permissions: ['tasks:read', 'tasks:write'] });
+    // Create users first so taskReadUser's email can be included as a candidate,
+    // allowing the coarse-permission GET /tasks/:id test to work under need-to-know scoping.
+    const taskReadUser = await createTestUser(app, { permissions: ['tasks:read'] });
+    taskReadCookie = await loginAs(app, taskReadUser.email);
+
+    // fullUser has tasks:manage so they bypass scoping when creating the task
+    const fullUser = await createTestUser(app, { permissions: ['tasks:read', 'tasks:write', 'tasks:manage'] });
     const fullCookie = await loginAs(app, fullUser.email);
     const res = await authed(app, fullCookie, {
       method: 'POST',
       url: '/tasks',
-      payload: { taskDefinitionId: taskDefId, workflowId: `wf-rbac-${Date.now()}` },
+      payload: {
+        taskDefinitionId: taskDefId,
+        workflowId: `wf-rbac-${Date.now()}`,
+        candidateUsers: [taskReadUser.email],
+      },
     });
     taskId = res.json<{ id: string }>().id;
-
-    const taskReadUser = await createTestUser(app, { permissions: ['tasks:read'] });
-    taskReadCookie = await loginAs(app, taskReadUser.email);
 
     const formsUser = await createTestUser(app, { permissions: ['forms:write'] });
     formsWriteCookie = await loginAs(app, formsUser.email);

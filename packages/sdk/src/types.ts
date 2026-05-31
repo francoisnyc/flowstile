@@ -31,6 +31,8 @@ export interface CreateTaskInput {
   inputData?: Record<string, unknown>;
   contextData?: Record<string, unknown>;
   submissionData?: Record<string, unknown>;
+  candidateUsers?: string[];
+  candidateGroups?: string[];
 }
 
 export interface CreateTaskAndWaitInput {
@@ -42,6 +44,12 @@ export interface CreateTaskAndWaitInput {
   followUpDate?: string;
   inputData?: Record<string, unknown>;
   contextData?: Record<string, unknown>;
+  /** Per-instance candidate users (emails). Overrides the task definition's
+   *  candidateUsers for this task instance only. */
+  candidateUsers?: string[];
+  /** Per-instance candidate groups (group names). Overrides the task
+   *  definition's candidateGroups for this task instance only. */
+  candidateGroups?: string[];
   /** Timeout in milliseconds. If the task is not completed within this time,
    *  a TaskTimeoutError is thrown and the task is cancelled (best-effort). */
   timeoutMs?: number;

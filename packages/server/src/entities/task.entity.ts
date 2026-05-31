@@ -50,6 +50,17 @@ export class Task {
   @Column({ type: 'uuid', name: 'assignee_id', nullable: true })
   assigneeId: string | null;
 
+  // Per-instance candidates, snapshotted from the task definition at creation
+  // (or overridden on POST /tasks). These — plus the assignee — are the
+  // need-to-know read boundary: a non-oversight user may only see a task they
+  // are the assignee of, a candidate user of (by email), or a candidate group
+  // member of (by group name).
+  @Column('text', { array: true, default: '{}' })
+  candidateGroups: string[];
+
+  @Column('text', { array: true, default: '{}' })
+  candidateUsers: string[];
+
   @Column({ type: 'jsonb', default: () => "'{}'" })
   inputData: Record<string, unknown>;
 

@@ -56,9 +56,11 @@ describe('POST /tasks/:id/claim — eligibility enforcement', () => {
     return authed(app, cookie, { method: 'POST', url: `/tasks/${taskId}/claim` });
   }
 
-  it('allows claim when candidateGroups and candidateUsers are both empty', async () => {
+  it('allows claim when candidateGroups and candidateUsers are both empty (oversight user)', async () => {
+    // Uncandidated tasks are only visible to oversight (tasks:manage). Anyone
+    // with oversight can claim them — no eligibility restriction when both lists are empty.
     const setup = await createTestTaskSetup(app);
-    const user = await createTestUser(app, { permissions: writePerms });
+    const user = await createTestUser(app, { permissions: [...writePerms, 'tasks:manage'] });
     const cookie = await loginAs(app, user.email);
 
     const taskRes = await authed(app, cookie, {
@@ -116,8 +118,9 @@ describe('POST /tasks/:id/claim — eligibility enforcement', () => {
     const taskId = taskRes.json<{ id: string }>().id;
 
     const res = await authed(app, cookie, { method: 'POST', url: `/tasks/${taskId}/claim` });
-    expect(res.statusCode).toBe(403);
-    expect(res.json<{ error: string }>().error).toMatch(/not eligible/i);
+    // With need-to-know scoping the user can't see the task at all (not in
+    // any candidateGroup), so the server returns 404 to avoid leaking existence.
+    expect(res.statusCode).toBe(404);
   });
 
   it('allows claim when user email is in candidateUsers', async () => {
@@ -162,7 +165,9 @@ describe('POST /tasks/:id/claim — eligibility enforcement', () => {
     const taskId = taskRes.json<{ id: string }>().id;
 
     const res = await authed(app, cookie, { method: 'POST', url: `/tasks/${taskId}/claim` });
-    expect(res.statusCode).toBe(403);
+    // With need-to-know scoping the user can't see the task (not in candidateUsers),
+    // so the server returns 404 to avoid leaking existence.
+    expect(res.statusCode).toBe(404);
   });
 
   it('allows claim when user matches candidateUsers even when candidateGroups is non-empty', async () => {

@@ -20,7 +20,7 @@ describe('Task routes', () => {
     app = await buildApp();
     await app.ready();
 
-    const user = await createTestUser(app, { permissions: ['tasks:read', 'tasks:write'] });
+    const user = await createTestUser(app, { permissions: ['tasks:read', 'tasks:write', 'tasks:manage'] });
     userId = user.id;
     cookie = await loginAs(app, user.email);
 
@@ -322,17 +322,18 @@ describe('Task routes', () => {
       expect(actions.canCancel).toBe(false);
     });
 
-    it('claimed task viewed by non-assignee without tasks:manage: canUnclaim false, canComplete false', async () => {
-      // Create a second user (write perms) and claim the task as them
-      const claimUser = await createTestUser(app, { permissions: ['tasks:read', 'tasks:write'] });
+    it('claimed task viewed by non-assignee candidate: canUnclaim false, canComplete false', async () => {
+      // claimUser and viewUser are both candidates; claimUser claims the task.
+      // viewUser (not the assignee, no tasks:manage) should see canUnclaim=false.
+      const claimUser = await createTestUser(app, { permissions: ['tasks:read', 'tasks:write', 'tasks:manage'] });
       const claimCookie = await loginAs(app, claimUser.email);
+      const viewUser = await createTestUser(app, { permissions: ['tasks:read', 'tasks:write'] });
+      const viewCookie = await loginAs(app, viewUser.email);
 
-      const id = await createTask();
-      // claim as claimUser
+      const id = await createTask({ candidateUsers: [claimUser.email, viewUser.email] });
       await authed(app, claimCookie, { method: 'POST', url: `/tasks/${id}/claim` });
 
-      // view as the main user (not the assignee, no tasks:manage)
-      const res = await authed(app, cookie, { method: 'GET', url: `/tasks/${id}` });
+      const res = await authed(app, viewCookie, { method: 'GET', url: `/tasks/${id}` });
       expect(res.statusCode).toBe(200);
       const { actions } = res.json<{ actions: Actions }>();
       expect(actions.canUnclaim).toBe(false);
@@ -340,7 +341,7 @@ describe('Task routes', () => {
     });
 
     it('user without tasks:write: canClaim false, canCancel false', async () => {
-      const readUser = await createTestUser(app, { permissions: ['tasks:read'] });
+      const readUser = await createTestUser(app, { permissions: ['tasks:read', 'tasks:manage'] });
       const readCookie = await loginAs(app, readUser.email);
 
       const id = await createTask();
