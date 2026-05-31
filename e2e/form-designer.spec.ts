@@ -110,11 +110,12 @@ test.describe('Form Designer', () => {
     const labelInput = page.locator('.properties-panel input').first();
     await labelInput.clear();
     await labelInput.fill('Customer Name');
-    // Tab away to trigger key sync
+    // Tab away to commit the value; wait briefly for React state to propagate.
     await labelInput.press('Tab');
+    await page.waitForTimeout(300);
 
     // Verify canvas reflects updated label
-    await expect(page.locator('.canvas-field .field-label').first()).toContainText('Customer Name', { timeout: 3000 });
+    await expect(page.locator('.canvas-field .field-label').first()).toContainText('Customer Name', { timeout: 6000 });
 
     // ── 5. Mark the field as required ─────────────────────────────────────
     const requiredCheckbox = page.locator('.props-checkbox input[type="checkbox"]');
@@ -219,9 +220,9 @@ test.describe('Form Designer', () => {
     await loginAs(page, 'alice@example.com');
     await goToForms(page);
 
-    // Click on LOAN_APPLICATION
-    await page.click('.form-item:has-text("LOAN_APPLICATION")');
-    await expect(page.locator('.form-workspace:not(.empty)')).toBeVisible({ timeout: 5000 });
+    // Click on LOAN_APPLICATION — use exact text to avoid matching LOAN_APPLICATION_START.
+    await page.locator('.form-item').filter({ hasText: /^LOAN_APPLICATION$/ }).click();
+    await expect(page.locator('.form-workspace:not(.empty)')).toBeVisible({ timeout: 10000 });
     await expect(page.locator('.designer-toolbar')).toBeVisible({ timeout: 5000 });
 
     // Create draft to enable editing

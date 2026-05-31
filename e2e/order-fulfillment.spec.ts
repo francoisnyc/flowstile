@@ -6,13 +6,14 @@ const BASE = 'http://localhost:5173';
 const SERVER = 'http://localhost:3000';
 
 const ROOT = path.resolve(__dirname, '..');
+// Run helpers from the worker package so @temporalio/client resolves correctly
+// (it's a dep of packages/worker, not hoisted to the monorepo root).
+const WORKER_DIR = path.resolve(ROOT, 'packages', 'worker');
 
 function runHelper(script: string, arg: string): string {
-  // Use pnpm exec tsx so the workspace-managed binary is always on PATH,
-  // regardless of where pnpm hoisted it in node_modules.
   return execSync(`pnpm exec tsx --tsconfig ${ROOT}/tsconfig.base.json ${script} '${arg}'`, {
-    cwd: ROOT,
-    stdio: ['pipe', 'pipe', 'pipe'],
+    cwd: WORKER_DIR,
+    stdio: ['pipe', 'pipe', 'inherit'], // inherit stderr so failures are visible
     timeout: 15000,
   }).toString().trim();
 }
