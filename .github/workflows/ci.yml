@@ -14,6 +14,9 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   # ── Fast gate: build + unit + integration ──────────────────────────────────
   build-and-test:
@@ -110,9 +113,11 @@ jobs:
         run: |
           docker compose up -d postgres postgres-temporal temporal
           # Poll until all three health-checks report healthy.
-          timeout 120 bash -c '
+          # 300s: Temporal has a 30s start_period + up to 15×10s retries = 180s max,
+          # plus image pull time on a cold CI runner.
+          timeout 300 bash -c '
             healthy() { docker compose ps -q "$1" | xargs docker inspect --format "{{.State.Health.Status}}" | grep -q healthy; }
-            until healthy postgres && healthy postgres-temporal && healthy temporal; do sleep 3; done'
+            until healthy postgres && healthy postgres-temporal && healthy temporal; do sleep 5; done'
 
       - name: Seed database
         run: pnpm --filter @flowstile/server db:seed
