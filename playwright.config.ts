@@ -9,8 +9,10 @@ export default defineConfig({
   use: {
     baseURL: 'http://localhost:5173',
   },
-  // webServer is only used when CI=true. Locally, rely on an already-running
-  // stack (reuseExistingServer: true) so `pnpm dev` stays your dev workflow.
+  // webServer manages server + UI startup when CI=true.
+  // The worker is started separately in CI (after Temporal is healthy) so it
+  // isn't subject to Playwright's pre-test timeout. Locally, reuseExistingServer
+  // means your existing `pnpm dev` stack is used as-is.
   webServer: [
     {
       command: 'pnpm --filter @flowstile/server dev',
@@ -23,13 +25,6 @@ export default defineConfig({
       url: 'http://localhost:5173',
       reuseExistingServer: !process.env.CI,
       timeout: 30_000,
-    },
-    {
-      command: 'pnpm --filter @flowstile/worker dev',
-      // No health-check URL; wait for the worker's own startup log.
-      stdout: 'Flowstile worker started',
-      reuseExistingServer: !process.env.CI,
-      timeout: 60_000,
     },
   ],
 });

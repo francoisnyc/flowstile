@@ -45,12 +45,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
-
-      - uses: pnpm/action-setup@v4
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -93,12 +93,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
-
-      - uses: pnpm/action-setup@v4
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -116,6 +116,11 @@ jobs:
 
       - name: Seed database
         run: pnpm --filter @flowstile/server db:seed
+
+      - name: Start Temporal worker
+        run: pnpm --filter @flowstile/worker dev &
+        # Worker connects to Temporal at TEMPORAL_ADDRESS; runs in the background
+        # so the step exits immediately and subsequent steps proceed.
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
