@@ -122,17 +122,20 @@ jobs:
       - name: Seed database
         run: pnpm --filter @flowstile/server db:seed
 
+      - name: Start server
+        run: pnpm --filter @flowstile/server start > /tmp/server.log 2>&1 &
+
+      - name: Wait for server to be healthy
+        run: timeout 60 bash -c 'until curl -sf http://localhost:3000/health > /dev/null; do sleep 2; done'
+
       - name: Start Temporal worker
-        # Use the pre-built dist (node dist/main.js) rather than tsx watch —
-        # more reliable in CI since sources are already compiled by `pnpm build`.
-        # Log to file so failures are visible in subsequent steps.
+        # Server must be up first — the SDK health-checks it at startup.
         run: pnpm --filter @flowstile/worker start > /tmp/worker.log 2>&1 &
 
       - name: Wait for worker to connect
         run: |
           sleep 5
           echo "=== worker log ===" && cat /tmp/worker.log || true
-          # Fail fast if the worker process already exited.
           pgrep -f "dist/main.js" > /dev/null || { echo "Worker process not found!"; cat /tmp/worker.log; exit 1; }
 
       - name: Install Playwright browsers

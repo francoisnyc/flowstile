@@ -19,7 +19,9 @@ export default defineConfig({
     {
       command: 'pnpm --filter @flowstile/server dev',
       url: 'http://localhost:3000/health',
-      reuseExistingServer: !process.env.CI,
+      // In CI the server is started explicitly before the worker (which health-checks
+      // it at startup), so Playwright must reuse that process rather than spawn another.
+      reuseExistingServer: true,
       timeout: 60_000,
     },
     {
