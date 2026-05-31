@@ -8,7 +8,7 @@ async function loginAs(page: Page, email: string) {
   await page.fill('input[type="email"], input[name="email"]', email);
   await page.fill('input[type="password"], input[name="password"]', 'password');
   await page.click('button[type="submit"]');
-  await expect(page.locator('.inbox, text=Inbox').first()).toBeVisible({ timeout: 10000 });
+  await expect(page.locator('.inbox').or(page.locator('text=Inbox')).first()).toBeVisible({ timeout: 10000 });
 }
 
 async function goToForms(page: Page) {

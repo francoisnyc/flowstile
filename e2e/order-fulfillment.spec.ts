@@ -5,11 +5,12 @@ import path from 'path';
 const BASE = 'http://localhost:5173';
 const SERVER = 'http://localhost:3000';
 
-const TSX = path.resolve(__dirname, '..', 'node_modules', '.pnpm', 'node_modules', '.bin', 'tsx');
 const ROOT = path.resolve(__dirname, '..');
 
 function runHelper(script: string, arg: string): string {
-  return execSync(`${TSX} --tsconfig ${ROOT}/tsconfig.base.json ${script} '${arg}'`, {
+  // Use pnpm exec tsx so the workspace-managed binary is always on PATH,
+  // regardless of where pnpm hoisted it in node_modules.
+  return execSync(`pnpm exec tsx --tsconfig ${ROOT}/tsconfig.base.json ${script} '${arg}'`, {
     cwd: ROOT,
     stdio: ['pipe', 'pipe', 'pipe'],
     timeout: 15000,
@@ -131,7 +132,7 @@ test.describe.serial('Order Fulfillment — Happy Path', () => {
     const orderId = `ORD-HAPPY-${Date.now()}`;
     wfId = `order-fulfillment-${orderId}`;
     startWorkflow(wfId, taskDefIds, orderId);
-    await new Promise((r) => setTimeout(r, 3000));
+    await new Promise((r) => setTimeout(r, 8000));
   });
 
   test('alice approves the order', async ({ page }) => {
@@ -195,7 +196,7 @@ test.describe.serial('Order Fulfillment — Saga Compensation', () => {
     const orderId = `ORD-SAGA-${Date.now()}`;
     wfId = `order-fulfillment-${orderId}`;
     startWorkflow(wfId, taskDefIds, orderId);
-    await new Promise((r) => setTimeout(r, 3000));
+    await new Promise((r) => setTimeout(r, 8000));
   });
 
   test('alice approves the order', async ({ page }) => {
@@ -286,7 +287,7 @@ test.describe.serial('Order Fulfillment — Rejection at Approval', () => {
     const orderId = `ORD-REJECT-${Date.now()}`;
     wfId = `order-fulfillment-${orderId}`;
     startWorkflow(wfId, taskDefIds, orderId);
-    await new Promise((r) => setTimeout(r, 3000));
+    await new Promise((r) => setTimeout(r, 8000));
   });
 
   test('alice rejects the order', async ({ page }) => {

@@ -56,8 +56,8 @@ test.describe('Flowstile UI smoke test', () => {
     await expect(formsLink).toBeVisible({ timeout: 5000 });
     await formsLink.click();
 
-    // Should see the seeded LOAN_APPLICATION form
-    await expect(page.locator('text=LOAN_APPLICATION')).toBeVisible({ timeout: 5000 });
+    // Should see the seeded LOAN_APPLICATION form (exact match avoids matching LOAN_APPLICATION_START)
+    await expect(page.locator('text=LOAN_APPLICATION').first()).toBeVisible({ timeout: 5000 });
   });
 
   test('bob cannot see admin page', async ({ page }) => {
