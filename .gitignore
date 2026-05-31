@@ -6,5 +6,6 @@ dist/
 .DS_Store
 .worktrees/
 test-results/
+playwright-report/
 docs/superpowers/
 .superpowers/
