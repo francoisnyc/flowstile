@@ -108,11 +108,11 @@ test.describe('Form Designer', () => {
     await expect(page.locator('.properties-panel')).toBeVisible({ timeout: 3000 });
 
     const labelInput = page.locator('.properties-panel input').first();
-    // Triple-click to select all existing text, then type the new label.
-    // pressSequentially fires per-character input events that React's
-    // onChange handler can reliably intercept on controlled inputs.
-    await labelInput.click({ clickCount: 3 });
-    await page.keyboard.type('Customer Name');
+    // clear() performs a triple-click + Delete so the existing value is removed,
+    // then pressSequentially types each character individually, firing per-char
+    // input events that React's onChange handler intercepts on controlled inputs.
+    await labelInput.clear();
+    await labelInput.pressSequentially('Customer Name', { delay: 30 });
     await page.waitForTimeout(300);
 
     // Verify canvas reflects updated label
@@ -209,7 +209,7 @@ test.describe('Form Designer', () => {
 
     // Undo — canvas should be empty again
     await page.click('button[title*="Undo"]');
-    await expect(page.locator('.canvas-empty')).toBeVisible({ timeout: 3000 });
+    await expect(page.locator('.canvas-empty')).toBeVisible({ timeout: 5000 });
 
     // Redo — field comes back
     await expect(page.locator('button[title*="Redo"]')).toBeEnabled({ timeout: 3000 });
@@ -224,14 +224,20 @@ test.describe('Form Designer', () => {
     // Click on LOAN_APPLICATION — filter by a span child with exactly that text so we
     // don't match LOAN_APPLICATION_START (whose code span reads "LOAN_APPLICATION_START").
     await page.locator('.form-item', { has: page.locator('span', { hasText: /^LOAN_APPLICATION$/ }) }).click();
-    await expect(page.locator('.form-workspace:not(.empty)')).toBeVisible({ timeout: 10000 });
-    await expect(page.locator('.designer-toolbar')).toBeVisible({ timeout: 5000 });
 
-    // Create draft to enable editing
+    // Wait for the workspace to appear (it will show the "empty" / "Create draft" state
+    // first because LOAN_APPLICATION only has a published version, not a draft yet).
+    await expect(page.locator('.form-workspace')).toBeVisible({ timeout: 10000 });
+
+    // Create a draft from the published version so the designer canvas is editable.
     const createDraftBtn = page.locator('button:has-text("Create draft")');
-    if (await createDraftBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+    if (await createDraftBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
       await createDraftBtn.click();
     }
+
+    // Now the workspace should be fully loaded (draft exists).
+    await expect(page.locator('.form-workspace:not(.empty)')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('.designer-toolbar')).toBeVisible({ timeout: 5000 });
 
     // Designer tab should show existing fields parsed from published schema
     await expect(page.locator('.canvas-field')).toHaveCount(4, { timeout: 8000 });

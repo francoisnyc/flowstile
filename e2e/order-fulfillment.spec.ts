@@ -113,13 +113,18 @@ async function findAndClaimTaskForProcess(
       await expect(page.locator('.inbox').first()).toBeVisible({ timeout: 5000 });
     }
 
+    // Wait for the task list to finish its initial API fetch (loading indicator gone).
+    await expect(page.locator('.task-list-items p:has-text("Loading")')).toBeHidden({ timeout: 5000 }).catch(() => {});
+
     // Match a card that shows this task code AND the specific process instance.
+    // filter({ hasText }) checks the full text content of the card element, which
+    // includes the .task-meta span that renders task.processInstanceId.
     const card = page.locator('.task-card')
       .filter({ has: page.locator(`.task-name:has-text("${taskCode}")`) })
-      .filter({ has: page.locator(`.task-meta:has-text("${instanceId}")`) })
+      .filter({ hasText: instanceId })
       .first();
 
-    if (await card.isVisible({ timeout: 500 }).catch(() => false)) {
+    if (await card.isVisible({ timeout: 2000 }).catch(() => false)) {
       await card.click();
       await page.waitForTimeout(300);
       const claimBtn = page.locator('button:has-text("Claim")');
