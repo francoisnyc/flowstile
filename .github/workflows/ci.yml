@@ -132,11 +132,23 @@ jobs:
         # Server must be up first — the SDK health-checks it at startup.
         run: pnpm --filter @flowstile/worker start > /tmp/worker.log 2>&1 &
 
-      - name: Wait for worker to connect
+      - name: Wait for worker to start polling
+        # The SDK prints "Flowstile worker started" immediately before
+        # worker.run() begins polling the task queue — and after Worker.create()
+        # (the slow, failure-prone workflow-bundling step) has succeeded. Poll for
+        # that banner so e2e tests never run against a worker that isn't actually
+        # processing workflows. Bail immediately (with logs) if the process dies.
         run: |
-          sleep 5
-          echo "=== worker log ===" && cat /tmp/worker.log || true
-          pgrep -f "dist/main.js" > /dev/null || { echo "Worker process not found!"; cat /tmp/worker.log; exit 1; }
+          timeout 90 bash -c '
+            until grep -q "Flowstile worker started" /tmp/worker.log 2>/dev/null; do
+              if ! pgrep -f "dist/main.js" > /dev/null; then
+                echo "::error::Worker process exited before it became ready"
+                echo "=== worker log ===" && cat /tmp/worker.log
+                exit 1
+              fi
+              sleep 2
+            done'
+          echo "=== worker log ===" && cat /tmp/worker.log
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium

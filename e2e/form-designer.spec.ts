@@ -95,34 +95,37 @@ test.describe('Form Designer', () => {
     await expect(page.locator('.canvas-empty')).toBeVisible();
 
     // ── 2. Drag a Text field onto the canvas ───────────────────────────────
+    // Dropping a field auto-selects it (handleDragEnd → onSelect(newField.id)),
+    // so the Properties panel immediately targets this field — no manual click
+    // needed. Avoiding a click on the dnd-kit sortable also avoids accidentally
+    // tripping its drag-activation threshold and selecting the wrong field.
     await dragPaletteItemToCanvas(page, 'Text');
     await expect(page.locator('.canvas-field')).toHaveCount(1, { timeout: 5000 });
     await expect(page.locator('.canvas-empty')).not.toBeVisible();
 
-    // ── 3. Drag a Number field onto the canvas ─────────────────────────────
-    await dragPaletteItemToCanvas(page, 'Number');
-    await expect(page.locator('.canvas-field')).toHaveCount(2, { timeout: 5000 });
-
-    // ── 4. Configure the Text field label via Properties panel ────────────
-    await page.locator('.canvas-field').first().click();
+    // ── 3. Configure the (auto-selected) Text field label ──────────────────
     await expect(page.locator('.properties-panel')).toBeVisible({ timeout: 3000 });
 
-    const labelInput = page.locator('.properties-panel input').first();
-    // clear() performs a triple-click + Delete so the existing value is removed,
-    // then pressSequentially types each character individually, firing per-char
-    // input events that React's onChange handler intercepts on controlled inputs.
-    await labelInput.clear();
-    await labelInput.pressSequentially('Customer Name', { delay: 30 });
-    await page.waitForTimeout(300);
+    // Target the Label input specifically (the input inside the "Label" row),
+    // not just the first input in the panel.
+    const labelInput = page.locator('.props-field', { has: page.locator('.props-label', { hasText: /^Label$/ }) }).locator('input');
+    // The label binding is onChange-based, so fill() — which sets the value via
+    // the native setter and dispatches a single input event — propagates to the
+    // canvas immediately, and the field stays selected for the next step.
+    await labelInput.fill('Customer Name');
 
     // Verify canvas reflects updated label
     await expect(page.locator('.canvas-field .field-label').first()).toContainText('Customer Name', { timeout: 6000 });
 
-    // ── 5. Mark the field as required ─────────────────────────────────────
+    // ── 4. Mark the (still-selected) field as required ────────────────────
     const requiredCheckbox = page.locator('.props-checkbox input[type="checkbox"]');
-    if (await requiredCheckbox.isVisible()) {
+    if (await requiredCheckbox.isVisible({ timeout: 2000 }).catch(() => false)) {
       await requiredCheckbox.check();
     }
+
+    // ── 5. Drag a Number field onto the canvas ─────────────────────────────
+    await dragPaletteItemToCanvas(page, 'Number');
+    await expect(page.locator('.canvas-field')).toHaveCount(2, { timeout: 5000 });
 
     // ── 6. Switch to Preview tab ───────────────────────────────────────────
     await page.click('.tab:has-text("Preview")');
@@ -239,8 +242,10 @@ test.describe('Form Designer', () => {
     await expect(page.locator('.form-workspace:not(.empty)')).toBeVisible({ timeout: 10000 });
     await expect(page.locator('.designer-toolbar')).toBeVisible({ timeout: 5000 });
 
-    // Designer tab should show existing fields parsed from published schema
-    await expect(page.locator('.canvas-field')).toHaveCount(4, { timeout: 8000 });
+    // Designer tab should show all fields parsed from the published schema:
+    // CUSTOMER_NAME, AMOUNT, DECISION, NOTES, and the SUPPORTING_DOCUMENTS
+    // attachment field — 5 controls total.
+    await expect(page.locator('.canvas-field')).toHaveCount(5, { timeout: 8000 });
 
     // Switch to Source — verify it shows valid JSON Schema
     await page.click('.tab:has-text("Source")');
@@ -248,6 +253,6 @@ test.describe('Form Designer', () => {
 
     // Switch back to Designer — fields should still be intact
     await page.click('.tab:has-text("Designer")');
-    await expect(page.locator('.canvas-field')).toHaveCount(4, { timeout: 5000 });
+    await expect(page.locator('.canvas-field')).toHaveCount(5, { timeout: 5000 });
   });
 });
