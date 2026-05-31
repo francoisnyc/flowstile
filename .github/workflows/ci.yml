@@ -163,3 +163,14 @@ jobs:
           name: playwright-report
           path: playwright-report/
           retention-days: 7
+
+      - name: Upload server + worker logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stack-logs
+          path: |
+            /tmp/server.log
+            /tmp/worker.log
+          retention-days: 7
+          if-no-files-found: ignore
