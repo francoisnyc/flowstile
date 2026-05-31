@@ -95,8 +95,16 @@ function checkWorkflowStatus(wfId: string): string {
   return JSON.parse(output).status;
 }
 
-/** Find and claim a task by definition code. Handles the seed having pre-existing tasks. */
-async function findAndClaimTask(page: Page, taskCode: string): Promise<void> {
+/**
+ * Find and claim the task matching both `taskCode` and `instanceId` (the
+ * orderId shown in `.task-meta`).  Scoping by processInstanceId prevents
+ * accidentally claiming a seeded task that shares the same task-definition code.
+ */
+async function findAndClaimTaskForProcess(
+  page: Page,
+  taskCode: string,
+  instanceId: string,
+): Promise<void> {
   let found = false;
   for (let attempt = 0; attempt < 20; attempt++) {
     if (attempt > 0) {
@@ -105,10 +113,14 @@ async function findAndClaimTask(page: Page, taskCode: string): Promise<void> {
       await expect(page.locator('.inbox').first()).toBeVisible({ timeout: 5000 });
     }
 
-    const taskRows = page.locator(`.task-name:has-text("${taskCode}")`);
-    const count = await taskRows.count();
-    for (let i = 0; i < count; i++) {
-      await taskRows.nth(i).click();
+    // Match a card that shows this task code AND the specific process instance.
+    const card = page.locator('.task-card')
+      .filter({ has: page.locator(`.task-name:has-text("${taskCode}")`) })
+      .filter({ has: page.locator(`.task-meta:has-text("${instanceId}")`) })
+      .first();
+
+    if (await card.isVisible({ timeout: 500 }).catch(() => false)) {
+      await card.click();
       await page.waitForTimeout(300);
       const claimBtn = page.locator('button:has-text("Claim")');
       if (await claimBtn.isVisible({ timeout: 1500 }).catch(() => false)) {
@@ -117,9 +129,8 @@ async function findAndClaimTask(page: Page, taskCode: string): Promise<void> {
         break;
       }
     }
-    if (found) break;
   }
-  expect(found, `Should find and claim a ${taskCode} task`).toBe(true);
+  expect(found, `Should find and claim ${taskCode} for process ${instanceId}`).toBe(true);
 }
 
 // ─── Happy Path: approve → confirm → shipped ─────────────────────────────────
@@ -127,10 +138,11 @@ async function findAndClaimTask(page: Page, taskCode: string): Promise<void> {
 test.describe.serial('Order Fulfillment — Happy Path', () => {
   test.setTimeout(60000);
   let wfId: string;
+  let orderId: string;
 
   test.beforeAll(async () => {
     const taskDefIds = await getTaskDefIds();
-    const orderId = `ORD-HAPPY-${Date.now()}`;
+    orderId = `ORD-HAPPY-${Date.now()}`;
     wfId = `order-fulfillment-${orderId}`;
     startWorkflow(wfId, taskDefIds, orderId);
     await new Promise((r) => setTimeout(r, 8000));
@@ -138,14 +150,7 @@ test.describe.serial('Order Fulfillment — Happy Path', () => {
 
   test('alice approves the order', async ({ page }) => {
     await loginAs(page, 'alice@example.com');
-
-    const taskRow = page.locator('text=APPROVE_ORDER').first();
-    await expect(taskRow).toBeVisible({ timeout: 15000 });
-    await taskRow.click();
-
-    const claimBtn = page.locator('button:has-text("Claim")');
-    await expect(claimBtn).toBeVisible({ timeout: 5000 });
-    await claimBtn.click();
+    await findAndClaimTaskForProcess(page, 'APPROVE_ORDER', orderId);
 
     const completeBtn = page.locator('button:has-text("Complete")');
     await expect(completeBtn).toBeVisible({ timeout: 5000 });
@@ -161,7 +166,7 @@ test.describe.serial('Order Fulfillment — Happy Path', () => {
 
   test('bob confirms shipment', async ({ page }) => {
     await loginAs(page, 'bob@example.com');
-    await findAndClaimTask(page, 'CONFIRM_SHIPMENT');
+    await findAndClaimTaskForProcess(page, 'CONFIRM_SHIPMENT', orderId);
 
     const completeBtn = page.locator('button:has-text("Complete")');
     await expect(completeBtn).toBeVisible({ timeout: 5000 });
@@ -191,10 +196,11 @@ test.describe.serial('Order Fulfillment — Happy Path', () => {
 test.describe.serial('Order Fulfillment — Saga Compensation', () => {
   test.setTimeout(60000);
   let wfId: string;
+  let orderId: string;
 
   test.beforeAll(async () => {
     const taskDefIds = await getTaskDefIds();
-    const orderId = `ORD-SAGA-${Date.now()}`;
+    orderId = `ORD-SAGA-${Date.now()}`;
     wfId = `order-fulfillment-${orderId}`;
     startWorkflow(wfId, taskDefIds, orderId);
     await new Promise((r) => setTimeout(r, 8000));
@@ -202,14 +208,7 @@ test.describe.serial('Order Fulfillment — Saga Compensation', () => {
 
   test('alice approves the order', async ({ page }) => {
     await loginAs(page, 'alice@example.com');
-
-    const taskRow = page.locator('text=APPROVE_ORDER').first();
-    await expect(taskRow).toBeVisible({ timeout: 15000 });
-    await taskRow.click();
-
-    const claimBtn = page.locator('button:has-text("Claim")');
-    await expect(claimBtn).toBeVisible({ timeout: 5000 });
-    await claimBtn.click();
+    await findAndClaimTaskForProcess(page, 'APPROVE_ORDER', orderId);
 
     const completeBtn = page.locator('button:has-text("Complete")');
     await expect(completeBtn).toBeVisible({ timeout: 5000 });
@@ -225,7 +224,7 @@ test.describe.serial('Order Fulfillment — Saga Compensation', () => {
 
   test('bob rejects at warehouse (triggers saga)', async ({ page }) => {
     await loginAs(page, 'bob@example.com');
-    await findAndClaimTask(page, 'CONFIRM_SHIPMENT');
+    await findAndClaimTaskForProcess(page, 'CONFIRM_SHIPMENT', orderId);
 
     const completeBtn = page.locator('button:has-text("Complete")');
     await expect(completeBtn).toBeVisible({ timeout: 5000 });
@@ -250,7 +249,7 @@ test.describe.serial('Order Fulfillment — Saga Compensation', () => {
     await loginAs(page, 'carol@example.com');
 
     // After saga compensation (refund), the HANDLE_EXCEPTION task is created
-    await findAndClaimTask(page, 'HANDLE_EXCEPTION');
+    await findAndClaimTaskForProcess(page, 'HANDLE_EXCEPTION', orderId);
 
     const completeBtn = page.locator('button:has-text("Complete")');
     await expect(completeBtn).toBeVisible({ timeout: 5000 });
@@ -282,10 +281,11 @@ test.describe.serial('Order Fulfillment — Saga Compensation', () => {
 test.describe.serial('Order Fulfillment — Rejection at Approval', () => {
   test.setTimeout(60000);
   let wfId: string;
+  let orderId: string;
 
   test.beforeAll(async () => {
     const taskDefIds = await getTaskDefIds();
-    const orderId = `ORD-REJECT-${Date.now()}`;
+    orderId = `ORD-REJECT-${Date.now()}`;
     wfId = `order-fulfillment-${orderId}`;
     startWorkflow(wfId, taskDefIds, orderId);
     await new Promise((r) => setTimeout(r, 8000));
@@ -293,14 +293,7 @@ test.describe.serial('Order Fulfillment — Rejection at Approval', () => {
 
   test('alice rejects the order', async ({ page }) => {
     await loginAs(page, 'alice@example.com');
-
-    const taskRow = page.locator('text=APPROVE_ORDER').first();
-    await expect(taskRow).toBeVisible({ timeout: 15000 });
-    await taskRow.click();
-
-    const claimBtn = page.locator('button:has-text("Claim")');
-    await expect(claimBtn).toBeVisible({ timeout: 5000 });
-    await claimBtn.click();
+    await findAndClaimTaskForProcess(page, 'APPROVE_ORDER', orderId);
 
     const completeBtn = page.locator('button:has-text("Complete")');
     await expect(completeBtn).toBeVisible({ timeout: 5000 });

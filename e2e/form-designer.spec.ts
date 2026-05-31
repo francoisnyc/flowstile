@@ -108,10 +108,11 @@ test.describe('Form Designer', () => {
     await expect(page.locator('.properties-panel')).toBeVisible({ timeout: 3000 });
 
     const labelInput = page.locator('.properties-panel input').first();
-    await labelInput.clear();
-    await labelInput.fill('Customer Name');
-    // Tab away to commit the value; wait briefly for React state to propagate.
-    await labelInput.press('Tab');
+    // Triple-click to select all existing text, then type the new label.
+    // pressSequentially fires per-character input events that React's
+    // onChange handler can reliably intercept on controlled inputs.
+    await labelInput.click({ clickCount: 3 });
+    await page.keyboard.type('Customer Name');
     await page.waitForTimeout(300);
 
     // Verify canvas reflects updated label
@@ -220,8 +221,9 @@ test.describe('Form Designer', () => {
     await loginAs(page, 'alice@example.com');
     await goToForms(page);
 
-    // Click on LOAN_APPLICATION — use exact text to avoid matching LOAN_APPLICATION_START.
-    await page.locator('.form-item').filter({ hasText: /^LOAN_APPLICATION$/ }).click();
+    // Click on LOAN_APPLICATION — filter by a span child with exactly that text so we
+    // don't match LOAN_APPLICATION_START (whose code span reads "LOAN_APPLICATION_START").
+    await page.locator('.form-item', { has: page.locator('span', { hasText: /^LOAN_APPLICATION$/ }) }).click();
     await expect(page.locator('.form-workspace:not(.empty)')).toBeVisible({ timeout: 10000 });
     await expect(page.locator('.designer-toolbar')).toBeVisible({ timeout: 5000 });
 
