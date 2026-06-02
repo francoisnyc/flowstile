@@ -69,9 +69,11 @@ export async function createTaskAndWait<
     cancelled = true;
   });
 
-  let resolved: boolean;
+  // condition() returns void (not boolean) when timeoutMs is undefined, which
+  // is falsy. Always check the actual state variables — never !resolved — so
+  // that a no-timeout wait doesn't misfire as a timeout the moment it resolves.
   try {
-    resolved = await condition(
+    await condition(
       () => completionPayload !== undefined || cancelled,
       input.timeoutMs,
     );
@@ -89,8 +91,8 @@ export async function createTaskAndWait<
     throw err;
   }
 
-  if (!resolved) {
-    // Timed out — try to cancel the task so it doesn't sit in the inbox
+  // Timed out: condition resolved but neither signal fired yet.
+  if (completionPayload === undefined && !cancelled) {
     try {
       await cancelFlowstileTask(task.id);
     } catch {
