@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, Component } from 'react';
+import type { ErrorInfo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   listForms, getFormVersions, createForm, updateDraft, publishForm,
@@ -14,6 +15,36 @@ import { useHistory } from '../components/form-designer/useHistory.js';
 import { toSchema } from '../components/form-designer/toSchema.js';
 import { fromSchema } from '../components/form-designer/fromSchema.js';
 import type { FieldDefinition } from '../components/form-designer/types.js';
+
+class PreviewErrorBoundary extends Component<
+  { children: React.ReactNode },
+  { error: string | null }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { error: null };
+  }
+
+  static getDerivedStateFromError(err: unknown) {
+    return { error: err instanceof Error ? err.message : String(err) };
+  }
+
+  componentDidCatch(_err: Error, _info: ErrorInfo) {}
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="form-preview">
+          <div className="preview-header">Preview</div>
+          <div className="preview-body" style={{ color: '#da3633', padding: 16 }}>
+            Preview error: {this.state.error}
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 const EMPTY_SCHEMA: Record<string, unknown> = {
   type: 'object',
@@ -371,7 +402,9 @@ export default function FormDesignerPage() {
             )}
             {activeTab === 'preview' && (
               <div className="preview-full">
-                <FormPreview form={draft} />
+                <PreviewErrorBoundary>
+                  <FormPreview form={draft} />
+                </PreviewErrorBoundary>
               </div>
             )}
           </div>
