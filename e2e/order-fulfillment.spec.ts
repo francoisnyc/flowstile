@@ -177,9 +177,8 @@ test.describe.serial('Order Fulfillment — Happy Path', () => {
     await expect(completeBtn).toBeVisible({ timeout: 5000 });
 
     const decisionSelect = page.locator('select').first();
-    if (await decisionSelect.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await decisionSelect.selectOption('CONFIRMED');
-    }
+    await expect(decisionSelect).toBeVisible({ timeout: 5000 });
+    await decisionSelect.selectOption({ label: 'CONFIRMED' });
 
     const trackingInput = page.locator('input[id*="tracking"], input[id*="Tracking"]').first();
     if (await trackingInput.isVisible({ timeout: 1000 }).catch(() => false)) {
@@ -236,9 +235,8 @@ test.describe.serial('Order Fulfillment — Saga Compensation', () => {
 
     // REJECT the shipment — this triggers saga compensation
     const decisionSelect = page.locator('select').first();
-    if (await decisionSelect.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await decisionSelect.selectOption('REJECTED');
-    }
+    await expect(decisionSelect).toBeVisible({ timeout: 5000 });
+    await decisionSelect.selectOption({ label: 'REJECTED' });
 
     // Fill in rejection reason
     const reasonTextarea = page.locator('textarea').first();

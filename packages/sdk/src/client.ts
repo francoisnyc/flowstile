@@ -61,7 +61,9 @@ export class FlowstileClient {
 
     const doRequest = async () => {
       const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
+        // Only set Content-Type when there is a body — Fastify rejects requests
+        // that carry Content-Type: application/json with an empty body (400).
+        ...(init?.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
         ...init?.headers as Record<string, string>,
       };
       const authHeader = this.authHeader();

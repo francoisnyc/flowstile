@@ -1,7 +1,31 @@
 import { Worker, NativeConnection } from '@temporalio/worker';
-import { configureFlowstileActivities } from './activities.js';
+import {
+  configureFlowstileActivities,
+  createFlowstileTask,
+  getFlowstileTask,
+  cancelFlowstileTask,
+  getFlowstileCaseEntity,
+  patchFlowstileCaseEntity,
+  setFlowstileCaseEntity,
+  setFlowstileCaseVariables,
+} from './activities.js';
 import type { FlowstileClientOptions } from './types.js';
 import type { ProcessDefinition } from './process.js';
+
+// The built-in activities that every Flowstile workflow relies on. The
+// `createTaskAndWait` helper proxies `createFlowstileTask`/`cancelFlowstileTask`,
+// and case-entity helpers proxy the rest. These must be registered on the worker
+// alongside any caller-supplied activities, otherwise Temporal reports
+// "Activity function ... is not registered on this Worker".
+const FLOWSTILE_ACTIVITIES = {
+  createFlowstileTask,
+  getFlowstileTask,
+  cancelFlowstileTask,
+  getFlowstileCaseEntity,
+  patchFlowstileCaseEntity,
+  setFlowstileCaseEntity,
+  setFlowstileCaseVariables,
+};
 
 export interface FlowstileWorkerConfig {
   /** Process definition created with `defineProcess`. Provides the task queue name. */
@@ -69,7 +93,9 @@ export async function createFlowstileWorker(config: FlowstileWorkerConfig): Prom
     connection,
     taskQueue: proc.taskQueue,
     workflowsPath,
-    activities,
+    // Register the built-in Flowstile activities first, then let caller-supplied
+    // activities extend (or override) them.
+    activities: { ...FLOWSTILE_ACTIVITIES, ...activities },
   });
 
   const authDesc = flowstile.apiKey

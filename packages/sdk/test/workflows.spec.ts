@@ -52,12 +52,14 @@ describe('createTaskAndWait', () => {
       formVersion: 1,
     };
 
+    // Real Temporal condition() returns void (not boolean) when timeoutMs is
+    // undefined — simulate that so the test exercises the same code path.
     mockCondition.mockImplementation((fn: () => boolean) => {
       const completedHandler = mockSetHandler.mock.calls.find(
         ([signal]) => signal.name === 'flowstile:task:completed:task-123',
       );
       if (completedHandler) completedHandler[1](payload);
-      return Promise.resolve(true);
+      return Promise.resolve(undefined);
     });
 
     const result = await createTaskAndWait({
@@ -134,7 +136,7 @@ describe('createTaskAndWait', () => {
         ([signal]) => signal.name === 'flowstile:task:cancelled:task-123',
       );
       if (cancelHandler) cancelHandler[1]();
-      return Promise.resolve(true);
+      return Promise.resolve(undefined);
     });
 
     await expect(
@@ -169,7 +171,7 @@ describe('createTaskAndWait', () => {
           formVersion: 1,
         });
       }
-      return Promise.resolve(true);
+      return Promise.resolve(undefined);
     });
 
     await createTaskAndWait({ taskDefinitionId: 'td-1' });

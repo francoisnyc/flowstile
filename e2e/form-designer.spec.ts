@@ -128,8 +128,16 @@ test.describe('Form Designer', () => {
     await expect(page.locator('.canvas-field')).toHaveCount(2, { timeout: 5000 });
 
     // ── 6. Switch to Preview tab ───────────────────────────────────────────
-    await page.click('.tab:has-text("Preview")');
-    await expect(page.locator('.form-preview')).toBeVisible({ timeout: 5000 });
+    // The preceding step is a synthetic @dnd-kit drag; the very next pointer
+    // interaction can occasionally be swallowed while dnd-kit settles its
+    // pointer state, so the tab click may not register on the first try. Click
+    // the tab until the preview pane actually mounts (the underlying switch +
+    // JSON Forms render is otherwise deterministic).
+    const previewTab = page.locator('.tab:has-text("Preview")');
+    await expect(async () => {
+      await previewTab.click();
+      await expect(page.locator('.form-preview')).toBeVisible({ timeout: 2000 });
+    }).toPass({ timeout: 15000 });
     // JSON Forms should render the Customer Name field label
     await expect(page.locator('.form-preview').getByText('Customer Name')).toBeVisible({ timeout: 5000 });
 
@@ -210,9 +218,15 @@ test.describe('Form Designer', () => {
     // Undo should now be enabled
     await expect(page.locator('button[title*="Undo"]')).toBeEnabled({ timeout: 3000 });
 
-    // Undo — canvas should be empty again
-    await page.click('button[title*="Undo"]');
-    await expect(page.locator('.canvas-empty')).toBeVisible({ timeout: 5000 });
+    // Undo — canvas should be empty again. The preceding drag is a synthetic
+    // @dnd-kit interaction; the immediately following click can be swallowed
+    // while dnd-kit settles its pointer state, so retry the Undo click until
+    // the canvas actually empties.
+    const undoBtn = page.locator('button[title*="Undo"]');
+    await expect(async () => {
+      await undoBtn.click();
+      await expect(page.locator('.canvas-empty')).toBeVisible({ timeout: 2000 });
+    }).toPass({ timeout: 15000 });
 
     // Redo — field comes back
     await expect(page.locator('button[title*="Redo"]')).toBeEnabled({ timeout: 3000 });

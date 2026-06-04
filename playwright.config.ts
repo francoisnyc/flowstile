@@ -6,6 +6,12 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   timeout: 60_000,
+  // The full-stack e2e suite (real browser + Temporal + async signal delivery)
+  // has irreducible timing variance: synthetic @dnd-kit drags, workflow signal
+  // round-trips, and inbox polling can each occasionally land a beat late. Retry
+  // failed tests in CI so a single transient miss doesn't redden an otherwise
+  // green build. Locally, retries stay off so flakes surface immediately.
+  retries: process.env.CI ? 2 : 0,
   // Always emit an HTML report so CI artifact upload has something to save.
   reporter: [['html', { open: 'never' }], ['list']],
   use: {

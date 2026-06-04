@@ -1,6 +1,7 @@
 import React from 'react';
 import type { FieldDefinition, CompoundVisibility } from './types.js';
 import VisibilityEditor from './VisibilityEditor.js';
+import { labelToKey, ensureUnique } from './keyUtils.js';
 
 interface Props {
   field: FieldDefinition | null;
@@ -72,7 +73,15 @@ export default function PropertiesPanel({ field, allFields, hasPublishedVersions
         <input
           type="text"
           value={field.label}
-          onChange={(e) => patch({ label: e.target.value } as Partial<FieldDefinition>)}
+          onChange={(e) => {
+            const newLabel = e.target.value;
+            const updates: Partial<FieldDefinition> = { label: newLabel };
+            if (field.key === labelToKey(field.label)) {
+              const otherKeys = new Set(allFields.filter((f) => f.id !== field.id).map((f) => f.key));
+              updates.key = ensureUnique(labelToKey(newLabel), otherKeys);
+            }
+            patch(updates);
+          }}
         />
       </FieldRow>
 

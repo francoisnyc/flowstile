@@ -68,10 +68,19 @@ export default function TaskDetail({ task, onTaskUpdated }: Props) {
   const outcomeKey = task.form?.outcomeKey ?? 'DECISION';
   const hasOutcomes = Array.isArray(outcomes) && outcomes.length > 0;
 
-  const completeWithOutcome = (value?: string) =>
-    act(() =>
-      completeTask(task.id, value !== undefined ? { ...formData, [outcomeKey]: value } : formData),
-    );
+  const completeWithOutcome = (value?: string) => {
+    // Merge original task data under formData so readonly/array fields that
+    // JsonForms may strip from its onChange output are still present in the
+    // submission and pass server-side required-field validation.
+    const safeData: Record<string, unknown> = {
+      ...(task.contextData ?? {}),
+      ...(task.inputData ?? {}),
+      ...(task.submissionData ?? {}),
+      ...formData,
+      ...(value !== undefined ? { [outcomeKey]: value } : {}),
+    };
+    act(() => completeTask(task.id, safeData));
+  };
 
   return (
     <div className="task-detail">
