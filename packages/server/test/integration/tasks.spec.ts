@@ -241,6 +241,21 @@ describe('Task routes', () => {
       });
       expect(res.statusCode).toBe(409);
     });
+
+    it('returns 403 when a non-assignee tries to complete a claimed task', async () => {
+      const otherUser = await createTestUser(app, { permissions: ['tasks:read', 'tasks:write', 'tasks:manage'] });
+      const otherCookie = await loginAs(app, otherUser.email);
+
+      const id = await createTask();
+      await authed(app, cookie, { method: 'POST', url: `/tasks/${id}/claim` });
+
+      const res = await authed(app, otherCookie, {
+        method: 'POST',
+        url: `/tasks/${id}/complete`,
+        payload: { data: { DECISION: 'APPROVED' } },
+      });
+      expect(res.statusCode).toBe(403);
+    });
   });
 
   describe('POST /tasks/:id/cancel', () => {
