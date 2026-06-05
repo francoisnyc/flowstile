@@ -470,15 +470,19 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
       if (!task) return reply.code(404).send({ error: 'Task not found' });
       if (!canSeeTask(task, request.principal!)) return reply.code(404).send({ error: 'Task not found' });
 
-      // Check state machine first — no point validating data for a non-completable task
-      try {
-        task.status = TaskStateMachine.transition(task.status, 'complete');
-      } catch (err) {
-        if (err instanceof InvalidTransitionError) {
-          return reply.code(409).send({ error: err.message });
-        }
-        throw err;
+      // Check state machine first — 409 before any other validation
+      if (!TaskStateMachine.canTransition(task.status, 'complete')) {
+        return reply.code(409).send({
+          error: `Invalid task transition: cannot 'complete' a task in '${task.status}' status`,
+        });
       }
+
+      // Only the assignee may complete a task
+      if (task.assigneeId !== user.id) {
+        return reply.code(403).send({ error: 'Only the assignee can complete this task' });
+      }
+
+      task.status = TaskStateMachine.transition(task.status, 'complete');
 
       // Load the locked form version
       const form = await app.db.getRepository(FormDefinition).findOne({
