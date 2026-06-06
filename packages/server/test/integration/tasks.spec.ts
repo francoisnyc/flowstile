@@ -193,6 +193,31 @@ describe('Task routes', () => {
       const res = await authed(app, cookie, { method: 'POST', url: `/tasks/${id}/unclaim` });
       expect(res.statusCode).toBe(409);
     });
+
+    it('returns 403 when a non-assignee without tasks:manage tries to unclaim', async () => {
+      const claimUser = await createTestUser(app, { permissions: ['tasks:read', 'tasks:write'] });
+      const claimCookie = await loginAs(app, claimUser.email);
+      const otherUser = await createTestUser(app, { permissions: ['tasks:read', 'tasks:write'] });
+      const otherCookie = await loginAs(app, otherUser.email);
+
+      const id = await createTask({ candidateUsers: [claimUser.email, otherUser.email] });
+      await authed(app, claimCookie, { method: 'POST', url: `/tasks/${id}/claim` });
+
+      const res = await authed(app, otherCookie, { method: 'POST', url: `/tasks/${id}/unclaim` });
+      expect(res.statusCode).toBe(403);
+    });
+
+    it('allows a tasks:manage holder who is not the assignee to unclaim', async () => {
+      const managerUser = await createTestUser(app, { permissions: ['tasks:read', 'tasks:write', 'tasks:manage'] });
+      const managerCookie = await loginAs(app, managerUser.email);
+
+      const id = await createTask();
+      await authed(app, cookie, { method: 'POST', url: `/tasks/${id}/claim` });
+
+      const res = await authed(app, managerCookie, { method: 'POST', url: `/tasks/${id}/unclaim` });
+      expect(res.statusCode).toBe(200);
+      expect(res.json<{ status: string }>().status).toBe('created');
+    });
   });
 
   describe('POST /tasks/:id/complete', () => {
@@ -234,6 +259,17 @@ describe('Task routes', () => {
         url: `/tasks/${id}/complete`,
         payload: { data: { DECISION: 'APPROVED' } },
       });
+      const res = await authed(app, cookie, {
+        method: 'POST',
+        url: `/tasks/${id}/complete`,
+        payload: { data: {} },
+      });
+      expect(res.statusCode).toBe(409);
+    });
+
+    it('returns 409 when completing a cancelled task', async () => {
+      const id = await createTask();
+      await authed(app, cookie, { method: 'POST', url: `/tasks/${id}/cancel` });
       const res = await authed(app, cookie, {
         method: 'POST',
         url: `/tasks/${id}/complete`,
@@ -286,6 +322,38 @@ describe('Task routes', () => {
       });
       const res = await authed(app, cookie, { method: 'POST', url: `/tasks/${id}/cancel` });
       expect(res.statusCode).toBe(409);
+    });
+
+    it('returns 409 when cancelling an already-cancelled task', async () => {
+      const id = await createTask();
+      await authed(app, cookie, { method: 'POST', url: `/tasks/${id}/cancel` });
+      const res = await authed(app, cookie, { method: 'POST', url: `/tasks/${id}/cancel` });
+      expect(res.statusCode).toBe(409);
+    });
+
+    it('returns 403 when a non-assignee without tasks:manage cancels a claimed task', async () => {
+      const claimUser = await createTestUser(app, { permissions: ['tasks:read', 'tasks:write'] });
+      const claimCookie = await loginAs(app, claimUser.email);
+      const otherUser = await createTestUser(app, { permissions: ['tasks:read', 'tasks:write'] });
+      const otherCookie = await loginAs(app, otherUser.email);
+
+      const id = await createTask({ candidateUsers: [claimUser.email, otherUser.email] });
+      await authed(app, claimCookie, { method: 'POST', url: `/tasks/${id}/claim` });
+
+      const res = await authed(app, otherCookie, { method: 'POST', url: `/tasks/${id}/cancel` });
+      expect(res.statusCode).toBe(403);
+    });
+
+    it('allows a tasks:manage holder who is not the assignee to cancel a claimed task', async () => {
+      const managerUser = await createTestUser(app, { permissions: ['tasks:read', 'tasks:write', 'tasks:manage'] });
+      const managerCookie = await loginAs(app, managerUser.email);
+
+      const id = await createTask();
+      await authed(app, cookie, { method: 'POST', url: `/tasks/${id}/claim` });
+
+      const res = await authed(app, managerCookie, { method: 'POST', url: `/tasks/${id}/cancel` });
+      expect(res.statusCode).toBe(200);
+      expect(res.json<{ status: string }>().status).toBe('cancelled');
     });
   });
 
