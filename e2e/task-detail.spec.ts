@@ -30,13 +30,16 @@ test('clicking a task shows the detail panel with form', async ({ page }) => {
   const isClaimable = await claimBtn.isVisible().catch(() => false);
 
   if (isClaimable) {
-    // Claim the task
+    // Claim the task. Claiming triggers two sequential API calls (claimTask →
+    // handleTaskUpdated → fetchTasks + getTask) before the badge updates, which
+    // can take several seconds on a loaded CI runner after the full case-overview
+    // suite runs before this test.
     await claimBtn.click();
-    await expect(page.locator('.status-badge')).toContainText('claimed', { timeout: 5000 });
+    await expect(page.locator('.task-detail .status-badge')).toContainText('claimed', { timeout: 10000 });
     await page.screenshot({ path: '/tmp/flowstile-04-claimed.png', fullPage: true });
 
     // Complete button should appear
-    await expect(page.locator('button:has-text("Complete")')).toBeVisible();
+    await expect(page.locator('button:has-text("Complete")')).toBeVisible({ timeout: 5000 });
 
     // Complete the task
     await page.locator('button:has-text("Complete")').click();
