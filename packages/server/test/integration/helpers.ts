@@ -10,6 +10,7 @@ import { TaskDefinition } from '../../src/entities/task-definition.entity.js';
 import { Task } from '../../src/entities/task.entity.js';
 import { Case } from '../../src/entities/case.entity.js';
 import { ApiKey } from '../../src/entities/api-key.entity.js';
+import { CaseComment } from '../../src/entities/case-comment.entity.js';
 import { FormDefinitionStatus, Priority } from '../../src/common/enums.js';
 
 export const TEST_PASSWORD = 'test-password-123';
@@ -120,6 +121,7 @@ export async function createTestTaskSetup(app: FastifyInstance) {
 export async function cleanupTestData(app: FastifyInstance) {
   const db = app.db;
   await db.getRepository(Task).createQueryBuilder().delete().execute();
+  await db.getRepository(CaseComment).createQueryBuilder().delete().execute();
   await db.getRepository(Case).createQueryBuilder()
     .delete().where('"processInstanceId" LIKE :p', { p: 'test-%' }).execute();
   await db.getRepository(TaskDefinition).createQueryBuilder()
