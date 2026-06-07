@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { listTasks, getTask } from '../api/client.js';
 import type { Task } from '../types.js';
 import TaskList, { type Filter } from '../components/TaskList.js';
 import TaskDetail from '../components/TaskDetail.js';
 
 export default function InboxPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [filter, setFilter] = useState<Filter>('all');
   const [selected, setSelected] = useState<Task | null>(null);
@@ -27,6 +29,15 @@ export default function InboxPage() {
   }, []);
 
   useEffect(() => { fetchTasks(); }, [fetchTasks]);
+
+  // Deep-link: if ?task=<id> is present, select that task directly
+  useEffect(() => {
+    const taskId = searchParams.get('task');
+    if (!taskId) return;
+    // Clear the param so it doesn't re-trigger on navigation
+    setSearchParams({}, { replace: true });
+    getTask(taskId).then(setSelected).catch(console.error);
+  }, [searchParams, setSearchParams]);
 
   const handleSelect = async (task: Task) => {
     try {
