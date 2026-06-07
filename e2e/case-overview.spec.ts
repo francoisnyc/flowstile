@@ -60,7 +60,8 @@ test.describe('Case overview', () => {
 
   test('setup: create form, process, task def, and a task', async () => {
     // Create and publish a form
-    const formRes = await apiAs('alice@example.com', 'PUT', `/forms/${formCode}/draft`, {
+    const formRes = await apiAs('alice@example.com', 'POST', '/forms', {
+      code: formCode,
       jsonSchema: {
         type: 'object',
         properties: {
@@ -80,7 +81,7 @@ test.describe('Case overview', () => {
     expect(formRes.status).toBeLessThan(300);
 
     const pubRes = await apiAs('alice@example.com', 'POST', `/forms/${formCode}/publish`);
-    expect(pubRes.status).toBe(200);
+    expect(pubRes.status).toBe(201);
 
     // Create process definition
     const procRes = await apiAs('alice@example.com', 'POST', '/processes', {
@@ -90,7 +91,7 @@ test.describe('Case overview', () => {
     const processId = procRes.body.id;
 
     // Create task definition — visible to loan-officers group (alice + bob)
-    const tdRes = await apiAs('alice@example.com', 'POST', `/processes/${processId}/task-definitions`, {
+    const tdRes = await apiAs('alice@example.com', 'POST', `/processes/${processId}/tasks`, {
       code: `E2E_CASE_OV_REVIEW_${tag}`,
       formDefinitionCode: formCode,
       candidateGroups: ['loan-officers'],
@@ -194,16 +195,17 @@ test.describe('Case overview', () => {
     await page.goto(`${BASE}/cases/${caseId}`);
     await expect(page.locator('.case-detail-header h1')).toBeVisible({ timeout: 10000 });
 
-    // Panels should be expanded by default
-    await expect(page.locator('.detail-panel-body').first()).toBeVisible();
+    // Panels should be expanded by default — chevron shows ▼
+    const firstChevron = page.locator('.panel-chevron').first();
+    await expect(firstChevron).toHaveText('▼');
 
-    // Click to collapse the first panel
+    // Click to collapse the first panel — chevron flips to ▶
     await page.locator('.detail-panel-header').first().click();
-    await expect(page.locator('.detail-panel-body').first()).not.toBeVisible();
+    await expect(firstChevron).toHaveText('▶');
 
-    // Click to expand again
+    // Click to expand again — chevron back to ▼
     await page.locator('.detail-panel-header').first().click();
-    await expect(page.locator('.detail-panel-body').first()).toBeVisible();
+    await expect(firstChevron).toHaveText('▼');
   });
 });
 
@@ -216,7 +218,8 @@ test.describe('Case overview — need-to-know security', () => {
   test.beforeAll(async () => {
     // Create a task visible only to customer-service group
     const formCode = `E2E_SEC_${tag}`;
-    await apiAs('alice@example.com', 'PUT', `/forms/${formCode}/draft`, {
+    await apiAs('alice@example.com', 'POST', '/forms', {
+      code: formCode,
       jsonSchema: { type: 'object', properties: { NOTE: { type: 'string' } } },
       uiSchema: { type: 'VerticalLayout', elements: [{ type: 'Control', scope: '#/properties/NOTE' }] },
     });
@@ -225,7 +228,7 @@ test.describe('Case overview — need-to-know security', () => {
     const procRes = await apiAs('alice@example.com', 'POST', '/processes', {
       name: `E2E Sec Process ${tag}`,
     });
-    const tdRes = await apiAs('alice@example.com', 'POST', `/processes/${procRes.body.id}/task-definitions`, {
+    const tdRes = await apiAs('alice@example.com', 'POST', `/processes/${procRes.body.id}/tasks`, {
       code: `E2E_SEC_TASK_${tag}`,
       formDefinitionCode: formCode,
       candidateGroups: ['customer-service'],
