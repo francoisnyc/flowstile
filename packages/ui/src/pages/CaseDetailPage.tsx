@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getCase, getAttachmentUrl, listCaseComments, createCaseComment } from '../api/client.js';
+import { useAuth } from '../context/AuthContext.js';
 import type { CaseDetail, CaseComment, CaseTask } from '../types.js';
 
 function caseLabel(c: CaseDetail): string {
@@ -107,7 +108,7 @@ function CollapsiblePanel({ title, count, defaultOpen = true, children }: {
   );
 }
 
-function CommentList({ caseId, commentCount }: { caseId: string; commentCount: number }) {
+function CommentList({ caseId, canPost }: { caseId: string; canPost: boolean }) {
   const [comments, setComments] = useState<CaseComment[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [body, setBody] = useState('');
@@ -147,24 +148,26 @@ function CommentList({ caseId, commentCount }: { caseId: string; commentCount: n
           <div className="comment-body">{c.body}</div>
         </div>
       ))}
-      <div className="comment-input">
-        <textarea
-          className="comment-textarea"
-          placeholder="Add a comment…"
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-          maxLength={2000}
-          data-testid="comment-input"
-        />
-        <button
-          className="comment-post-btn"
-          onClick={handlePost}
-          disabled={!body.trim() || posting}
-          data-testid="comment-post-btn"
-        >
-          Post
-        </button>
-      </div>
+      {canPost && (
+        <div className="comment-input">
+          <textarea
+            className="comment-textarea"
+            placeholder="Add a comment…"
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            maxLength={2000}
+            data-testid="comment-input"
+          />
+          <button
+            className="comment-post-btn"
+            onClick={handlePost}
+            disabled={!body.trim() || posting}
+            data-testid="comment-post-btn"
+          >
+            Post
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -172,6 +175,7 @@ function CommentList({ caseId, commentCount }: { caseId: string; commentCount: n
 export default function CaseDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [caseDetail, setCaseDetail] = useState<CaseDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -278,7 +282,7 @@ export default function CaseDetailPage() {
           </CollapsiblePanel>
 
           <CollapsiblePanel title="Comments" count={caseDetail.commentCount}>
-            <CommentList caseId={caseDetail.id} commentCount={caseDetail.commentCount} />
+            <CommentList caseId={caseDetail.id} canPost={user?.roles.some((r) => r.permissions.includes('tasks:write')) ?? false} />
           </CollapsiblePanel>
         </div>
       </div>
