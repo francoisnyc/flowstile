@@ -13,8 +13,11 @@ test('clicking a task shows the detail panel with form', async ({ page }) => {
   await expect(page.locator('.task-card').first()).toBeVisible({ timeout: 5000 });
   await page.screenshot({ path: '/tmp/flowstile-01-inbox.png', fullPage: true });
 
-  // Click the first task card
-  await page.locator('.task-card').first().click();
+  // Click the seeded LN-2024-0847 task specifically. Other e2e tests that run
+  // before this one (case-overview) create tasks with candidateGroups that alice
+  // cannot claim; those tasks may appear first in the inbox. Targeting a known
+  // seeded task avoids that non-determinism.
+  await page.locator('.task-card', { hasText: 'LN-2024-0847' }).click();
 
   // Wait for detail panel to show task info
   await expect(page.locator('.task-detail h2')).toBeVisible({ timeout: 5000 });
@@ -30,12 +33,8 @@ test('clicking a task shows the detail panel with form', async ({ page }) => {
   const isClaimable = await claimBtn.isVisible().catch(() => false);
 
   if (isClaimable) {
-    // Claim the task. Claiming triggers two sequential API calls (claimTask →
-    // handleTaskUpdated → fetchTasks + getTask) before the badge updates, which
-    // can take several seconds on a loaded CI runner after the full case-overview
-    // suite runs before this test.
     await claimBtn.click();
-    await expect(page.locator('.task-detail .status-badge')).toContainText('claimed', { timeout: 10000 });
+    await expect(page.locator('.task-detail .status-badge')).toContainText('claimed', { timeout: 8000 });
     await page.screenshot({ path: '/tmp/flowstile-04-claimed.png', fullPage: true });
 
     // Complete button should appear
@@ -47,3 +46,4 @@ test('clicking a task shows the detail panel with form', async ({ page }) => {
     await page.screenshot({ path: '/tmp/flowstile-05-completed.png', fullPage: true });
   }
 });
+
