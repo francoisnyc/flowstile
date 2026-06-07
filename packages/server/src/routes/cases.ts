@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { In } from 'typeorm';
 import { Case } from '../entities/case.entity.js';
+import { CaseComment } from '../entities/case-comment.entity.js';
 import { Task } from '../entities/task.entity.js';
 import { FormDefinition } from '../entities/form-definition.entity.js';
 import { Attachment } from '../entities/attachment.entity.js';
@@ -43,6 +44,10 @@ const PatchCaseEntityBody = z.object({
 const PutCaseEntityBody = z.object({
   entity: z.record(z.string(), z.unknown()),
   expectedVersion: z.number().int().nonnegative().optional(),
+});
+
+const CommentBody = z.object({
+  body: z.string().min(1).max(2000),
 });
 
 function serializeCaseTask(task: Task) {
@@ -126,6 +131,10 @@ async function loadCaseDetail(
     userGroupNames,
   );
 
+  const commentCount = await app.db
+    .getRepository(CaseComment)
+    .count({ where: { caseId: c.id } });
+
   return {
     id: c.id,
     processInstanceId: c.processInstanceId,
@@ -138,6 +147,7 @@ async function loadCaseDetail(
     createdAt: c.createdAt,
     tasks: tasks.map(serializeCaseTask),
     attachments: visibleAttachments,
+    commentCount,
   };
 }
 
@@ -210,6 +220,21 @@ export const caseRoutes: FastifyPluginAsyncZod = async (app) => {
   const write = { preHandler: [requirePermission(Permissions.TASKS_WRITE)] };
 
   const caseRepo = () => app.db.getRepository(Case);
+  const commentRepo = () => app.db.getRepository(CaseComment);
+
+  function serializeComment(c: CaseComment) {
+    return {
+      id: c.id,
+      caseId: c.caseId,
+      author: {
+        id: c.author.id,
+        email: c.author.email,
+        displayName: c.author.displayName,
+      },
+      body: c.body,
+      createdAt: c.createdAt,
+    };
+  }
 
   async function resolveProcessName(processDefinitionId: string | null): Promise<string | null> {
     if (!processDefinitionId) return null;
@@ -453,6 +478,72 @@ export const caseRoutes: FastifyPluginAsyncZod = async (app) => {
       }
 
       return writeEntity(processInstanceId, expectedVersion, () => entity, reply);
+    },
+  );
+
+  // GET /cases/:id/comments
+  app.get(
+    '/cases/:id/comments',
+    { ...read, schema: { params: UuidParam, tags: ['Cases'] } },
+    async (request, reply) => {
+      const { id } = request.params;
+      const user = requireUser(request, reply);
+      if (!user) return reply;
+
+      const c = await caseRepo().findOne({ where: { id } });
+      if (!c) return reply.code(404).send({ error: 'Case not found' });
+
+      // Need-to-know visibility check
+      const tasks = await app.db.getRepository(Task).find({
+        where: { processInstanceId: c.processInstanceId },
+      });
+      if (!canSeeCase(c.startedById, tasks, request.principal!)) {
+        return reply.code(404).send({ error: 'Case not found' });
+      }
+
+      const comments = await commentRepo().find({
+        where: { caseId: id },
+        order: { createdAt: 'ASC' },
+      });
+
+      return { items: comments.map(serializeComment) };
+    },
+  );
+
+  // POST /cases/:id/comments
+  app.post(
+    '/cases/:id/comments',
+    {
+      preHandler: [requirePermission(Permissions.TASKS_READ), requirePermission(Permissions.TASKS_WRITE)],
+      schema: { params: UuidParam, body: CommentBody, tags: ['Cases'] },
+    },
+    async (request, reply) => {
+      const { id } = request.params;
+      const { body } = request.body;
+      const user = requireUser(request, reply);
+      if (!user) return reply;
+
+      const c = await caseRepo().findOne({ where: { id } });
+      if (!c) return reply.code(404).send({ error: 'Case not found' });
+
+      // Need-to-know visibility check
+      const tasks = await app.db.getRepository(Task).find({
+        where: { processInstanceId: c.processInstanceId },
+      });
+      if (!canSeeCase(c.startedById, tasks, request.principal!)) {
+        return reply.code(404).send({ error: 'Case not found' });
+      }
+
+      const comment = await commentRepo().save({
+        caseId: id,
+        authorId: user.id,
+        body,
+      });
+
+      // Reload with author relation (eager on entity, but save doesn't hydrate)
+      const saved = await commentRepo().findOneOrFail({ where: { id: comment.id } });
+
+      return reply.code(201).send(serializeComment(saved));
     },
   );
 };
