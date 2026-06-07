@@ -191,4 +191,13 @@ export interface CaseDetail {
   createdAt: string;
   tasks: CaseTask[];
   attachments: CaseAttachment[];
+  commentCount: number;
+}
+
+export interface CaseComment {
+  id: string;
+  caseId: string;
+  author: { id: string; email: string; displayName: string };
+  body: string;
+  createdAt: string;
 }

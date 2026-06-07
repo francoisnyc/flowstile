@@ -1,4 +1,4 @@
-import type { Task, User, Group, RoleRef, FormSummary, FormDefinition, Page, AttachmentRef, CaseSummary, CaseDetail, ProcessSummary, StartCaseResult } from '../types.js';
+import type { Task, User, Group, RoleRef, FormSummary, FormDefinition, Page, AttachmentRef, CaseSummary, CaseDetail, CaseComment, ProcessSummary, StartCaseResult } from '../types.js';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers: Record<string, string> = { ...init?.headers as Record<string, string> };
@@ -41,6 +41,13 @@ export const listCases = (params?: Record<string, string>) => {
   return request<Page<CaseSummary>>(`/cases${qs ? `?${qs}` : ''}`);
 };
 export const getCase = (id: string) => request<CaseDetail>(`/cases/${id}`);
+export const listCaseComments = (caseId: string) =>
+  request<{ items: CaseComment[] }>(`/cases/${caseId}/comments`);
+export const createCaseComment = (caseId: string, body: string) =>
+  request<CaseComment>(`/cases/${caseId}/comments`, {
+    method: 'POST',
+    body: JSON.stringify({ body }),
+  });
 
 // Admin — Users
 export const listUsers = () => request<Page<User>>('/users');
