@@ -192,14 +192,39 @@ The target inner loop, replayed for "add a document-request step to loan origina
 
 No curl, no manually invoked CLI, no foreign UI. Every seam either self-heals or fails loudly within seconds of the edit, and the one unavoidable context switch (form design) is reached by a printed link.
 
-## Roadmap
+## The same loop, run by a coding agent
+
+**Status: mostly possible today; the missing artifact is the skill. Planned (Phase 2).**
+
+Increasingly, the "developer" running the loop above is a coding agent. The story is deliberately agent-legible — OpenAPI as the contract, code-first definitions, deterministic checks with printed remediation — and one packaging step makes it agent-*runnable*: a **`flowstile` skill** that restates this guide as agent instructions (loop steps, form-schema conventions, validation commands, API surface, auth via an API key). The skill and this guide are the same knowledge maintained once.
+
+The notable consequence: **a coding agent can author forms today, with no new product code.** The pieces already exist —
+
+1. Agent drafts the JSON Forms schema + UI schema + outcomes from the task definition and the workflow's data needs.
+2. Agent submits via `PUT /forms/:code/draft` (authenticated with an API key); the server validates and rejects malformed schema.
+3. Agent prints the designer URL; optionally starts a test case and screenshots the rendered form via the existing Playwright setup to self-verify before handing off.
+4. **A human reviews the preview and publishes.** The draft → publish lifecycle is the gate — agents write drafts, only humans publish. Codegen then pulls the types as usual.
+
+This keeps form ownership where it belongs (the server; the designer remains the review and business-editing surface) while removing the one step of the loop that previously forced a human context switch for authoring. An MCP server projecting the authoring endpoints from `docs/openapi.yaml` is a later ergonomic upgrade (typed tools, permission-gated calls); the API-key + REST path is sufficient to start.
+
+### Where AI fits — and where it must not
+
+The rule, consistent with the read-model scope test: **LLMs draft what humans intended; they never decide what the system does.** Every AI touchpoint sits upstream of a human gate that already exists:
+
+- **Form drafting** (above) — gated by publish. Later, optionally in-product in the designer ("draft with AI", bring-your-own-key, hidden when unconfigured).
+- **Plan/phase suggestion** — phase names and narrative order are human intent absent from the code, which is exactly what an LLM can *propose* from reading the workflow; the developer reviews the diff. Pairs with drift remediation: the type check *finds* the unplaced task deterministically, the suggestion *proposes* its phase.
+- **Mining narratives** (Phase 4) — prose over the stats, subject to the same minimum-sample thresholds.
+
+Explicitly out of bounds: the doctor's checks and "did you mean" hints (edit distance beats a model on speed, cost, and trust), codegen (types must be mechanically faithful), and anything in the runtime path (task creation, signal delivery, phase-state derivation — deterministic by contract, and Temporal workflows must be deterministic anyway). A doctor that is occasionally wrong is worse than no doctor.
+
+
 
 | Phase | Theme | Contents |
 |---|---|---|
 | **1 — Orientation & the doctor** | Give users the map; fail at the seam | `plan` on `defineProcess`, required type-checked `phase` on `defineTask` (placement + plan membership as compile errors); `milestones` JSONB projection on `ProcessDefinition` + `milestoneCode` on `TaskDefinition`; phase-state derivation shipped as a table-driven test suite, then computed in `GET /cases/:id`; stepper on the case page and in `@flowstile/react`; worker doctor preflight |
-| **2 — Failure ergonomics & staleness** | Make breakage loud and typed | Non-retryable `404`/`422` task-creation errors with remediation hints; workflow failure status surfaced on the case page (cached, non-blocking); codegen staleness hash + `--watch` |
-| **3 — Sync & versioning** *(directional)* | Kill the curl steps; version the description | Dev-mode worker self-registration (loud override-skips, soft-deprecate deletions, no version minting in dev); explicit release sync minting versions; `Case.processDefinitionVersion`; per-version plan snapshots |
-| **4 — Insight** *(directional)* | Let the map learn from reality | Mined phase durations, loop-back and skip rates on the stepper (min-sample thresholds, ranges with n, segmented by process version); UI process page as read-model (definitions, phases, form publish status, last sync, deprecated/orphan detection); optional developer-facing execution DAG in admin |
+| **2 — Failure ergonomics & staleness** | Make breakage loud and typed | Non-retryable `404`/`422` task-creation errors with remediation hints; workflow failure status surfaced on the case page (cached, non-blocking); codegen staleness hash + `--watch`; `flowstile` skill packaging the agent-runnable authoring loop incl. agent-drafted forms (draft → preview → human publish) |
+| **3 — Sync & versioning** *(directional)* | Kill the curl steps; version the description | Dev-mode worker self-registration (loud override-skips, soft-deprecate deletions, no version minting in dev); explicit release sync minting versions; `Case.processDefinitionVersion`; per-version plan snapshots; MCP server projecting the authoring endpoints from `docs/openapi.yaml` |
+| **4 — Insight** *(directional)* | Let the map learn from reality | Mined phase durations, loop-back and skip rates on the stepper (min-sample thresholds, ranges with n, segmented by process version); UI process page as read-model (definitions, phases, form publish status, last sync, deprecated/orphan detection); optional developer-facing execution DAG in admin; in-product AI form drafting (BYO-key) and mining narratives |
 
 Deliberately unscheduled: the AST liveness/order backstop (step 7) — built only if evidence shows the type-level checks missing real drift, and warning-only if so.
 
