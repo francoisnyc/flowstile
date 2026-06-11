@@ -2,7 +2,7 @@
 // Source: http://localhost:3000  |  Process: Order Fulfillment  |  2026-05-30
 // Regenerate: flowstile-codegen --process "Order Fulfillment" --task-queue flowstile
 
-import { defineProcess, defineTask } from '@flowstile/sdk/process';
+import { defineProcess } from '@flowstile/sdk/process';
 
 // ---------------------------------------------------------------------------
 // Form output types (typed submission data returned by createAndWait)
@@ -44,9 +44,11 @@ export interface HandleExceptionOutput extends Record<string, unknown> {
 
 export const orderFulfillmentProcess = defineProcess('Order Fulfillment', {
   taskQueue: 'flowstile',
-  tasks: {
-    approveOrder: defineTask<ApproveOrderOutput>('APPROVE_ORDER', { priority: 'high' }),
-    confirmShipment: defineTask<ConfirmShipmentOutput>('CONFIRM_SHIPMENT'),
-    handleException: defineTask<HandleExceptionOutput>('HANDLE_EXCEPTION', { priority: 'urgent' }),
-  },
-});
+  // Case plan: APPROVAL → PAYMENT → SHIPMENT (PAYMENT is fully automated — no
+  // human tasks; the stepper jumps it to achieved when shipment starts).
+  plan: ['APPROVAL', 'PAYMENT', 'SHIPMENT'],
+}, (task) => ({
+  approveOrder: task<ApproveOrderOutput>('APPROVE_ORDER', { phase: 'APPROVAL', defaults: { priority: 'high' } }),
+  confirmShipment: task<ConfirmShipmentOutput>('CONFIRM_SHIPMENT', { phase: 'SHIPMENT' }),
+  handleException: task<HandleExceptionOutput>('HANDLE_EXCEPTION', { phase: null, defaults: { priority: 'urgent' } }),
+}));

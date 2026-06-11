@@ -745,6 +745,19 @@ label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color:
 
 .section-label { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin: 0 0 16px 0; }
 
+/* Milestone stepper — the case plan: completed checked, active highlighted,
+   future greyed, skipped struck */
+.milestone-stepper { display: flex; align-items: center; gap: 8px; margin: 20px 0 28px; flex-wrap: wrap; }
+.milestone-step { display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--border); font-size: 12px; font-weight: 500; color: var(--text-muted); background: var(--surface); }
+.milestone-step.achieved { border-color: var(--success); color: var(--success); }
+.milestone-step.active { border-color: var(--accent); color: var(--accent-hover); background: rgba(31, 111, 235, 0.1); font-weight: 600; }
+.milestone-step.skipped { opacity: 0.55; }
+.milestone-step.skipped .milestone-name { text-decoration: line-through; }
+.milestone-marker { font-size: 11px; line-height: 1; min-width: 10px; text-align: center; }
+.milestone-step.pending .milestone-marker { display: none; }
+.milestone-connector { width: 18px; height: 2px; background: var(--border); flex-shrink: 0; }
+.milestone-connector.achieved { background: var(--success); }
+
 /* Timeline */
 .case-timeline { padding-left: 4px; }
 .timeline-entry { display: flex; gap: 16px; }

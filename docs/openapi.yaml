@@ -565,6 +565,23 @@ paths:
                   enum:
                     - active
                     - inactive
+                milestones:
+                  anyOf:
+                    - maxItems: 20
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          code:
+                            type: string
+                            minLength: 1
+                          name:
+                            type: string
+                            minLength: 1
+                        required:
+                          - code
+                          - name
+                    - type: "null"
               required:
                 - name
       responses:
@@ -617,6 +634,23 @@ paths:
                   anyOf:
                     - type: string
                       minLength: 1
+                    - type: "null"
+                milestones:
+                  anyOf:
+                    - maxItems: 20
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          code:
+                            type: string
+                            minLength: 1
+                          name:
+                            type: string
+                            minLength: 1
+                        required:
+                          - code
+                          - name
                     - type: "null"
       parameters:
         - schema:
@@ -788,6 +822,11 @@ paths:
                 formDefinitionCode:
                   type: string
                   minLength: 1
+                milestoneCode:
+                  anyOf:
+                    - type: string
+                      minLength: 1
+                    - type: "null"
                 candidateGroups:
                   type: array
                   items:
@@ -831,6 +870,11 @@ paths:
                 formDefinitionCode:
                   type: string
                   minLength: 1
+                milestoneCode:
+                  anyOf:
+                    - type: string
+                      minLength: 1
+                    - type: "null"
                 candidateGroups:
                   type: array
                   items:

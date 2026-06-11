@@ -170,6 +170,7 @@ export interface CaseTask {
     id: string;
     code: string;
     formDefinitionCode: string;
+    milestoneCode?: string | null;
   };
   assignee: UserRef | null;
 }
@@ -177,6 +178,14 @@ export interface CaseTask {
 export interface CaseAttachment extends AttachmentRef {
   taskId: string;
   fieldKey: string;
+}
+
+export type MilestoneState = 'pending' | 'active' | 'achieved' | 'skipped';
+
+export interface CaseMilestone {
+  code: string;
+  name: string;
+  state: MilestoneState;
 }
 
 export interface CaseDetail {
@@ -189,6 +198,8 @@ export interface CaseDetail {
   status: CaseStatus;
   startedById: string | null;
   createdAt: string;
+  // The case plan rendered as a stepper; null when the process declares no plan.
+  milestones: CaseMilestone[] | null;
   tasks: CaseTask[];
   attachments: CaseAttachment[];
   commentCount: number;

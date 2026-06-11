@@ -14,6 +14,7 @@ import { PaginationQuery, paginate } from '../common/pagination.js';
 import { filterFormSchemas } from '../common/visibility.js';
 import { toReference } from '../common/attachments.js';
 import { deriveCaseStatus, type CaseStatus } from '../common/cases.js';
+import { deriveMilestoneStates, type Milestone } from '../common/milestones.js';
 import { validateAgainstSchema } from '../validation/schema-validator.js';
 import { applyJsonPatch, JsonPatchError, type JsonPatchOperation } from '../common/json-patch.js';
 import { canSeeCase, principalSeesAllCases } from '../common/task-scope.js';
@@ -64,6 +65,7 @@ function serializeCaseTask(task: Task) {
           id: task.taskDefinition.id,
           code: task.taskDefinition.code,
           formDefinitionCode: task.taskDefinition.formDefinitionCode,
+          milestoneCode: task.taskDefinition.milestoneCode ?? null,
         }
       : undefined,
     assignee: task.assignee
@@ -99,7 +101,7 @@ function serializeCaseSummary(
 async function loadCaseDetail(
   app: { db: { getRepository: (...args: any[]) => any } },
   c: Case,
-  processName: string | null,
+  processMeta: { name: string | null; milestones: Milestone[] | null },
   userRoleNames: string[],
   userGroupNames: string[],
   principal: AuthPrincipal,
@@ -117,6 +119,18 @@ async function loadCaseDetail(
   if (!canSeeCase(c.startedById, tasks, principal)) return null;
 
   const status = deriveCaseStatus(tasks);
+
+  // Read-time projection of the case plan — no stored milestone state.
+  const milestones = processMeta.milestones?.length
+    ? deriveMilestoneStates(
+        processMeta.milestones,
+        tasks.map((task: Task) => ({
+          status: task.status,
+          milestoneCode: task.taskDefinition?.milestoneCode ?? null,
+        })),
+        status,
+      )
+    : null;
 
   // Visibility-filtered attachments for the case
   const allAttachments = await app.db
@@ -138,13 +152,14 @@ async function loadCaseDetail(
   return {
     id: c.id,
     processInstanceId: c.processInstanceId,
-    processDefinitionName: processName,
+    processDefinitionName: processMeta.name,
     title: c.title,
     entity: c.entity,
     entityVersion: c.entityVersion,
     status,
     startedById: c.startedById,
     createdAt: c.createdAt,
+    milestones,
     tasks: tasks.map(serializeCaseTask),
     attachments: visibleAttachments,
     commentCount,
@@ -236,12 +251,14 @@ export const caseRoutes: FastifyPluginAsyncZod = async (app) => {
     };
   }
 
-  async function resolveProcessName(processDefinitionId: string | null): Promise<string | null> {
-    if (!processDefinitionId) return null;
+  async function resolveProcessMeta(
+    processDefinitionId: string | null,
+  ): Promise<{ name: string | null; milestones: Milestone[] | null }> {
+    if (!processDefinitionId) return { name: null, milestones: null };
     const pd = await app.db
       .getRepository(ProcessDefinition)
-      .findOne({ where: { id: processDefinitionId }, select: ['id', 'name'] });
-    return pd?.name ?? null;
+      .findOne({ where: { id: processDefinitionId }, select: ['id', 'name', 'milestones'] });
+    return { name: pd?.name ?? null, milestones: pd?.milestones ?? null };
   }
 
   // GET /cases
@@ -312,9 +329,9 @@ export const caseRoutes: FastifyPluginAsyncZod = async (app) => {
 
       const userRoleNames = user.roles.map((r) => r.name);
       const userGroupNames = user.groups.map((g) => g.name);
-      const processName = await resolveProcessName(c.processDefinitionId);
+      const processMeta = await resolveProcessMeta(c.processDefinitionId);
 
-      const detail = await loadCaseDetail(app, c, processName, userRoleNames, userGroupNames, request.principal!);
+      const detail = await loadCaseDetail(app, c, processMeta, userRoleNames, userGroupNames, request.principal!);
       if (!detail) return reply.code(404).send({ error: 'Case not found' });
       return detail;
     },
@@ -334,9 +351,9 @@ export const caseRoutes: FastifyPluginAsyncZod = async (app) => {
 
       const userRoleNames = user.roles.map((r) => r.name);
       const userGroupNames = user.groups.map((g) => g.name);
-      const processName = await resolveProcessName(c.processDefinitionId);
+      const processMeta = await resolveProcessMeta(c.processDefinitionId);
 
-      const detail = await loadCaseDetail(app, c, processName, userRoleNames, userGroupNames, request.principal!);
+      const detail = await loadCaseDetail(app, c, processMeta, userRoleNames, userGroupNames, request.principal!);
       if (!detail) return reply.code(404).send({ error: 'Case not found' });
       return detail;
     },

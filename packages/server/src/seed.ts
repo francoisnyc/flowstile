@@ -287,9 +287,15 @@ async function seed() {
     defaultPriority: Priority.HIGH,
   });
 
-  // Process: Order Fulfillment
+  // Process: Order Fulfillment — case plan: APPROVAL → PAYMENT → SHIPMENT
+  // (PAYMENT is fully automated: no human tasks, achieved when shipment starts)
   const orderProcess = await db.getRepository(ProcessDefinition).save({
     name: 'Order Fulfillment',
+    milestones: [
+      { code: 'APPROVAL', name: 'Approval' },
+      { code: 'PAYMENT', name: 'Payment' },
+      { code: 'SHIPMENT', name: 'Shipment' },
+    ],
   });
 
   // Task Definition: Approve Order
@@ -297,6 +303,7 @@ async function seed() {
     code: 'APPROVE_ORDER',
     processDefinitionId: orderProcess.id,
     formDefinitionCode: orderApprovalForm.code,
+    milestoneCode: 'APPROVAL',
     candidateGroups: ['order-reviewers'],
     defaultPriority: Priority.HIGH,
   });
@@ -306,15 +313,17 @@ async function seed() {
     code: 'CONFIRM_SHIPMENT',
     processDefinitionId: orderProcess.id,
     formDefinitionCode: shipmentForm.code,
+    milestoneCode: 'SHIPMENT',
     candidateGroups: ['warehouse'],
     defaultPriority: Priority.NORMAL,
   });
 
-  // Task Definition: Handle Exception
+  // Task Definition: Handle Exception — off the happy path, deliberately unphased
   const handleException = await db.getRepository(TaskDefinition).save({
     code: 'HANDLE_EXCEPTION',
     processDefinitionId: orderProcess.id,
     formDefinitionCode: exceptionForm.code,
+    milestoneCode: null,
     candidateGroups: ['customer-service'],
     defaultPriority: Priority.URGENT,
   });

@@ -95,6 +95,12 @@ export class FlowstileClient {
     return response.json() as Promise<T>;
   }
 
+  /** Generic authenticated GET — used by tooling (doctor, codegen) for
+   *  endpoints without a dedicated typed method. */
+  get<T>(path: string): Promise<T> {
+    return this.request<T>(path);
+  }
+
   createTask(input: CreateTaskInput): Promise<Task> {
     return this.request<Task>('/tasks', {
       method: 'POST',

@@ -132,28 +132,31 @@ describe('generateProcessFile', () => {
   ]);
 
   const tasks = [
-    { code: 'APPROVE_ORDER', formCode: 'approve-order', defaultPriority: 'high' },
-    { code: 'CONFIRM_SHIPMENT', formCode: 'confirm-shipment', defaultPriority: 'normal' },
+    { code: 'APPROVE_ORDER', formCode: 'approve-order', milestoneCode: 'APPROVAL', defaultPriority: 'high' },
+    { code: 'CONFIRM_SHIPMENT', formCode: 'confirm-shipment', milestoneCode: null, defaultPriority: 'normal' },
   ];
+  const plan = ['APPROVAL', 'SHIPMENT'];
 
   it('produces a parseable TypeScript file with the right structure', () => {
     const out = generateProcessFile({
       processName: 'Order Fulfillment',
       taskQueue: 'flowstile',
+      plan,
       tasks,
       forms,
       serverUrl: 'http://localhost:3000',
     });
 
-    expect(out).toContain(`import { defineProcess, defineTask } from '@flowstile/sdk/process'`);
+    expect(out).toContain(`import { defineProcess } from '@flowstile/sdk/process'`);
+    expect(out).toContain(`plan: ['APPROVAL', 'SHIPMENT'],`);
     expect(out).toContain('export interface ApproveOrderOutput');
     expect(out).toContain('export interface ConfirmShipmentOutput');
     expect(out).toContain("DECISION: 'APPROVED' | 'REJECTED'");
     expect(out).toContain('REASON?: string');
     expect(out).toContain('TRACKING_NUMBER: string');
     expect(out).toContain('export const orderFulfillmentProcess = defineProcess');
-    expect(out).toContain("defineTask<ApproveOrderOutput>('APPROVE_ORDER', { priority: 'high' })");
-    expect(out).toContain("defineTask<ConfirmShipmentOutput>('CONFIRM_SHIPMENT')");
+    expect(out).toContain("approveOrder: task<ApproveOrderOutput>('APPROVE_ORDER', { phase: 'APPROVAL', defaults: { priority: 'high' } })");
+    expect(out).toContain("confirmShipment: task<ConfirmShipmentOutput>('CONFIRM_SHIPMENT', { phase: null })");
   });
 
   it('adds the attachment import only when a form has attachment fields', () => {
@@ -198,8 +201,8 @@ describe('generateProcessFile', () => {
       forms,
       serverUrl: 'http://localhost:3000',
     });
-    // CONFIRM_SHIPMENT has defaultPriority: 'normal' — no options object
-    expect(out).toContain(`defineTask<ConfirmShipmentOutput>('CONFIRM_SHIPMENT'),`);
+    // CONFIRM_SHIPMENT has defaultPriority: 'normal' — phase only, no defaults
+    expect(out).toContain(`confirmShipment: task<ConfirmShipmentOutput>('CONFIRM_SHIPMENT', { phase: null }),`);
     expect(out).not.toMatch(/CONFIRM_SHIPMENT.*priority/);
   });
 });

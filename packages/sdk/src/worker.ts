@@ -11,6 +11,7 @@ import {
 } from './activities.js';
 import type { FlowstileClientOptions } from './types.js';
 import type { ProcessDefinition } from './process.js';
+import { runDoctor, formatDoctorReport } from './doctor.js';
 
 // The built-in activities that every Flowstile workflow relies on. The
 // `createTaskAndWait` helper proxies `createFlowstileTask`/`cancelFlowstileTask`,
@@ -73,6 +74,29 @@ export async function createFlowstileWorker(config: FlowstileWorkerConfig): Prom
         `\nError: ${err instanceof Error ? err.message : err}\n`,
     );
     process.exit(1);
+  }
+
+  // Doctor preflight: validate the seams (task codes, published forms, queue,
+  // plan/phase agreement) before accepting work. A typo'd task code becomes a
+  // red line here, not a failed workflow in the Temporal UI ten minutes later.
+  // FLOWSTILE_DOCTOR=off skips; =warn reports but never blocks.
+  const doctorMode = process.env.FLOWSTILE_DOCTOR ?? 'strict';
+  if (doctorMode !== 'off') {
+    try {
+      const report = await runDoctor(flowstile, proc);
+      console.log(`\n${formatDoctorReport(report)}\n`);
+      if (!report.ok && doctorMode !== 'warn') {
+        console.error(
+          'Doctor found errors — refusing to start. Fix the findings above, ' +
+            'or start with FLOWSTILE_DOCTOR=warn to override.\n',
+        );
+        process.exit(1);
+      }
+    } catch (err) {
+      console.warn(
+        `Doctor preflight could not run (${err instanceof Error ? err.message : err}) — continuing.`,
+      );
+    }
   }
 
   configureFlowstileActivities(flowstile);

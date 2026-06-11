@@ -127,8 +127,8 @@ async function apiFetch<T>(path: string, authHeader: string): Promise<T> {
 // Main
 // ---------------------------------------------------------------------------
 
-interface ProcessItem { id: string; name: string }
-interface TaskDefItem { id: string; code: string; formDefinitionCode: string; defaultPriority: string }
+interface ProcessItem { id: string; name: string; milestones?: { code: string; name: string }[] | null }
+interface TaskDefItem { id: string; code: string; formDefinitionCode: string; milestoneCode?: string | null; defaultPriority: string }
 interface FormItem { code: string; version: number; jsonSchema: Record<string, unknown> }
 
 async function run() {
@@ -181,9 +181,11 @@ async function run() {
   const output = generateProcessFile({
     processName: processName!,
     taskQueue: taskQueue!,
+    plan: (proc.milestones ?? []).map((m) => m.code),
     tasks: taskDefs.items.map((td) => ({
       code: td.code,
       formCode: td.formDefinitionCode,
+      milestoneCode: td.milestoneCode ?? null,
       defaultPriority: td.defaultPriority,
     })),
     forms: formMap,
