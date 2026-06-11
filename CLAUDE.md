@@ -120,6 +120,7 @@ For everything else, push to `master`.
 ## Documentation
 
 - `docs/developer-guide.md` — concepts and integration guide
+- `docs/process-authoring-guide.md` — step-by-step authoring journey (code-first process definition, task→form mapping, case plan/phases, versioning, mining); doubles as the process-visibility & DX roadmap
 - `docs/design-decisions.md` — why the task data model is split
 - `docs/runtime-contract.md` — detailed payload, lifecycle, and access rules
 - `docs/ui-direction.md` — frontend stack and visual principles
