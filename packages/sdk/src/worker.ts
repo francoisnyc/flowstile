@@ -29,8 +29,12 @@ const FLOWSTILE_ACTIVITIES = {
 };
 
 export interface FlowstileWorkerConfig {
-  /** Process definition created with `defineProcess`. Provides the task queue name. */
-  process: ProcessDefinition;
+  /**
+   * Process definition(s) created with `defineProcess`. A worker can host
+   * several processes as long as they share one task queue. Provides the
+   * task queue name; the doctor preflights each process.
+   */
+  process: ProcessDefinition | ProcessDefinition[];
   /** Flowstile server connection options (baseUrl + apiKey or auth). */
   flowstile: FlowstileClientOptions;
   /** Temporal connection options. Defaults to localhost:7233. */
@@ -60,7 +64,16 @@ export interface FlowstileWorkerConfig {
  *   });
  */
 export async function createFlowstileWorker(config: FlowstileWorkerConfig): Promise<void> {
-  const { process: proc, flowstile, temporal = {}, workflowsPath, activities = {} } = config;
+  const { flowstile, temporal = {}, workflowsPath, activities = {} } = config;
+  const procs = Array.isArray(config.process) ? config.process : [config.process];
+  if (procs.length === 0) throw new Error('createFlowstileWorker: at least one process is required');
+  const queues = new Set(procs.map((p) => p.taskQueue));
+  if (queues.size > 1) {
+    throw new Error(
+      `createFlowstileWorker: all processes must share one task queue, got: ${[...queues].join(', ')}`,
+    );
+  }
+  const proc = procs[0];
   const temporalAddress = temporal.address ?? 'localhost:7233';
 
   // Health check — fail fast with a helpful message if the server is unreachable
@@ -83,9 +96,13 @@ export async function createFlowstileWorker(config: FlowstileWorkerConfig): Prom
   const doctorMode = process.env.FLOWSTILE_DOCTOR ?? 'strict';
   if (doctorMode !== 'off') {
     try {
-      const report = await runDoctor(flowstile, proc);
-      console.log(`\n${formatDoctorReport(report)}\n`);
-      if (!report.ok && doctorMode !== 'warn') {
+      let allOk = true;
+      for (const p of procs) {
+        const report = await runDoctor(flowstile, p);
+        console.log(`\n${formatDoctorReport(report)}\n`);
+        allOk = allOk && report.ok;
+      }
+      if (!allOk && doctorMode !== 'warn') {
         console.error(
           'Doctor found errors — refusing to start. Fix the findings above, ' +
             'or start with FLOWSTILE_DOCTOR=warn to override.\n',
@@ -128,7 +145,7 @@ export async function createFlowstileWorker(config: FlowstileWorkerConfig): Prom
 
   console.log(
     `\nFlowstile worker started` +
-      `\n  Process:   ${proc.name}` +
+      `\n  Process:   ${procs.map((p) => p.name).join(', ')}` +
       `\n  Temporal:  ${temporalAddress}` +
       `\n  Server:    ${flowstile.baseUrl}` +
       `\n  Auth:      ${authDesc}` +

@@ -23,32 +23,31 @@ Four decisions shape everything below. They are worth internalizing before readi
 
 ## Step 1 — Define the process in code
 
-**Status: partially Shipped — `defineProcess`/`defineTask` exist; `plan` and `phase` are Planned (Phase 1).**
+**Status: Shipped.** `plan` on `defineProcess`, required `phase` on `defineTask`; the task-factory form scopes `phase` to the plan at compile time, and both forms validate phase membership at module load (a worker with a stale plan fails to boot).
 
 A process is declared once, co-located with the workflow that implements it:
 
 ```typescript
-import { defineProcess, defineTask } from '@flowstile/sdk/process';
+import { defineProcess } from '@flowstile/sdk/process';
 
 export const loanProcess = defineProcess('Loan Origination', {
   taskQueue: 'flowstile',
-  // The case plan: ordered business phases, as users should understand them.
-  plan: ['Application Review', 'Credit Assessment', 'Underwriting', 'Final Decision'],
-  tasks: {
-    reviewApplication: defineTask<ReviewOutput>('REVIEW_APPLICATION', { phase: 'Application Review' }),
-    verifyIdentity:    defineTask<IdentityOutput>('VERIFY_IDENTITY',  { phase: 'Application Review' }),
-    requestDocuments:  defineTask<DocsOutput>('REQUEST_DOCUMENTS',    { phase: 'Application Review' }),
-    assessRisk:        defineTask<RiskOutput>('ASSESS_RISK',          { phase: 'Underwriting' }),
-    seniorReview:      defineTask<SeniorOutput>('SENIOR_REVIEW',      { phase: 'Underwriting' }),
-    approveLoan:       defineTask<ApprovalOutput>('APPROVE_LOAN',     { phase: 'Final Decision' }),
-    handleFraudFlag:   defineTask<FraudOutput>('HANDLE_FRAUD_FLAG',   { phase: null }), // exception path, unphased
-  },
-});
+  // The case plan: ordered milestone codes, as users should understand them.
+  plan: ['APPLICATION_REVIEW', 'CREDIT_ASSESSMENT', 'UNDERWRITING', 'FINAL_DECISION'],
+}, (task) => ({
+  reviewApplication: task<ReviewOutput>('REVIEW_APPLICATION', { phase: 'APPLICATION_REVIEW' }),
+  verifyIdentity:    task<IdentityOutput>('VERIFY_IDENTITY',  { phase: 'APPLICATION_REVIEW' }),
+  requestDocuments:  task<DocsOutput>('REQUEST_DOCUMENTS',    { phase: 'APPLICATION_REVIEW' }),
+  assessRisk:        task<RiskOutput>('ASSESS_RISK',          { phase: 'UNDERWRITING' }),
+  seniorReview:      task<SeniorOutput>('SENIOR_REVIEW',      { phase: 'UNDERWRITING' }),
+  approveLoan:       task<ApprovalOutput>('APPROVE_LOAN',     { phase: 'FINAL_DECISION' }),
+  handleFraudFlag:   task<FraudOutput>('HANDLE_FRAUD_FLAG',   { phase: null }), // exception path, unphased
+}));
 ```
 
 Rules of the plan:
 
-- **`phase` is required, and its values are type-checked against `plan`.** Every task is either placed in a phase or explicitly opted out with `phase: null` — the compiler enforces placement. Because the plan and the task map live in the same object literal, `phase` is typed as a member of `plan` (a mapped type, not tooling): a typo'd or removed phase name is a compile error. Forgetting to put a new task on the map is unmergeable at zero analysis cost.
+- **`phase` is required, and its values are type-checked against `plan`.** Every task is either placed in a phase or explicitly opted out with `phase: null` — the compiler enforces placement. In the task-factory form above, `task` is scoped to the plan, so a typo'd or removed phase is a compile error at the exact line. (A legacy object form using standalone `defineTask` also exists — there, and in all cases as a backstop, `defineProcess` validates membership at module load and a worker with a stale plan refuses to boot.)
 - **Phases map N:1 to task definitions.** "Application Review" spans three task definitions, one of which (`REQUEST_DOCUMENTS`) may be created zero or many times at runtime. A phase also spans N task *instances* — rework loops create repeated instances under one stable phase.
 - **A phase may have zero tasks.** "Credit Assessment" can be fully automated (a Temporal activity). It will appear on the map and in mined statistics (step 9), but task-based state inference will jump over it (see step 6).
 - **Exception tasks are explicitly unphased** (`phase: null`). The plan is the happy path on purpose. Do not try to express "shipped OR refunded" in the plan — that is the road to CMMN sentries and the brittleness this design exists to avoid.
@@ -56,7 +55,7 @@ Rules of the plan:
 
 ## Step 2 — Run the worker: self-registration and the doctor
 
-**Status: Planned — doctor preflight (Phase 1), dev-mode sync (Phase 3, directional). Today, process and task definitions are created via the REST API or seed script, and `workflowType`/`taskQueue` are set on the process definition manually.**
+**Status: doctor Shipped (strict by default; `FLOWSTILE_DOCTOR=warn|off` to relax); dev-mode sync Planned (Phase 3, directional). Today, process and task definitions are created via the REST API or seed script, and `workflowType`/`taskQueue` are set on the process definition manually.**
 
 In dev mode (`pnpm dev`), starting the worker does two things beyond hosting workflows:
 
@@ -118,7 +117,7 @@ Failure semantics when the seams are broken anyway (**hardening Planned, Phase 2
 
 ## Step 6 — Run a case: the stepper, the timeline, and failure visibility
 
-**Status: timeline Shipped. Phase stepper, computed phase states, and workflow-failure surfacing Planned (Phases 1–2).**
+**Status: timeline, phase stepper, and computed phase states Shipped (the derivation's table-driven spec lives in `packages/server/test/unit/milestones.spec.ts`). Workflow-failure surfacing Planned (Phase 2).**
 
 `POST /processes/:id/start` validates start-form data, starts the Temporal workflow, and creates the case. The case page then shows two layers, one per audience altitude:
 
@@ -140,7 +139,7 @@ The embeddable `@flowstile/react` package consumes the same computed `milestones
 
 ## Step 7 — Change management: conformance, types first
 
-**Status: type-level checks Planned (Phase 1, part of the SDK types). AST analysis explicitly Deferred.**
+**Status: type-level checks Shipped (task-factory form; object form validated at module load). AST analysis explicitly Deferred.**
 
 The plan is a static declaration and *will* drift from the workflow unless something stops it. The cheapest thing that stops it is the compiler, and it covers most of the surface:
 
@@ -221,7 +220,7 @@ Explicitly out of bounds: the doctor's checks and "did you mean" hints (edit dis
 
 | Phase | Theme | Contents |
 |---|---|---|
-| **1 — Orientation & the doctor** | Give users the map; fail at the seam | `plan` on `defineProcess`, required type-checked `phase` on `defineTask` (placement + plan membership as compile errors); `milestones` JSONB projection on `ProcessDefinition` + `milestoneCode` on `TaskDefinition`; phase-state derivation shipped as a table-driven test suite, then computed in `GET /cases/:id`; stepper on the case page and in `@flowstile/react`; worker doctor preflight |
+| **1 — Orientation & the doctor** ✅ *shipped* | Give users the map; fail at the seam | `plan` on `defineProcess`, required type-checked `phase` on `defineTask` (placement + plan membership as compile errors); `milestones` JSONB projection on `ProcessDefinition` + `milestoneCode` on `TaskDefinition`; phase-state derivation shipped as a table-driven test suite, then computed in `GET /cases/:id`; stepper on the case page and in `@flowstile/react`; worker doctor preflight |
 | **2 — Failure ergonomics & staleness** | Make breakage loud and typed | Non-retryable `404`/`422` task-creation errors with remediation hints; workflow failure status surfaced on the case page (cached, non-blocking); codegen staleness hash + `--watch`; `flowstile` skill packaging the agent-runnable authoring loop incl. agent-drafted forms (draft → preview → human publish) |
 | **3 — Sync & versioning** *(directional)* | Kill the curl steps; version the description | Dev-mode worker self-registration (loud override-skips, soft-deprecate deletions, no version minting in dev); explicit release sync minting versions; `Case.processDefinitionVersion`; per-version plan snapshots; MCP server projecting the authoring endpoints from `docs/openapi.yaml` |
 | **4 — Insight** *(directional)* | Let the map learn from reality | Mined phase durations, loop-back and skip rates on the stepper (min-sample thresholds, ranges with n, segmented by process version); UI process page as read-model (definitions, phases, form publish status, last sync, deprecated/orphan detection); optional developer-facing execution DAG in admin; in-product AI form drafting (BYO-key) and mining narratives |

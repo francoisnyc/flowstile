@@ -38,6 +38,7 @@ async function seed() {
   const orderReviewers = await db.getRepository(Group).save({ name: 'order-reviewers' });
   const warehouse = await db.getRepository(Group).save({ name: 'warehouse' });
   const customerService = await db.getRepository(Group).save({ name: 'customer-service' });
+  const underwriters = await db.getRepository(Group).save({ name: 'underwriters' });
 
   // Roles
   const adminRole = await db.getRepository(Role).save({
@@ -76,6 +77,13 @@ async function seed() {
     displayName: 'Carol Davis',
     passwordHash: devHash,
     groups: [customerService],
+    roles: [taskUserRole],
+  });
+  await db.getRepository(User).save({
+    email: 'dave@example.com',
+    displayName: 'Dave (Underwriter)',
+    passwordHash: devHash,
+    groups: [underwriters],
     roles: [taskUserRole],
   });
 
@@ -328,6 +336,195 @@ async function seed() {
     defaultPriority: Priority.URGENT,
   });
 
+  // ── Loan Origination ──────────────────────────────────────────────────────
+  // Multi-stage approval demo: APPLICATION_REVIEW → CREDIT_ASSESSMENT (fully
+  // automated, zero human tasks) → UNDERWRITING (rework loop + conditional
+  // senior review above 50k) → FINAL_DECISION.
+
+  const loanOriginationStartForm = await db.getRepository(FormDefinition).save({
+    code: 'LOAN_ORIGINATION_START',
+    version: 1,
+    jsonSchema: {
+      type: 'object',
+      properties: {
+        CUSTOMER_NAME: { type: 'string' },
+        AMOUNT: { type: 'number', minimum: 1 },
+        PURPOSE: { type: 'string' },
+      },
+      required: ['CUSTOMER_NAME', 'AMOUNT', 'PURPOSE'],
+    },
+    uiSchema: {
+      type: 'VerticalLayout',
+      elements: [
+        { type: 'Control', scope: '#/properties/CUSTOMER_NAME' },
+        { type: 'Control', scope: '#/properties/AMOUNT' },
+        { type: 'Control', scope: '#/properties/PURPOSE', options: { multi: true } },
+      ],
+    },
+    status: FormDefinitionStatus.PUBLISHED,
+  });
+
+  const loanApplicationReviewForm = await db.getRepository(FormDefinition).save({
+    code: 'LOAN_APPLICATION_REVIEW',
+    version: 1,
+    jsonSchema: {
+      type: 'object',
+      properties: {
+        CUSTOMER_NAME: { type: 'string' },
+        AMOUNT: { type: 'number' },
+        PURPOSE: { type: 'string' },
+        REWORK_REASON: { type: 'string' },
+        DECISION: { type: 'string', enum: ['PROCEED', 'REJECT'] },
+        NOTES: { type: 'string' },
+      },
+      required: ['CUSTOMER_NAME', 'AMOUNT', 'DECISION'],
+    },
+    uiSchema: {
+      type: 'VerticalLayout',
+      elements: [
+        { type: 'Control', scope: '#/properties/CUSTOMER_NAME', options: { readonly: true } },
+        { type: 'Control', scope: '#/properties/AMOUNT', options: { readonly: true } },
+        { type: 'Control', scope: '#/properties/PURPOSE', options: { readonly: true } },
+        { type: 'Control', scope: '#/properties/REWORK_REASON', options: { readonly: true } },
+        { type: 'Control', scope: '#/properties/DECISION' },
+        { type: 'Control', scope: '#/properties/NOTES', options: { multi: true } },
+      ],
+    },
+    status: FormDefinitionStatus.PUBLISHED,
+  });
+
+  const loanRiskAssessmentForm = await db.getRepository(FormDefinition).save({
+    code: 'LOAN_RISK_ASSESSMENT',
+    version: 1,
+    jsonSchema: {
+      type: 'object',
+      properties: {
+        CUSTOMER_NAME: { type: 'string' },
+        AMOUNT: { type: 'number' },
+        CREDIT_SCORE: { type: 'integer' },
+        DECISION: { type: 'string', enum: ['APPROVE', 'REJECT', 'SEND_BACK'] },
+        RATIONALE: { type: 'string' },
+      },
+      required: ['CUSTOMER_NAME', 'AMOUNT', 'CREDIT_SCORE', 'DECISION', 'RATIONALE'],
+    },
+    uiSchema: {
+      type: 'VerticalLayout',
+      elements: [
+        { type: 'Control', scope: '#/properties/CUSTOMER_NAME', options: { readonly: true } },
+        { type: 'Control', scope: '#/properties/AMOUNT', options: { readonly: true } },
+        { type: 'Control', scope: '#/properties/CREDIT_SCORE', options: { readonly: true } },
+        { type: 'Control', scope: '#/properties/DECISION' },
+        { type: 'Control', scope: '#/properties/RATIONALE', options: { multi: true } },
+      ],
+    },
+    status: FormDefinitionStatus.PUBLISHED,
+  });
+
+  const loanSeniorReviewForm = await db.getRepository(FormDefinition).save({
+    code: 'LOAN_SENIOR_REVIEW',
+    version: 1,
+    jsonSchema: {
+      type: 'object',
+      properties: {
+        AMOUNT: { type: 'number' },
+        CREDIT_SCORE: { type: 'integer' },
+        RISK_RATIONALE: { type: 'string' },
+        DECISION: { type: 'string', enum: ['ENDORSE', 'REJECT'] },
+        COMMENT: { type: 'string' },
+      },
+      required: ['AMOUNT', 'CREDIT_SCORE', 'DECISION'],
+    },
+    uiSchema: {
+      type: 'VerticalLayout',
+      elements: [
+        { type: 'Control', scope: '#/properties/AMOUNT', options: { readonly: true } },
+        { type: 'Control', scope: '#/properties/CREDIT_SCORE', options: { readonly: true } },
+        { type: 'Control', scope: '#/properties/RISK_RATIONALE', options: { readonly: true } },
+        { type: 'Control', scope: '#/properties/DECISION' },
+        { type: 'Control', scope: '#/properties/COMMENT', options: { multi: true } },
+      ],
+    },
+    status: FormDefinitionStatus.PUBLISHED,
+  });
+
+  const loanFinalDecisionForm = await db.getRepository(FormDefinition).save({
+    code: 'LOAN_FINAL_DECISION',
+    version: 1,
+    jsonSchema: {
+      type: 'object',
+      properties: {
+        CUSTOMER_NAME: { type: 'string' },
+        AMOUNT: { type: 'number' },
+        CREDIT_SCORE: { type: 'integer' },
+        DECISION: { type: 'string', enum: ['APPROVED', 'DECLINED'] },
+        APR: { type: 'number' },
+        TERMS: { type: 'string' },
+      },
+      required: ['CUSTOMER_NAME', 'AMOUNT', 'DECISION'],
+    },
+    uiSchema: {
+      type: 'VerticalLayout',
+      elements: [
+        { type: 'Control', scope: '#/properties/CUSTOMER_NAME', options: { readonly: true } },
+        { type: 'Control', scope: '#/properties/AMOUNT', options: { readonly: true } },
+        { type: 'Control', scope: '#/properties/CREDIT_SCORE', options: { readonly: true } },
+        { type: 'Control', scope: '#/properties/DECISION' },
+        { type: 'Control', scope: '#/properties/APR' },
+        { type: 'Control', scope: '#/properties/TERMS', options: { multi: true } },
+      ],
+    },
+    status: FormDefinitionStatus.PUBLISHED,
+  });
+
+  const loanOriginationProcess = await db.getRepository(ProcessDefinition).save({
+    name: 'Loan Origination',
+    startFormCode: loanOriginationStartForm.code,
+    workflowType: 'loanOriginationWorkflow',
+    taskQueue: 'flowstile',
+    milestones: [
+      { code: 'APPLICATION_REVIEW', name: 'Application Review' },
+      { code: 'CREDIT_ASSESSMENT', name: 'Credit Assessment' },
+      { code: 'UNDERWRITING', name: 'Underwriting' },
+      { code: 'FINAL_DECISION', name: 'Final Decision' },
+    ],
+  });
+
+  await db.getRepository(TaskDefinition).save({
+    code: 'LOAN_REVIEW_APPLICATION',
+    processDefinitionId: loanOriginationProcess.id,
+    formDefinitionCode: loanApplicationReviewForm.code,
+    milestoneCode: 'APPLICATION_REVIEW',
+    candidateGroups: ['loan-officers'],
+    defaultPriority: Priority.HIGH,
+  });
+
+  await db.getRepository(TaskDefinition).save({
+    code: 'LOAN_ASSESS_RISK',
+    processDefinitionId: loanOriginationProcess.id,
+    formDefinitionCode: loanRiskAssessmentForm.code,
+    milestoneCode: 'UNDERWRITING',
+    candidateGroups: ['underwriters'],
+    defaultPriority: Priority.NORMAL,
+  });
+
+  await db.getRepository(TaskDefinition).save({
+    code: 'LOAN_SENIOR_REVIEW',
+    processDefinitionId: loanOriginationProcess.id,
+    formDefinitionCode: loanSeniorReviewForm.code,
+    milestoneCode: 'UNDERWRITING',
+    candidateGroups: ['underwriters'],
+    defaultPriority: Priority.HIGH,
+  });
+
+  await db.getRepository(TaskDefinition).save({
+    code: 'LOAN_FINAL_DECISION',
+    processDefinitionId: loanOriginationProcess.id,
+    formDefinitionCode: loanFinalDecisionForm.code,
+    milestoneCode: 'FINAL_DECISION',
+    candidateGroups: ['loan-officers'],
+    defaultPriority: Priority.NORMAL,
+  });
+
   // Sample tasks
   await db.getRepository(Task).save({
     taskDefinitionId: reviewLoan.id,
@@ -414,13 +611,13 @@ async function seed() {
   });
 
   console.log('Seed complete:');
-  console.log('  5 groups: loan-officers, hr-team, order-reviewers, warehouse, customer-service');
+  console.log('  6 groups: loan-officers, hr-team, order-reviewers, warehouse, customer-service, underwriters');
   console.log('  2 roles: admin, task-user');
-  console.log('  4 users: alice (admin), bob (loan officer + warehouse), carol (customer service), service (worker)');
+  console.log('  5 users: alice (admin), bob (loan officer + warehouse), carol (customer service), dave (underwriter), service (worker)');
   console.log(`  1 dev API key (name "dev-worker"): ${DEV_API_KEY}`);
-  console.log('  5 forms: LOAN_APPLICATION_START, LOAN_APPLICATION, ORDER_APPROVAL, SHIPMENT_CONFIRMATION, ORDER_EXCEPTION');
-  console.log('  2 processes: Loan Processing, Order Fulfillment');
-  console.log('  4 task definitions: REVIEW_LOAN, APPROVE_ORDER, CONFIRM_SHIPMENT, HANDLE_EXCEPTION');
+  console.log('  10 forms: LOAN_APPLICATION_START, LOAN_APPLICATION, ORDER_APPROVAL, SHIPMENT_CONFIRMATION, ORDER_EXCEPTION, LOAN_ORIGINATION_START, LOAN_APPLICATION_REVIEW, LOAN_RISK_ASSESSMENT, LOAN_SENIOR_REVIEW, LOAN_FINAL_DECISION');
+  console.log('  3 processes: Loan Processing, Order Fulfillment, Loan Origination');
+  console.log('  8 task definitions: REVIEW_LOAN, APPROVE_ORDER, CONFIRM_SHIPMENT, HANDLE_EXCEPTION, LOAN_REVIEW_APPLICATION, LOAN_ASSESS_RISK, LOAN_SENIOR_REVIEW, LOAN_FINAL_DECISION');
   console.log('  4 tasks: 2 loan tasks, 2 order tasks');
 
   await db.destroy();
