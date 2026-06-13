@@ -286,3 +286,39 @@ describe('Milestone write validation', () => {
     expect(JSON.parse(cleared.body).milestoneCode).toBeNull();
   });
 });
+
+// The worker doctor (packages/sdk/src/doctor.ts) reads `milestones` off
+// GET /processes and `milestoneCode` off GET /processes/:id/tasks to validate
+// a worker's declaration before it accepts work. Pin that read contract here so
+// a server-side field rename can't silently blind the doctor — the failure it
+// otherwise causes (a workflow dying in the Temporal UI) is far from this code.
+describe('Worker doctor read contract', () => {
+  it('exposes milestones on GET /processes and milestoneCode on its task definitions', async () => {
+    const { process, defs } = await createPlannedProcess();
+
+    const procList = await authed(app, cookie, { method: 'GET', url: '/processes?limit=200' });
+    expect(procList.statusCode).toBe(200);
+    const listed = JSON.parse(procList.body).items.find(
+      (p: { id: string }) => p.id === process.id,
+    );
+    expect(listed.milestones).toEqual([
+      { code: 'REVIEW', name: 'Review' },
+      { code: 'ASSESS', name: 'Assess' },
+      { code: 'DECIDE', name: 'Decide' },
+    ]);
+
+    const tasksRes = await authed(app, cookie, {
+      method: 'GET',
+      url: `/processes/${process.id}/tasks?limit=200`,
+    });
+    expect(tasksRes.statusCode).toBe(200);
+    const items: Array<{ code: string; milestoneCode: string | null }> = JSON.parse(tasksRes.body).items;
+    const byCode = new Map(items.map((t) => [t.code, t]));
+
+    // every task def carries the field the doctor keys on
+    for (const t of items) expect(t).toHaveProperty('milestoneCode');
+    expect(byCode.get(defs.REVIEW.code)?.milestoneCode).toBe('REVIEW');
+    // the deliberately-unphased exception task surfaces null, not a missing key
+    expect(byCode.get(defs.EXCEPTION.code)?.milestoneCode).toBeNull();
+  });
+});

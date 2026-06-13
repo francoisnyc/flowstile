@@ -1,8 +1,8 @@
 export { FlowstileClient } from './client.js';
 export { defineTask, defineProcess } from './process.js';
 export type { TaskDescriptor, TasksMap, ProcessDefinition, TaskOptions, PhasedTaskFactory } from './process.js';
-export { runDoctor, formatDoctorReport } from './doctor.js';
-export type { DoctorReport, DoctorFinding, DoctorSeverity } from './doctor.js';
+export { runDoctor, evaluateProcessHealth, formatDoctorReport } from './doctor.js';
+export type { DoctorReport, DoctorFinding, DoctorSeverity, DoctorSnapshot } from './doctor.js';
 export type {
   FlowstileClientOptions,
   CreateTaskInput,
