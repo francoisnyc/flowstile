@@ -33,6 +33,12 @@ export class ProcessDefinition {
   @Column({ type: 'jsonb', nullable: true })
   caseEntitySchema: Record<string, unknown> | null;
 
+  // The case plan: ordered business phases shown to users as a stepper on the
+  // case page. Display-only — never gates task creation or workflow progress.
+  // Null = process has no declared plan (cases render without a stepper).
+  @Column({ type: 'jsonb', nullable: true })
+  milestones: { code: string; name: string }[] | null;
+
   // Portal start: the code of the published form users fill to initiate this
   // process from the Tasklist UI. Null = process cannot be portal-started.
   @Column({ type: 'varchar', nullable: true })

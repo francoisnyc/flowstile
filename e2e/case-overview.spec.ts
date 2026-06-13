@@ -132,6 +132,9 @@ test.describe('Case overview', () => {
     await expect(page.locator('.timeline-entry')).toHaveCount(1);
     await expect(page.locator('.timeline-task-name')).toContainText(`E2E_CASE_OV_REVIEW_${tag}`);
     await expect(page.locator('.timeline-status')).toContainText('created');
+
+    // This process declares no case plan — the milestone stepper must not render
+    await expect(page.getByTestId('milestone-stepper')).toHaveCount(0);
   });
 
   test('timeline updates after claim and completion', async ({ page }) => {

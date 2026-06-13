@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getCase, getAttachmentUrl, listCaseComments, createCaseComment } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.js';
-import type { CaseDetail, CaseComment, CaseTask } from '../types.js';
+import type { CaseDetail, CaseComment, CaseTask, CaseMilestone } from '../types.js';
 
 function caseLabel(c: CaseDetail): string {
   return c.title || c.processDefinitionName || c.processInstanceId;
@@ -38,6 +38,27 @@ function taskActorLine(task: CaseTask): string {
     return `Cancelled · ${relativeTime(task.updatedAt)}`;
   }
   return 'Waiting';
+}
+
+// The case plan as a horizontal stepper: where this case stands in the
+// process, including the phases still ahead. States come fully computed from
+// the server — this component renders, it never derives.
+function MilestoneStepper({ milestones }: { milestones: CaseMilestone[] }) {
+  return (
+    <div className="milestone-stepper" data-testid="milestone-stepper">
+      {milestones.map((m, i) => (
+        <React.Fragment key={m.code}>
+          {i > 0 && <div className={`milestone-connector ${m.state}`} />}
+          <div className={`milestone-step ${m.state}`} data-testid={`milestone-${m.code}`} data-state={m.state}>
+            <span className="milestone-marker">
+              {m.state === 'achieved' ? '✓' : m.state === 'skipped' ? '–' : ''}
+            </span>
+            <span className="milestone-name">{m.name}</span>
+          </div>
+        </React.Fragment>
+      ))}
+    </div>
+  );
 }
 
 function TaskTimeline({ tasks, navigate }: { tasks: CaseTask[]; navigate: (path: string) => void }) {
@@ -234,6 +255,10 @@ export default function CaseDetailPage() {
           )}
         </div>
       </header>
+
+      {caseDetail.milestones && caseDetail.milestones.length > 0 && (
+        <MilestoneStepper milestones={caseDetail.milestones} />
+      )}
 
       <div className="case-detail-body">
         {/* Left: Task Timeline */}

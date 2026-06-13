@@ -30,6 +30,11 @@ export class TaskDefinition {
   @Column({ type: 'varchar' })
   formDefinitionCode: string;
 
+  // Links this task definition to a milestone in the process's case plan.
+  // Null = unphased (exception/escalation tasks that aren't on the happy path).
+  @Column({ type: 'varchar', nullable: true })
+  milestoneCode: string | null;
+
   @Column('text', { array: true, default: '{}' })
   candidateGroups: string[];
 

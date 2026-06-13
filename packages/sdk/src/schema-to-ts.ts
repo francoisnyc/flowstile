@@ -104,6 +104,8 @@ export function schemaToInterface(name: string, schema: JsonSchemaNode): string 
 export interface TaskInfo {
   code: string;
   formCode: string;
+  /** Milestone code from the process plan; null/undefined = unphased. */
+  milestoneCode?: string | null;
   defaultPriority?: string;
 }
 
@@ -120,11 +122,13 @@ export interface FormInfo {
 export function generateProcessFile(options: {
   processName: string;
   taskQueue: string;
+  /** Milestone codes in plan order (from the server's case plan). */
+  plan?: string[];
   tasks: TaskInfo[];
   forms: Map<string, FormInfo>;
   serverUrl: string;
 }): string {
-  const { processName, taskQueue, tasks, forms, serverUrl } = options;
+  const { processName, taskQueue, plan = [], tasks, forms, serverUrl } = options;
   const now = new Date().toISOString().slice(0, 10);
 
   // Determine if any form uses attachments (need the import)
@@ -140,7 +144,7 @@ export function generateProcessFile(options: {
   lines.push(`// Source: ${serverUrl}  |  Process: ${processName}  |  ${now}`);
   lines.push(`// Regenerate: flowstile-codegen --process "${processName}" --task-queue ${taskQueue}`);
   lines.push('');
-  lines.push(`import { defineProcess, defineTask } from '@flowstile/sdk/process';`);
+  lines.push(`import { defineProcess } from '@flowstile/sdk/process';`);
   if (needsAttachmentImport) {
     lines.push(`import type { AttachmentReference } from '@flowstile/sdk';`);
   }
@@ -176,21 +180,29 @@ export function generateProcessFile(options: {
   const processVarName = `${toCamelCase(processName.replace(/\s+/g, '_'))}Process`;
   const sq = (s: string) => `'${s.replace(/'/g, "\\'")}'`;
 
+  // Task-factory form: `task` is scoped to the plan, so a phase that isn't a
+  // member is a compile error in this generated file.
   lines.push(`export const ${processVarName} = defineProcess(${sq(processName)}, {`);
   lines.push(`  taskQueue: ${sq(taskQueue)},`);
-  lines.push(`  tasks: {`);
+  if (plan.length > 0) {
+    lines.push(`  // Case plan: ${plan.join(' → ')}`);
+    lines.push(`  plan: [${plan.map(sq).join(', ')}],`);
+  } else {
+    lines.push(`  plan: [],`);
+  }
+  lines.push(`}, (task) => ({`);
 
   for (const task of tasks) {
     const key = toCamelCase(task.code);
     const typeName = typeNames.get(task.code) ?? 'Record<string, unknown>';
-    const priority = task.defaultPriority && task.defaultPriority !== 'normal'
-      ? `, { priority: '${task.defaultPriority}' }`
+    const phase = task.milestoneCode ? sq(task.milestoneCode) : 'null';
+    const defaults = task.defaultPriority && task.defaultPriority !== 'normal'
+      ? `, defaults: { priority: '${task.defaultPriority}' }`
       : '';
-    lines.push(`    ${key}: defineTask<${typeName}>(${sq(task.code)}${priority}),`);
+    lines.push(`  ${key}: task<${typeName}>(${sq(task.code)}, { phase: ${phase}${defaults} }),`);
   }
 
-  lines.push(`  },`);
-  lines.push(`});`);
+  lines.push(`}));`);
   lines.push('');
 
   return lines.join('\n');

@@ -20,9 +20,19 @@ function isUniqueViolation(err: unknown): boolean {
   return code === '23505';
 }
 
+// The case plan: ordered milestones rendered as a stepper on the case page.
+// Display-only — never gates task creation or workflow progress.
+const MilestonesBody = z
+  .array(z.object({ code: z.string().min(1), name: z.string().min(1) }))
+  .max(20)
+  .refine((ms) => new Set(ms.map((m) => m.code)).size === ms.length, {
+    message: 'milestone codes must be unique',
+  });
+
 const CreateProcessBody = z.object({
   name: z.string().min(1),
   status: z.nativeEnum(ProcessDefinitionStatus).optional(),
+  milestones: MilestonesBody.nullable().optional(),
 });
 
 const PatchProcessBody = z.object({
@@ -31,6 +41,7 @@ const PatchProcessBody = z.object({
   startFormCode: z.string().min(1).nullable().optional(),
   workflowType: z.string().min(1).nullable().optional(),
   taskQueue: z.string().min(1).nullable().optional(),
+  milestones: MilestonesBody.nullable().optional(),
 });
 
 const StartProcessBody = z.object({
@@ -54,6 +65,7 @@ const ErrorResponse = z.object({
 const CreateTaskDefBody = z.object({
   code: z.string().min(1),
   formDefinitionCode: z.string().min(1),
+  milestoneCode: z.string().min(1).nullable().optional(),
   candidateGroups: z.array(z.string()).optional(),
   candidateUsers: z.array(z.string()).optional(),
   defaultPriority: z.nativeEnum(Priority).optional(),
@@ -61,10 +73,21 @@ const CreateTaskDefBody = z.object({
 
 const PatchTaskDefBody = z.object({
   formDefinitionCode: z.string().min(1).optional(),
+  milestoneCode: z.string().min(1).nullable().optional(),
   candidateGroups: z.array(z.string()).optional(),
   candidateUsers: z.array(z.string()).optional(),
   defaultPriority: z.nativeEnum(Priority).optional(),
 });
+
+// A task definition may only reference a milestone that exists in its
+// process's plan (422 otherwise). Null is always valid: unphased task.
+function validMilestoneCode(
+  pd: { milestones: { code: string }[] | null },
+  milestoneCode: string | null | undefined,
+): boolean {
+  if (milestoneCode === null || milestoneCode === undefined) return true;
+  return (pd.milestones ?? []).some((m) => m.code === milestoneCode);
+}
 
 export const processRoutes: FastifyPluginAsyncZod = async (app) => {
   const read = { preHandler: [requireAuth] };
@@ -87,8 +110,12 @@ export const processRoutes: FastifyPluginAsyncZod = async (app) => {
     '/processes',
     { ...write, schema: { body: CreateProcessBody, tags: ['Processes'] } },
     async (request, reply) => {
-      const { name, status } = request.body;
-      const pd = await pdRepo().save({ name, status: status ?? ProcessDefinitionStatus.ACTIVE });
+      const { name, status, milestones } = request.body;
+      const pd = await pdRepo().save({
+        name,
+        status: status ?? ProcessDefinitionStatus.ACTIVE,
+        milestones: milestones ?? null,
+      });
       return reply.code(201).send(pd);
     },
   );
@@ -112,7 +139,7 @@ export const processRoutes: FastifyPluginAsyncZod = async (app) => {
     { ...write, schema: { params: UuidParam, body: PatchProcessBody, tags: ['Processes'] } },
     async (request, reply) => {
       const { id } = request.params;
-      const { name, status, startFormCode, workflowType, taskQueue } = request.body;
+      const { name, status, startFormCode, workflowType, taskQueue, milestones } = request.body;
 
       const pd = await pdRepo().findOne({ where: { id } });
       if (!pd) return reply.code(404).send({ error: 'Process not found' });
@@ -122,6 +149,7 @@ export const processRoutes: FastifyPluginAsyncZod = async (app) => {
       if (startFormCode !== undefined) pd.startFormCode = startFormCode;
       if (workflowType !== undefined) pd.workflowType = workflowType;
       if (taskQueue !== undefined) pd.taskQueue = taskQueue;
+      if (milestones !== undefined) pd.milestones = milestones;
       await pdRepo().save(pd);
       return pd;
     },
@@ -270,16 +298,23 @@ export const processRoutes: FastifyPluginAsyncZod = async (app) => {
     { ...write, schema: { params: UuidParam, body: CreateTaskDefBody, tags: ['Processes'] } },
     async (request, reply) => {
       const { id } = request.params;
-      const { code, formDefinitionCode, candidateGroups, candidateUsers, defaultPriority } =
+      const { code, formDefinitionCode, milestoneCode, candidateGroups, candidateUsers, defaultPriority } =
         request.body;
 
       const pd = await pdRepo().findOne({ where: { id } });
       if (!pd) return reply.code(404).send({ error: 'Process not found' });
 
+      if (!validMilestoneCode(pd, milestoneCode)) {
+        return reply.code(422).send({
+          error: `Unknown milestone code '${milestoneCode}' — valid codes: ${(pd.milestones ?? []).map((m) => m.code).join(', ') || '(none — process has no plan)'}`,
+        });
+      }
+
       const td = await tdRepo().save({
         code,
         processDefinitionId: id,
         formDefinitionCode,
+        milestoneCode: milestoneCode ?? null,
         candidateGroups: candidateGroups ?? [],
         candidateUsers: candidateUsers ?? [],
         defaultPriority: defaultPriority ?? Priority.NORMAL,
@@ -294,11 +329,21 @@ export const processRoutes: FastifyPluginAsyncZod = async (app) => {
     { ...write, schema: { params: UuidParam, body: PatchTaskDefBody, tags: ['Processes'] } },
     async (request, reply) => {
       const { id } = request.params;
-      const { formDefinitionCode, candidateGroups, candidateUsers, defaultPriority } =
+      const { formDefinitionCode, milestoneCode, candidateGroups, candidateUsers, defaultPriority } =
         request.body;
 
       const td = await tdRepo().findOne({ where: { id } });
       if (!td) return reply.code(404).send({ error: 'Task definition not found' });
+
+      if (milestoneCode !== undefined) {
+        const pd = await pdRepo().findOne({ where: { id: td.processDefinitionId } });
+        if (!pd || !validMilestoneCode(pd, milestoneCode)) {
+          return reply.code(422).send({
+            error: `Unknown milestone code '${milestoneCode}' — valid codes: ${(pd?.milestones ?? []).map((m) => m.code).join(', ') || '(none — process has no plan)'}`,
+          });
+        }
+        td.milestoneCode = milestoneCode;
+      }
 
       if (formDefinitionCode !== undefined) td.formDefinitionCode = formDefinitionCode;
       if (candidateGroups !== undefined) td.candidateGroups = candidateGroups;
