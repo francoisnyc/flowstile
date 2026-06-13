@@ -53,6 +53,15 @@ Rules of the plan:
 - **Exception tasks are explicitly unphased** (`phase: null`). The plan is the happy path on purpose. Do not try to express "shipped OR refunded" in the plan — that is the road to CMMN sentries and the brittleness this design exists to avoid.
 - **Workflow code never references phases.** No `reachMilestone()` calls, no query handlers, no per-workflow boilerplate. The phase mapping lives entirely in the declaration above.
 
+### Bootstrapping dev data: the seed script
+
+The code declaration above tells the *worker* what the process looks like. But the *server* also needs matching records — process definitions, task definitions, and published forms — before any workflow can create tasks. There are two ways to get them there:
+
+- **REST API** — `POST /processes`, `POST /processes/:id/tasks`, `PUT /forms/:code/draft` + `POST /forms/:code/publish`. Good for live iteration; ephemeral (lost on database reset).
+- **Seed script** — `packages/server/src/seed.ts`, run via `pnpm --filter @flowstile/server db:seed`. This is the authoritative source for demo and development data: users, groups, roles, forms, processes, task definitions, and sample tasks. It truncates and rebuilds every run, so it's idempotent but destructive. When adding a new process, add a block here following the Loan Origination pattern (forms → process with `milestones` → task definitions with `milestoneCode`). The seed is what makes `pnpm dev` produce a working demo out of the box.
+
+Once dev-mode sync ships (Phase 3), the worker will push structure from the code declaration to the server automatically — eliminating the need to maintain the seed block for structural data. Until then, the seed and the `defineProcess` declaration are two representations of the same truth, and both must be kept in sync manually.
+
 ## Step 2 — Run the worker: self-registration and the doctor
 
 **Status: doctor Shipped (strict by default; `FLOWSTILE_DOCTOR=warn|off` to relax); dev-mode sync Planned (Phase 3, directional). Today, process and task definitions are created via the REST API or seed script, and `workflowType`/`taskQueue` are set on the process definition manually.**

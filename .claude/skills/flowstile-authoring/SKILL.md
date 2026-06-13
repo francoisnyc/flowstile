@@ -61,9 +61,9 @@ Decide, before any artifact:
 
 ## 2 — Register on the server
 
-Durable demo/dev data goes in `packages/server/src/seed.ts` (follow the Order
-Fulfillment block: forms → process with `milestones` → task definitions with
-`milestoneCode`). For live iteration use the API:
+Durable demo/dev data goes in `packages/server/src/seed.ts` (follow the Loan
+Origination block starting at line ~339: forms → process with `milestones` →
+task definitions with `milestoneCode`). For live iteration use the API:
 
 ```
 POST /processes                  { name, milestones: [{code,name},...] }
