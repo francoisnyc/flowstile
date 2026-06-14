@@ -10,6 +10,19 @@ for human input via `createTaskAndWait`, tasks completed through forms in a web
 inbox, with a case page showing a milestone stepper. Follow this loop in order.
 Every step has a deterministic check — run it before moving on.
 
+**Three disciplines that run through the whole loop:**
+
+- **Brainstorm before you build (§1 is a gate).** Pin the design down in dialogue
+  first — milestones, decisions, branches, who acts — and get a thumbs-up before
+  creating any artifact. Authoring against a fuzzy design is the #1 source of rework.
+- **Test-first (red → green).** Write the e2e spec as the executable rubric in §1,
+  *before* the seed/forms/workflow exist. It fails — that's the point: it's the
+  contract you build toward, not a victory-lap test written afterward to confirm
+  what you already shipped. §2–§6 are "make the rubric pass"; §7 is "run it green."
+- **Workflow code → the `temporal-developer` skill.** Temporal's determinism rules
+  live in the vendored `temporal-developer` skill, not here; this skill adds only
+  the Flowstile bridge (§5).
+
 ## Coming from BPMN? Translate the mental model first
 
 If you — or the prompt you're following — think in BPMN / Camunda / Bonita / KuFlow
@@ -84,9 +97,10 @@ order-reviewers), `bob@example.com` (loan-officers, warehouse), `carol@example.c
 (customer-service), `service@flowstile.local` (service). Add new groups/users in
 `packages/server/src/seed.ts`, not ad hoc.
 
-## 1 — Design the process on paper first
+## 1 — Brainstorm the design, then write the failing e2e (gate)
 
-Decide, before any artifact:
+**Brainstorm first, with the requester.** Before any artifact, talk the process
+through and converge on:
 
 - **Plan**: 3–6 ordered milestone codes + display names (the happy path only —
   exception/escalation tasks stay unphased with `phase: null`; never encode
@@ -95,8 +109,15 @@ Decide, before any artifact:
   milestone code or null, each with a form code and candidate groups.
 - **Workflow shape**: branches, loops, compensation — this lives in imperative
   TypeScript, not in the plan. The plan never gates anything.
-- **Acceptance rubric**: write the e2e scenarios first (happy path, early
-  termination, any loop) — they are the definition of done.
+
+Surface the open questions out loud (who approves what, what ends the case, what's
+automated vs human) and get a thumbs-up. *Then* gate to build.
+
+**Write the e2e spec now (red).** Translate the agreed scenarios — happy path,
+early termination, any loop — into `e2e/<slug>.spec.ts` (shape in §7) *before* the
+seed/forms/workflow exist. It will fail to even find the process: that's your red
+bar, and the definition of done. Everything below turns it green; do not write the
+spec last to rubber-stamp what you built.
 
 ## 2 — Register on the server
 
@@ -165,6 +186,30 @@ In `packages/worker/src/<slug>/workflow.ts`:
   try/catch + a compensations array (see `order-fulfillment/workflow.ts`).
 - Long waits: pass `timeoutMs`; handle `TaskTimeoutError` / `TaskCancelledError`.
 
+### Workflow code → lean on the vendored `temporal-developer` skill
+
+`workflow.ts` runs in Temporal's deterministic sandbox. Before anything non-trivial
+(timers, signals beyond `createTaskAndWait`, child workflows, continue-as-new, or
+**changing a workflow while instances are live**), load the vendored
+**`temporal-developer`** skill (`.claude/skills/temporal-developer/`, TypeScript
+subset) and read the relevant `references/typescript/*.md`. It owns the determinism
+rules; this skill adds only the Flowstile-specific bridge:
+
+- **`createTaskAndWait` is a durable, deterministic await** — it suspends on a
+  Temporal signal. Never use `setTimeout`/`Date.now()`/`Math.random()` in workflow
+  code to wait or decide; use `timeoutMs` for deadlines and derive values from
+  inputs/activity results (see `references/typescript/determinism.md`).
+- **`persist` / `contextFrom` / `patchFlowstileCaseEntity` are activities** — the
+  SDK runs case-entity I/O inside Temporal activities, so that's the
+  non-deterministic boundary, already safe. Your workflow body stays pure.
+- **Flowstile workflows are long-lived** — a human task can sit for days, so a
+  deploy almost always replays against in-flight instances. Treat any edit to an
+  existing workflow's shape as a versioned change: read `references/core/versioning.md`
+  + `references/typescript/versioning.md` first. (Same reason Flowstile locks a form
+  version per task at creation — see CLAUDE.md "Form Versioning".)
+- **The worker bundles `workflows.ts`** — only `@temporalio/workflow`-safe imports
+  there; the `tsx watch` bundler gotcha in §0 is the symptom of breaking this.
+
 **Portal-start and read-back contracts** (these live in the examples; here so you don't have to reverse-engineer them):
 
 - **Start a case:** `POST /processes/:id/start` with `{ data: { ...start-form fields }, idempotencyKey? }` → `201 { processInstanceId, caseId }`. Requires `workflowType` + `taskQueue` set on the process (422 otherwise; 503 if `TEMPORAL_ADDRESS` isn't configured on the server).
@@ -192,12 +237,13 @@ In `packages/worker/src/<slug>/workflow.ts`:
    `JSON.stringify({ status, result })` — `const h = client.workflow.getHandle(id);
    const d = await h.describe(); const result = d.status.name === 'COMPLETED' ? await h.result() : null;`.
 
-## 7 — Validate, outer loop (the rubric)
+## 7 — Run the rubric to green (it was written in §1)
 
-Write the e2e spec in `e2e/<slug>.spec.ts` following `order-fulfillment.spec.ts`:
-start the workflow with `e2e/helpers/start-workflow.ts`-style script, complete
-tasks via API logins as the right seeded users, assert case status, milestone
-states, and the workflow's final result. Then the full local CI gate:
+You already wrote `e2e/<slug>.spec.ts` in §1 as your red contract. Now run it and
+drive it green. Shape (follow `order-fulfillment.spec.ts`): start the case via the
+portal-start contract (§5), complete tasks via API logins as the right seeded users
+(claim → complete, §5), assert case status, milestone states, the persisted case
+entity, and the workflow's typed result. Then the full local CI gate:
 
 ```bash
 pnpm build
