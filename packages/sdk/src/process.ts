@@ -1,5 +1,6 @@
 import { createTaskAndWait } from './workflows.js';
 import type { CreateTaskAndWaitInput, TaskResult } from './types.js';
+import type { VariableMapping } from './mapping.js';
 
 type TaskDefaults = Partial<Omit<CreateTaskAndWaitInput, 'taskDefinitionCode' | 'taskDefinitionId'>>;
 
@@ -13,6 +14,10 @@ export interface TaskDescriptor<TOutput extends Record<string, unknown> = Record
    */
   readonly phase: string | null;
   readonly defaults: TaskDefaults;
+  /** Input mapping: case variables projected into `contextData`. */
+  readonly contextFrom?: VariableMapping;
+  /** Output mapping: submission fields promoted to the case entity. */
+  readonly persist?: VariableMapping;
   createAndWait(
     input?: Omit<CreateTaskAndWaitInput, 'taskDefinitionCode' | 'taskDefinitionId'>,
   ): Promise<TaskResult<TOutput>>;
@@ -23,6 +28,14 @@ export interface TaskOptions {
   phase: string | null;
   /** Defaults merged into every `createAndWait` call. */
   defaults?: TaskDefaults;
+  /** Project named case-entity variables into this task's `contextData` for
+   *  display (input mapping). Array maps each key to the same name; object
+   *  renames (entity key → context key). Plumbing only — no calculation. */
+  contextFrom?: VariableMapping;
+  /** Promote an allowlist of submission fields to the case entity on
+   *  completion (output mapping). Array keeps the name; object renames
+   *  (submission key → entity key). Plumbing only. */
+  persist?: VariableMapping;
 }
 
 /**
@@ -49,8 +62,14 @@ export function defineTask<TOutput extends Record<string, unknown> = Record<stri
     taskDefinitionCode,
     phase: options.phase,
     defaults: resolvedDefaults,
+    contextFrom: options.contextFrom,
+    persist: options.persist,
     createAndWait(input = {}) {
       return createTaskAndWait<TOutput>({
+        // Descriptor-level mappings apply to every call; an explicit call-site
+        // contextFrom/persist (rare) overrides via the spread of `input`.
+        ...(options.contextFrom ? { contextFrom: options.contextFrom } : {}),
+        ...(options.persist ? { persist: options.persist } : {}),
         ...resolvedDefaults,
         ...input,
         taskDefinitionCode,
@@ -79,7 +98,12 @@ export type PhasedTaskFactory<TPhase extends string> = <
   TOutput extends Record<string, unknown> = Record<string, unknown>,
 >(
   taskDefinitionCode: string,
-  options: { phase: TPhase | null; defaults?: TaskDefaults },
+  options: {
+    phase: TPhase | null;
+    defaults?: TaskDefaults;
+    contextFrom?: VariableMapping;
+    persist?: VariableMapping;
+  },
 ) => TaskDescriptor<TOutput>;
 
 export interface ProcessConfig<TTasks extends TasksMap> {

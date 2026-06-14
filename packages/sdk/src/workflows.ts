@@ -14,7 +14,8 @@ import type {
   TaskCompletedSignalPayload,
 } from './types.js';
 import { taskCompletedSignalName, taskCancelledSignalName } from './types.js';
-import { TaskTimeoutError, TaskCancelledError } from './errors.js';
+import { TaskTimeoutError, TaskCancelledError, FlowstileApiError } from './errors.js';
+import { projectContext, buildPersistPatch } from './mapping.js';
 
 /**
  * Workflow function: creates a Flowstile task and durably waits for a human to
@@ -40,15 +41,33 @@ export async function createTaskAndWait<
 >(
   input: CreateTaskAndWaitInput,
 ): Promise<TaskResult<TOutput>> {
-  const { createFlowstileTask, cancelFlowstileTask } = proxyActivities<typeof activities>({
-    startToCloseTimeout: '10 minutes',
-    retry: { maximumAttempts: 3 },
-  });
+  const { createFlowstileTask, cancelFlowstileTask, getFlowstileCaseEntity, patchFlowstileCaseEntity } =
+    proxyActivities<typeof activities>({
+      startToCloseTimeout: '10 minutes',
+      retry: { maximumAttempts: 3 },
+    });
 
   const { workflowId } = workflowInfo();
 
+  // contextFrom (input mapping): project named case variables into contextData
+  // before creating the task. Explicit call-site contextData wins per key. Only
+  // touches the entity when declared, so workflows that don't opt in are
+  // unchanged. The first task of a case has no entity yet → 404 → project
+  // nothing (other errors propagate to Temporal's activity retry).
+  let contextData = input.contextData;
+  if (input.contextFrom && input.processInstanceId) {
+    let entity: Record<string, unknown> | null = null;
+    try {
+      ({ entity } = await getFlowstileCaseEntity(input.processInstanceId));
+    } catch (err) {
+      if (!(err instanceof FlowstileApiError && err.statusCode === 404)) throw err;
+    }
+    contextData = { ...projectContext(entity, input.contextFrom), ...(input.contextData ?? {}) };
+  }
+
   const task = await createFlowstileTask({
     ...input,
+    contextData,
     workflowId,
   });
 
@@ -103,6 +122,16 @@ export async function createTaskAndWait<
 
   if (cancelled) {
     throw new TaskCancelledError(task.id);
+  }
+
+  // persist (output mapping): promote the allowlisted submission fields to the
+  // case entity after a successful completion (never on timeout/cancel). Only
+  // touches the entity when declared.
+  if (input.persist && input.processInstanceId) {
+    const patch = buildPersistPatch(completionPayload!.data, input.persist);
+    if (patch.length > 0) {
+      await patchFlowstileCaseEntity(input.processInstanceId, patch);
+    }
   }
 
   return {

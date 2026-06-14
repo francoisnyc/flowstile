@@ -8,13 +8,13 @@ const { fetchCreditScore } = proxyActivities<typeof loanActivities>({
   retry: { maximumAttempts: 3 },
 });
 
-// Built-in Flowstile activities for the case entity (the durable cross-task
-// "variables" store). Registered on every worker by createFlowstileWorker.
-const { getFlowstileCaseEntity, patchFlowstileCaseEntity } =
-  proxyActivities<typeof flowstileActivities>({
-    startToCloseTimeout: '30 seconds',
-    retry: { maximumAttempts: 3 },
-  });
+// Built-in Flowstile case-entity activity, used here for the *computed* values
+// (creditScore, riskTier) that aren't submission fields. Submission-field
+// plumbing uses the declarative contextFrom/persist mappings on createAndWait.
+const { patchFlowstileCaseEntity } = proxyActivities<typeof flowstileActivities>({
+  startToCloseTimeout: '30 seconds',
+  retry: { maximumAttempts: 3 },
+});
 
 // Shape produced by POST /processes/:id/start (portal start): the validated
 // start-form payload under `data`, plus server-injected metadata.
@@ -55,11 +55,13 @@ function deriveRiskTier(creditScore: number, amount: number): RiskTier {
  * that only exists above the amount threshold.
  *
  * This workflow also doubles as the reference for the variable lifecycle:
- *   - COMPUTE in workflow code (creditScore via an activity; riskTier derived),
- *   - PERSIST to the durable case entity via patchFlowstileCaseEntity (the
- *     cross-task "variables" store, readable by the case overview and any
- *     later step),
- *   - PROJECT into a task for display via contextData (a point-in-time copy).
+ *   - COMPUTE in workflow code (creditScore via an activity; riskTier derived)
+ *     and PERSIST those *computed* values with patchFlowstileCaseEntity — they
+ *     aren't submission fields, so they're written explicitly.
+ *   - For *submission* fields, the declarative mappings on createAndWait do the
+ *     plumbing: `persist` promotes an allowlist of submitted fields to the case
+ *     entity on completion; `contextFrom` projects case variables into a task's
+ *     contextData for display (a point-in-time copy). No manual get/patch.
  *
  * Concurrency note: every write here is a disjoint-field `add`, so no
  * expectedVersion is needed — the server applies them under a row lock and
@@ -115,6 +117,10 @@ export async function loanOriginationWorkflow(
       processInstanceId: pid,
       inputData: { CUSTOMER_NAME, AMOUNT, CREDIT_SCORE: creditScore },
       contextData: { RISK_TIER: riskTier },
+      // OUTPUT MAPPING (persist): promote the underwriting outcome to the case
+      // entity on completion — an allowlist of submission fields, renamed. The
+      // SDK applies it after completion; no manual patch needed.
+      persist: { DECISION: 'underwritingDecision', RATIONALE: 'underwritingRationale' },
     });
     if (risk.data.DECISION === 'SEND_BACK') {
       reworkReason = risk.data.RATIONALE;
@@ -123,12 +129,6 @@ export async function loanOriginationWorkflow(
     if (risk.data.DECISION === 'REJECT') {
       return { status: 'declined', stage: 'underwriting', reason: risk.data.RATIONALE };
     }
-    // PERSIST the underwriting outcome (output promotion — an allowlist of
-    // submission fields written back to the durable entity).
-    await patchFlowstileCaseEntity(pid, [
-      { op: 'add', path: '/underwritingDecision', value: risk.data.DECISION },
-      { op: 'add', path: '/underwritingRationale', value: risk.data.RATIONALE },
-    ]);
 
     // Still UNDERWRITING: senior review, only above the threshold.
     if (AMOUNT > SENIOR_REVIEW_THRESHOLD) {
@@ -146,22 +146,18 @@ export async function loanOriginationWorkflow(
       }
     }
 
-    // Phase: FINAL_DECISION (loan-officers). RETRIEVE the accumulated case
-    // entity so the final reviewer sees the full picture assembled across the
-    // case — the read matters most when earlier data came from another branch;
-    // here it also confirms the variables persisted.
-    const { entity } = await getFlowstileCaseEntity(pid);
+    // Phase: FINAL_DECISION (loan-officers).
+    // INPUT MAPPING (contextFrom): project the accumulated case variables into
+    // the task for display — read from the entity, not threaded through locals
+    // (the form that matters when data came from another branch). OUTPUT MAPPING
+    // (persist): promote the final decision + APR back to the entity. Both are
+    // applied by the SDK; no manual get/patch here.
     const finalDecision = await loanFinalDecision.createAndWait({
       processInstanceId: pid,
       inputData: { CUSTOMER_NAME, AMOUNT, CREDIT_SCORE: creditScore },
-      contextData: { CREDIT_SCORE: creditScore, RISK_TIER: riskTier, CASE_VARIABLES: entity },
+      contextFrom: ['creditScore', 'riskTier', 'underwritingDecision'],
+      persist: { DECISION: 'decision', APR: 'apr' },
     });
-    await patchFlowstileCaseEntity(pid, [
-      { op: 'add', path: '/decision', value: finalDecision.data.DECISION },
-      ...(finalDecision.data.APR !== undefined
-        ? [{ op: 'add' as const, path: '/apr', value: finalDecision.data.APR }]
-        : []),
-    ]);
 
     if (finalDecision.data.DECISION === 'APPROVED') {
       return {
