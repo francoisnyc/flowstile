@@ -170,6 +170,8 @@ In `packages/worker/src/<slug>/workflow.ts`:
 - **Start a case:** `POST /processes/:id/start` with `{ data: { ...start-form fields }, idempotencyKey? }` → `201 { processInstanceId, caseId }`. Requires `workflowType` + `taskQueue` set on the process (422 otherwise; 503 if `TEMPORAL_ADDRESS` isn't configured on the server).
 - **Workflow input shape:** a portal-started workflow receives `{ processInstanceId: string, data: { ...start-form fields }, startedBy?: { id, email, displayName } | null }`. Start-form fields are nested under `data`, never at the top level. The start form's `required` constrains the *submitted form*, not your workflow input type — type fields you read as you actually use them.
 - **Read case variables back:** `GET /cases/by-process-instance/:pid/entity` → `{ entity, entityVersion }` (as a logged-in user, not the service key). This is how an e2e asserts that `persist` / `patchFlowstileCaseEntity` writes landed.
+- **Human task lifecycle (the SDK omits these by design — a workflow never completes a human task):** locate a case's open task with `GET /cases/by-process-instance/:pid` → `tasks[]` (filter by `taskDefinition.code` + `status` of `created`/`claimed`; `/tasks` is **not** filterable by `processInstanceId`), then `POST /tasks/:id/claim` (no body) and `POST /tasks/:id/complete` with `{ data: { ...submission fields } }` — the completion body key is **`data`**, not `submissionData`. An e2e drives the human side this way.
+- **Fresh-start 404 race:** right after `POST /start`, `GET /cases/by-process-instance/:pid` **404s for a beat** until the workflow runs far enough to create its first task. Poll: treat 404 as "not ready yet" and retry, don't fail.
 
 ## 6 — Validate, inner loop
 
@@ -185,7 +187,10 @@ In `packages/worker/src/<slug>/workflow.ts`:
    Temporal: `pnpm exec tsx --tsconfig <repo>/tsconfig.base.json e2e/helpers/check-workflow.ts '<wfId>'`
    **run with `cwd: packages/worker`** (the `@temporalio/client` dep is the
    worker's, not hoisted — running from repo root fails with "tsx not found").
-   Or use temporal-ui on :8080.
+   Or use temporal-ui on :8080. `check-workflow.ts` returns only `{ status }`; to
+   assert the workflow's **typed result**, drop a 10-line sibling that prints
+   `JSON.stringify({ status, result })` — `const h = client.workflow.getHandle(id);
+   const d = await h.describe(); const result = d.status.name === 'COMPLETED' ? await h.result() : null;`.
 
 ## 7 — Validate, outer loop (the rubric)
 
