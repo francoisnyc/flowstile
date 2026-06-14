@@ -41,6 +41,8 @@ async function seed() {
   const underwriters = await db.getRepository(Group).save({ name: 'underwriters' });
   const managers = await db.getRepository(Group).save({ name: 'managers' });
   const finance = await db.getRepository(Group).save({ name: 'finance' });
+  const peopleManagers = await db.getRepository(Group).save({ name: 'people-managers' });
+  const hrReviewers = await db.getRepository(Group).save({ name: 'hr-reviewers' });
 
   // Roles
   const adminRole = await db.getRepository(Role).save({
@@ -100,6 +102,20 @@ async function seed() {
     displayName: 'Frank (Finance)',
     passwordHash: devHash,
     groups: [finance],
+    roles: [taskUserRole],
+  });
+  await db.getRepository(User).save({
+    email: 'mona@example.com',
+    displayName: 'Mona (People Manager)',
+    passwordHash: devHash,
+    groups: [peopleManagers],
+    roles: [taskUserRole],
+  });
+  await db.getRepository(User).save({
+    email: 'helen@example.com',
+    displayName: 'Helen (HR Reviewer)',
+    passwordHash: devHash,
+    groups: [hrReviewers],
     roles: [taskUserRole],
   });
 
@@ -659,6 +675,129 @@ async function seed() {
     defaultPriority: Priority.NORMAL,
   });
 
+  // ── Vacation Leave Request ────────────────────────────────────────────────
+  // Portal-startable leave flow: MANAGER_REVIEW → HR_REVIEW (only when DAYS > 10)
+  // → LEDGER_UPDATE (trailing automated phase — a Temporal activity records a
+  // deterministic leave reference; no human task, so the stepper reads it as
+  // `skipped` once the case closes).
+
+  const vacationStartForm = await db.getRepository(FormDefinition).save({
+    code: 'VACATION_LEAVE_START',
+    version: 1,
+    jsonSchema: {
+      type: 'object',
+      properties: {
+        EMPLOYEE_NAME: { type: 'string' },
+        START_DATE: { type: 'string' },
+        END_DATE: { type: 'string' },
+        DAYS: { type: 'number', minimum: 1 },
+        REASON: { type: 'string' },
+      },
+      required: ['EMPLOYEE_NAME', 'START_DATE', 'END_DATE', 'DAYS', 'REASON'],
+    },
+    uiSchema: {
+      type: 'VerticalLayout',
+      elements: [
+        { type: 'Control', scope: '#/properties/EMPLOYEE_NAME', label: 'Employee Name' },
+        { type: 'Control', scope: '#/properties/START_DATE', label: 'Start Date' },
+        { type: 'Control', scope: '#/properties/END_DATE', label: 'End Date' },
+        { type: 'Control', scope: '#/properties/DAYS', label: 'Number of Days' },
+        { type: 'Control', scope: '#/properties/REASON', label: 'Reason', options: { multi: true } },
+      ],
+    },
+    status: FormDefinitionStatus.PUBLISHED,
+  });
+
+  const vacationManagerReviewForm = await db.getRepository(FormDefinition).save({
+    code: 'VACATION_MANAGER_REVIEW',
+    version: 1,
+    jsonSchema: {
+      type: 'object',
+      properties: {
+        EMPLOYEE_NAME: { type: 'string' },
+        START_DATE: { type: 'string' },
+        END_DATE: { type: 'string' },
+        DAYS: { type: 'number' },
+        REASON: { type: 'string' },
+        DECISION: { type: 'string', enum: ['APPROVE', 'REJECT'] },
+        NOTES: { type: 'string' },
+      },
+      required: ['EMPLOYEE_NAME', 'DAYS', 'DECISION'],
+    },
+    uiSchema: {
+      type: 'VerticalLayout',
+      elements: [
+        { type: 'Control', scope: '#/properties/EMPLOYEE_NAME', options: { readonly: true } },
+        { type: 'Control', scope: '#/properties/START_DATE', options: { readonly: true } },
+        { type: 'Control', scope: '#/properties/END_DATE', options: { readonly: true } },
+        { type: 'Control', scope: '#/properties/DAYS', options: { readonly: true } },
+        { type: 'Control', scope: '#/properties/REASON', options: { readonly: true, multi: true } },
+        { type: 'Control', scope: '#/properties/DECISION' },
+        { type: 'Control', scope: '#/properties/NOTES', options: { multi: true } },
+      ],
+    },
+    status: FormDefinitionStatus.PUBLISHED,
+  });
+
+  const vacationHrReviewForm = await db.getRepository(FormDefinition).save({
+    code: 'VACATION_HR_REVIEW',
+    version: 1,
+    jsonSchema: {
+      type: 'object',
+      properties: {
+        EMPLOYEE_NAME: { type: 'string' },
+        DAYS: { type: 'number' },
+        REASON: { type: 'string' },
+        MANAGER_DECISION: { type: 'string' },
+        DECISION: { type: 'string', enum: ['APPROVE', 'REJECT'] },
+        NOTES: { type: 'string' },
+      },
+      required: ['EMPLOYEE_NAME', 'DAYS', 'DECISION'],
+    },
+    uiSchema: {
+      type: 'VerticalLayout',
+      elements: [
+        { type: 'Control', scope: '#/properties/EMPLOYEE_NAME', options: { readonly: true } },
+        { type: 'Control', scope: '#/properties/DAYS', options: { readonly: true } },
+        { type: 'Control', scope: '#/properties/REASON', options: { readonly: true, multi: true } },
+        { type: 'Control', scope: '#/properties/MANAGER_DECISION', options: { readonly: true } },
+        { type: 'Control', scope: '#/properties/DECISION' },
+        { type: 'Control', scope: '#/properties/NOTES', options: { multi: true } },
+      ],
+    },
+    status: FormDefinitionStatus.PUBLISHED,
+  });
+
+  const vacationProcess = await db.getRepository(ProcessDefinition).save({
+    name: 'Vacation Leave Request',
+    startFormCode: vacationStartForm.code,
+    workflowType: 'vacationLeaveWorkflow',
+    taskQueue: 'flowstile',
+    milestones: [
+      { code: 'MANAGER_REVIEW', name: 'Manager Review' },
+      { code: 'HR_REVIEW', name: 'HR Review' },
+      { code: 'LEDGER_UPDATE', name: 'Ledger Update' },
+    ],
+  });
+
+  await db.getRepository(TaskDefinition).save({
+    code: 'VACATION_MANAGER_REVIEW',
+    processDefinitionId: vacationProcess.id,
+    formDefinitionCode: vacationManagerReviewForm.code,
+    milestoneCode: 'MANAGER_REVIEW',
+    candidateGroups: ['people-managers'],
+    defaultPriority: Priority.HIGH,
+  });
+
+  await db.getRepository(TaskDefinition).save({
+    code: 'VACATION_HR_REVIEW',
+    processDefinitionId: vacationProcess.id,
+    formDefinitionCode: vacationHrReviewForm.code,
+    milestoneCode: 'HR_REVIEW',
+    candidateGroups: ['hr-reviewers'],
+    defaultPriority: Priority.NORMAL,
+  });
+
   // Sample tasks
   await db.getRepository(Task).save({
     taskDefinitionId: reviewLoan.id,
@@ -745,13 +884,13 @@ async function seed() {
   });
 
   console.log('Seed complete:');
-  console.log('  8 groups: loan-officers, hr-team, order-reviewers, warehouse, customer-service, underwriters, managers, finance');
+  console.log('  10 groups: loan-officers, hr-team, order-reviewers, warehouse, customer-service, underwriters, managers, finance, people-managers, hr-reviewers');
   console.log('  2 roles: admin, task-user');
-  console.log('  7 users: alice (admin), bob (loan officer + warehouse), carol (customer service), dave (underwriter), erin (manager), frank (finance), service (worker)');
+  console.log('  9 users: alice (admin), bob (loan officer + warehouse), carol (customer service), dave (underwriter), erin (manager), frank (finance), mona (people manager), helen (hr reviewer), service (worker)');
   console.log(`  1 dev API key (name "dev-worker"): ${DEV_API_KEY}`);
-  console.log('  13 forms: LOAN_APPLICATION_START, LOAN_APPLICATION, ORDER_APPROVAL, SHIPMENT_CONFIRMATION, ORDER_EXCEPTION, LOAN_ORIGINATION_START, LOAN_APPLICATION_REVIEW, LOAN_RISK_ASSESSMENT, LOAN_SENIOR_REVIEW, LOAN_FINAL_DECISION, EXPENSE_APPROVAL_START, EXPENSE_MANAGER_REVIEW, EXPENSE_FINANCE_REVIEW');
-  console.log('  4 processes: Loan Processing, Order Fulfillment, Loan Origination, Expense Approval');
-  console.log('  10 task definitions: REVIEW_LOAN, APPROVE_ORDER, CONFIRM_SHIPMENT, HANDLE_EXCEPTION, LOAN_REVIEW_APPLICATION, LOAN_ASSESS_RISK, LOAN_SENIOR_REVIEW, LOAN_FINAL_DECISION, EXPENSE_MANAGER_REVIEW, EXPENSE_FINANCE_REVIEW');
+  console.log('  16 forms: ..., VACATION_LEAVE_START, VACATION_MANAGER_REVIEW, VACATION_HR_REVIEW');
+  console.log('  5 processes: Loan Processing, Order Fulfillment, Loan Origination, Expense Approval, Vacation Leave Request');
+  console.log('  12 task definitions: ..., VACATION_MANAGER_REVIEW, VACATION_HR_REVIEW');
   console.log('  4 tasks: 2 loan tasks, 2 order tasks');
 
   await db.destroy();
