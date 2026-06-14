@@ -49,15 +49,19 @@ email/password). This is a parity gap (see Conclusions).
 | Start a process | none (task-first; workflow started externally) | `createProcess(...)` |
 | Retrieve | `getCase`, `getCaseByProcessInstance` | `retrieveProcess(id)` |
 | List/find | `listCases({status,limit,offset})` | `findProcesses(options)` |
-| Replace business data | shallow-merge `setCaseVariables` (pre-redesign) | `updateProcessEntity(id, entity)` |
-| Patch business data | none today; targeted by redesign | `patchProcessEntity(id, ops)` — RFC 6902 |
-| Non-validated aux data | `variables` (current) | `updateProcessMetadata(id, metadata)` |
-| Read business data back | none today; targeted by redesign | via `retrieveProcess` (entity included) |
+| Replace business data | `setCaseEntity` (full replace, schema-validated) **[shipped]** | `updateProcessEntity(id, entity)` |
+| Patch business data | `patchCaseEntity` (RFC 6902, `entityVersion`/`expectedVersion`) **[shipped]** | `patchProcessEntity(id, ops)` — RFC 6902 |
+| Non-validated aux data | initial scalar snapshot of `inputData` (no schema) | `updateProcessMetadata(id, metadata)` |
+| Read business data back | `getCaseEntity` **[shipped]**; activities `getFlowstileCaseEntity` / `patchFlowstileCaseEntity` | via `retrieveProcess` (entity included) |
 
 KuFlow's `entity` (JSON-Schema-validated) vs `metadata` (free-form) split, and
 `patchProcessEntity` (RFC 6902), are almost exactly the `caseEntitySchema`-backed
-entity and JSON Patch write model specced in `design-decisions.md`. The case
-entity redesign converges on KuFlow's process-entity API by design.
+entity and JSON Patch write model. **This has shipped** (it was "planned" when this
+note was first written): the case entity now has read-back and patch, plus the one
+genuine improvement over KuFlow — `entityVersion` + `expectedVersion` optimistic
+concurrency for parallel-branch writes, which KuFlow lacks (last-write-wins). On
+the data model Flowstile has converged on KuFlow's process-entity API by design,
+with a concurrency edge.
 
 ## 4. Task / ProcessItem operations
 
@@ -114,13 +118,56 @@ hard-rejects; KuFlow saves-but-flags, enabling progressive partial saves) and th
 three-contract payload split (a deliberate Flowstile decision recorded in
 `design-decisions.md` vs KuFlow's single `data` object).
 
+## 7. Process authoring surface (new axis of divergence)
+
+| Capability | Flowstile | KuFlow |
+|---|---|---|
+| Process/task definition | server-side **+ a typed code-first projection** (`defineProcess`/`defineTask`, codegen) | portal-configured; worker references by id/code |
+| Case plan / phases | `plan` + `phase` (compile-checked), milestone stepper | none |
+| Boot-time conformance | worker **doctor** preflight (task codes, published forms, queue, plan) | none (Temporal retry catches runtime failures) |
+| Variable I/O mapping | `contextFrom` / `persist` (declarative, SDK-applied, plumbing-only) | manual in worker code |
+
+This surface has **no KuFlow equivalent** — it is Flowstile-only ergonomics for a
+code-first TypeScript author. KuFlow is REST-resource + portal-config; Flowstile
+adds a typed authoring/projection layer (descriptors, plan/stepper, doctor,
+declarative mappings) on top of server-side definitions. This is a *new* axis of
+deliberate divergence (the "ergonomics is the moat" positioning), and `contextFrom`/
+`persist` is genuinely novel — the engines that have declarative I/O mapping
+(Camunda/Bonita) put it in the *model*; KuFlow does it manually. So here Flowstile
+is in greenfield, owning the design rather than following a precedent.
+
+## 8. Surfacing automated / agent work (an asymmetry cost)
+
+KuFlow orchestrates "tasks, both human and automated": an **automatic task** is a
+first-class process item the worker completes programmatically (`claimProcessItem`
++ `completeProcessItem`). Because it is a task, it appears in the process view and
+audit trail **for free** — KuFlow's *symmetric* SDK buys uniform visibility of
+human and automated steps. KuFlow also has `appendProcessItemTaskLog`.
+
+Flowstile's SDK is *asymmetric* (human-only completion — see §4), so it **cannot**
+model automated work as a completable task without reopening the completion
+boundary. The cost: automated steps (Temporal activities) are invisible in the case
+view; only their results land in case variables, and the milestone stepper jumps
+over automated phases. Note also Flowstile does **not** copy KuFlow/Bonita-style
+connectors or external tasks — those are Temporal's job (activities, task queues,
+retry policies, deterministic replay), and Temporal does them better than the BPMN
+engines' manual replay.
+
+The proposed Flowstile answer — **not** a completable task, **not** reading Temporal
+history — is an optional, display-only **case-event log** the workflow publishes to,
+with `actor: human | system | agent` (see `design-decisions.md` → "Surfacing
+Automated and Agent Work"). It is *not built*; it is the principled, asymmetry-
+respecting alternative, and the slot that makes RPA/agent actors legible in the
+case view.
+
 ## Conclusions
 
-1. **Case entity convergence is correct, with a concurrency edge.** KuFlow's
-   `entity`/`metadata` split and `patchProcessEntity` mirror the specced case
-   entity. The research found no ETag/version optimistic-concurrency mechanism in
-   KuFlow (last-write-wins). Flowstile's planned `entityVersion` + `If-Match` is a
-   genuine improvement for parallel-branch writes, not just parity.
+1. **Case entity convergence is correct, with a concurrency edge — and shipped.**
+   KuFlow's `entity`/`metadata` split and `patchProcessEntity` mirror the case
+   entity, which now has read-back, JSON Patch, and `entityVersion`/`expectedVersion`
+   optimistic concurrency. KuFlow has no version mechanism (last-write-wins), so
+   the concurrency model is a genuine improvement for parallel-branch writes, not
+   just parity.
 
 2. **SDK symmetry is the deepest divergence, and it flows from positioning.**
    KuFlow's SDK can drive the whole task lifecycle because its platform owns task
@@ -138,14 +185,29 @@ three-contract payload split (a deliberate Flowstile decision recorded in
      a soft-validating partial-save endpoint is the KuFlow-shaped answer if we
      want it.
 
-4. **Ergonomics is the moat.** `createTaskAndWait<TOutput>()` with built-in
-   timeout/cancel/typing, and per-task signal names, are materially nicer than
-   KuFlow's signal+condition primitive. Protect this as the surface grows.
+4. **Ergonomics is the moat — and it has grown.** `createTaskAndWait<TOutput>()`
+   with built-in timeout/cancel/typing and per-task signals, plus the newer
+   code-first authoring surface (§7: `defineProcess`/`defineTask`, plan/phase, the
+   doctor, `contextFrom`/`persist`), are materially nicer than KuFlow's
+   signal+condition primitive and manual wiring — on its home turf (code-first TS
+   Temporal human tasks). KuFlow leads on breadth: multi-language SDKs, symmetric
+   programmatic task control, partial-save/soft-validation, and being a proven
+   product. Better-designed for the niche, not yet better-proven.
 
-**Net:** on the *data model* Flowstile converges on KuFlow deliberately (with a
-concurrency edge); on *SDK shape* it diverges deliberately (produce-and-await vs
-full remote-control), and that divergence is the bring-your-own-Temporal,
-embedded positioning expressed in code.
+5. **The asymmetry cost is real and has a designed answer.** The human-only SDK
+   that protects the audit boundary also makes automated/agent work invisible in
+   the case view (§8), where KuFlow gets visibility for free via symmetric
+   automatic tasks. The answer is *not* to add programmatic completion but the
+   proposed display-only, actor-tagged **case-event log** — which also readies
+   Flowstile for agent actors.
+
+**Net:** on the *data model* Flowstile has converged on KuFlow deliberately (with a
+shipped concurrency edge); on *SDK shape and authoring* it diverges deliberately
+(produce-and-await + a typed code-first authoring layer vs full remote-control +
+portal-config), and that divergence is the bring-your-own-Temporal, embedded
+positioning expressed in code. The one place the asymmetry *costs* visibility —
+automated/agent steps — is addressed by a proposed case-event log, not by eroding
+the human-completion boundary.
 
 ## Sources
 

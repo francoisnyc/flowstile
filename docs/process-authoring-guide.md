@@ -19,6 +19,10 @@ Four decisions shape everything below. They are worth internalizing before readi
 
 **Code owns structure; the server owns forms; ops config is shared.** Process structure (task codes, phases, plan order, task queue, workflow type) is authored in code, because it is inseparable from the workflow. Forms are authored in the UI designer, because form schemas are the type-bearing, business-editable artifact. Operational config (candidate groups/users, priorities) gets *defaults* from code and *overrides* from the UI/API; sync never clobbers an override.
 
+**Declarative for data, imperative for control.** The declarative surface (`contextFrom`/`persist`, the case plan) is for *data and display* — copy, rename, project. All *control flow* — sequencing, branching, loops, timeouts, compensation/saga — stays in the workflow body as plain TypeScript. This is why the plan never gates execution, why there are no calculated fields, and why variable mappings are plumbing-only: an expression engine in config would be a second, weaker place logic lives that drifts from the code that runs. See `docs/design-decisions.md` → "Declarative for Data, Imperative for Control".
+
+> **Coming from BPMN?** Most BPMN constructs (service task, connector, external task, subprocess, saga) are *not* Flowstile features — they dissolve into Temporal code (activity, task queue, function/child workflow, compensations array). The `flowstile-authoring` skill carries a full BPMN → Flowstile/Temporal translation table; `design-decisions.md` → "BPMN Constructs Map to Temporal Code, Not Flowstile Features" records why.
+
 ---
 
 ## Step 1 — Define the process in code
@@ -139,6 +143,8 @@ Failure semantics when the seams are broken anyway (**hardening Planned, Phase 2
 They are **plumbing only** — no expressions or transforms; *computed* values are still calculated in the workflow and written explicitly with `patchFlowstileCaseEntity`. They only touch the entity when declared, so workflows that don't opt in are byte-identical. Declare them on a hand-authored `defineTask` descriptor, or — for codegen'd processes, whose descriptor file is generated and not hand-edited — pass them **per call** in `createAndWait({ ..., persist, contextFrom })`.
 
 `packages/worker/src/loan-origination/workflow.ts` is the worked reference: the automated credit phase computes `creditScore`, the workflow derives `riskTier` (both persisted explicitly as computed values), the underwriting task uses `persist` to promote its decision/rationale, and the final-decision task uses `contextFrom` to project the accumulated variables for display and `persist` to record the outcome.
+
+**Surfacing automated work — *Planned (proposed, not built)*.** Automated steps are Temporal activities, which are invisible to Flowstile today: only their *results* (case variables) and milestone phases appear, so the stepper jumps over zero-task automated phases and a long automated phase can look stuck. The proposed answer is an optional, display-only **case-event log** the workflow publishes to — `recordCaseEvent({ actor: human | system | agent, label, payload, phase? })`, plus a `recordedActivity` wrapper — that gives service tasks, connector executions, and RPA/agent actors a first-class, honestly-labeled slot in the case timeline without making automated work a completable task (which the human-only completion boundary forbids) and without reading Temporal's execution history into the business view. See `docs/design-decisions.md` → "Surfacing Automated and Agent Work".
 
 ## Step 6 — Run a case: the stepper, the timeline, and failure visibility
 

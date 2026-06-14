@@ -370,6 +370,8 @@ The Flowstile mental model should settle quickly.
 
 You should be able to tell, without much effort, which concerns belong to Temporal and which belong to Flowstile. Creating a human task should look like normal workflow code, not like a sidecar integration with hidden coupling. The same nouns should mean the same things everywhere: in the docs, in the API, in the UI, and in application code.
 
+Concretely, the split is: **Flowstile owns human tasks and the case business-data tier; Temporal owns orchestration and everything automated.** A BPMN "service task" is a Temporal activity; a "connector" is an activity (its data mapping is `contextFrom`/`persist`, its retry/replay is Temporal's); an "external task" is a Temporal task queue; "saga" is a compensations array in the workflow. Flowstile deliberately does *not* reimplement those — see `docs/design-decisions.md` → "BPMN Constructs Map to Temporal Code, Not Flowstile Features", and the BPMN → Flowstile translation table in the `flowstile-authoring` skill. The one capability KuFlow's symmetric SDK has that Flowstile deliberately omits — programmatically completing tasks — is examined in `docs/kuflow-comparison.md`.
+
 The system should also behave predictably under change. Form versions should not surprise in-flight work. Reassignment should preserve useful progress. Visibility rules should be enforced in a way that does not depend on the browser being honest. When something goes wrong, the failure should be understandable from the task model itself rather than from undocumented behavior between services.
 
 ## Embeddable React SDK

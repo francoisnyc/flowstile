@@ -121,7 +121,8 @@ For everything else, push to `master`.
 
 - `docs/developer-guide.md` — concepts and integration guide
 - `docs/process-authoring-guide.md` — step-by-step authoring journey (code-first process definition, task→form mapping, case plan/phases, versioning, mining); doubles as the process-visibility & DX roadmap
-- `docs/design-decisions.md` — why the task data model is split
+- `docs/design-decisions.md` — why the task data model is split; declarative-data/imperative-control; why BPMN constructs map to Temporal code (not Flowstile features); the proposed case-event log for automated/agent work
+- `docs/kuflow-comparison.md` — method-by-method Flowstile vs KuFlow SDK comparison; what diverges (authoring surface, asymmetric SDK) vs converges (case entity) and why
 - `docs/runtime-contract.md` — detailed payload, lifecycle, and access rules
 - `docs/ui-direction.md` — frontend stack and visual principles
 - `docs/openapi.yaml` — auto-generated OpenAPI 3.1 spec (regenerate with `pnpm --filter @flowstile/server openapi:generate`)

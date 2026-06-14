@@ -10,6 +10,45 @@ for human input via `createTaskAndWait`, tasks completed through forms in a web
 inbox, with a case page showing a milestone stepper. Follow this loop in order.
 Every step has a deterministic check — run it before moving on.
 
+## Coming from BPMN? Translate the mental model first
+
+If you — or the prompt you're following — think in BPMN / Camunda / Bonita / KuFlow
+terms, translate *before* you author. Most BPMN **constructs are not Flowstile
+features**; they dissolve into plain workflow code. The spine: a BPMN engine
+*bundles* orchestration into a visual model because a diagram is its medium;
+Temporal *unbundles* it into code. So Flowstile's declarative surface is reserved
+for **data and visibility**, never control flow.
+
+| BPMN / engine concept | Flowstile / Temporal | Guardrail |
+|---|---|---|
+| User task (human work) | `defineTask` + `createAndWait` | Human completes via the UI → signal; the SDK has **no** `complete`/`claim` — by design (see below) |
+| Service task (automated) | A Temporal **activity** (`proxyActivities`) | Invisible to Flowstile today; surface it only if needed — the case-event log is *proposed*, not built |
+| Script / business-rule task | Plain workflow code, or an activity | — |
+| Connector in/out (data mapping) | `contextFrom` / `persist` for case-entity data; an **activity** for external systems | Declarative for *data*, imperative for *control* — never put an external call's sequencing into config |
+| Connector retry / replay | Temporal **retry policy** + the Temporal UI | Don't rebuild it — Temporal's is automatic and better than a manual replay button |
+| External task (pull worker) | A dedicated Temporal **task queue**, or **async activity completion** | Build a REST-claimable Flowstile task *only* if the worker/agent can't be a Temporal worker |
+| Sequence flow / ordering | Sequential `await` in the workflow | Already guaranteed durably — no "subprocess" construct needed |
+| Subprocess | A function; a **child workflow** only for real isolation | Don't reach for a child workflow just to order calls |
+| Saga / compensation | Compensations array + try/catch (see `order-fulfillment/workflow.ts`) | **Saga can't cross a human-task commit** — compensate the automated steps, *escalate* (don't roll back) the human decision |
+| Gateway / branching | Plain `if` / `switch` | — |
+| Boundary timer / escalation | `timeoutMs` on `createTaskAndWait` (→ cancel + `TaskTimeoutError`) | — |
+| Pool / lane (who acts) | Candidate groups/users on the task | — |
+| Process variables | The **case entity** (compute in the workflow → `persist` / `patchFlowstileCaseEntity`) | Not a formula engine — calculation lives in the workflow |
+| Agent / RPA actor | A Temporal **activity** (agent-backed) | Don't make an agent *complete a human task* — that forges the audit trail; automated/agent work gets its own slot (proposed case-event log) |
+
+**Two boundaries that catch BPMN-trained authors (and agents):**
+
+- **The SDK can't complete a task.** Completion is a human action through the UI;
+  the workflow only *creates* and *cancels*. If you're tempted to complete a task
+  from code, the work isn't a human task — model it as an **activity**. A human
+  task captures a human decision with an audited `completedBy`; completing it from
+  code corrupts that.
+- **Calculation lives in the workflow, not in forms or config.** There is no
+  calculated-field / expression mechanism by design. Derive values in TypeScript
+  and `persist` them; `contextFrom`/`persist` are *plumbing only* (copy/rename),
+  never transforms. See `docs/design-decisions.md` → "Declarative for Data,
+  Imperative for Control".
+
 ## 0 — Stack prerequisites
 
 ```bash

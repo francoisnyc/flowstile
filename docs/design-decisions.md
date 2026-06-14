@@ -182,3 +182,45 @@ The differentiation must therefore live in **positioning**, not in the data mode
 ### Current Decision
 
 Flowstile adopts the BPM-standard authoritative data model deliberately, and differentiates on positioning: **open, self-hosted, embeddable, riding the user's own Temporal cluster.** The failure mode to avoid is converging on KuFlow's data model *and* its portal-first, platform-owns-Temporal positioning simultaneously — at which point Flowstile would simply be a weaker KuFlow. Any move that makes Flowstile own the Temporal cluster or become portal-only should be treated as a real strategic decision, not an incremental product step.
+
+## Declarative for Data, Imperative for Control
+
+`contextFrom` and `persist` (the task variable mappings) are declarative because they are **pure data plumbing** — copy a case variable into a task's context, copy a submission field into the case entity, optionally rename. They carry no expressions and no transforms.
+
+Everything that is **control flow** — sequencing, branching, loops, timeouts, compensation/saga — stays in the workflow body as ordinary TypeScript. This line is deliberate and load-bearing:
+
+- It keeps a single source of truth. The workflow *is* the orchestration; nothing in declarative config can reorder or gate it.
+- It avoids the BPMN-engine trap of an expression language (FEEL / JUEL / Groovy) that becomes a second, weaker place business logic lives and silently drifts from the code that actually runs.
+- It is the same reasoning behind "the case plan never gates execution" and "no calculated fields": the declarative surface is for **data and display**; the imperative surface (workflow code) is for **logic**.
+
+The test for any future SDK ergonomic: if it copies/renames/projects *data*, it may be declarative; if it sequences, branches, retries, or compensates (*control*), it belongs in the workflow body. Ship helpers that *compose* primitives, not constructs that *bundle* control flow into a method signature.
+
+## BPMN Constructs Map to Temporal Code, Not Flowstile Features
+
+A recurring question when evaluating Flowstile against BPMN engines (Camunda, Bonita, KuFlow) is "where is the service task / connector / external task / subprocess / saga?" The consistent answer: **a BPMN engine bundles these into a visual model because a diagram is its medium; Temporal unbundles every one of them into composable code, which is strictly more flexible.** Flowstile therefore does *not* grow them as features — that would reimplement, worse, what Temporal already provides:
+
+- **Service task** → a Temporal activity.
+- **Connector (in/out)** → data mapping is `contextFrom`/`persist`; the external call is an activity. Its retry/replay is Temporal's retry policy + the Temporal UI — automatic, and better than a manual "replay this connector" button.
+- **External task** → a Temporal task queue (pull-based workers) or async activity completion (hand-off-and-complete-later). Temporal task queues *are* external tasks, done right.
+- **Subprocess / sequence** → a function, sequential `await`, or a child workflow for isolation.
+- **Saga / compensation** → a compensations array in the workflow. Critically, **saga cannot cross a human-task commit**: a completed human task is an audited, irreversible decision, so you compensate the automated steps and *escalate* the human one (forward recovery), never roll it back. The Order Fulfillment demo models this correctly.
+
+Two firm boundaries follow:
+
+- **The SDK does not complete tasks.** The workflow creates and cancels; the human claims and completes through the UI; the workflow learns the result via a per-task Temporal signal. Adding `claimTask`/`completeTask` would pull task-state ownership into Flowstile and erode the bring-your-own-Temporal distinction — and programmatically completing a *human* task forges its `completedBy` audit. If code can do the work, it is an activity, not a human task.
+- **No connector / external-task / replay engine in Flowstile.** Dispatch, retry, and replay are Temporal's job (the territory, and it does them better than the BPMN engines). Flowstile's job is the human-work layer and the *business-facing view* of what happened (the map).
+
+## Surfacing Automated and Agent Work: A Case-Event Log (Proposed — Not Built)
+
+> **Status: design direction, not implemented.** Recorded so the shape is agreed before any code.
+
+The asymmetry above has a cost. KuFlow makes automated work a first-class "automatic task" the worker completes programmatically, so it appears in the process view *for free* — its **symmetric** SDK buys uniform visibility of human and automated steps. Flowstile's **asymmetric** SDK (human-only completion) buys clean human-decision semantics but means automated steps (Temporal activities) are **invisible** in the case view: only their *results* land in case variables, and the milestone stepper jumps over automated phases.
+
+The principled answer — consistent with "Flowstile records the business map, Temporal owns the execution territory" — is **not** to make automated work a completable task (that reopens the completion boundary) and **not** to read Temporal history into the case view (that is the execution territory: noisy, developer-facing, coupling). It is an **optional, display-only case-event log the workflow publishes to**: a `recordCaseEvent({ actor, label, payload, at, phase? })` primitive, plus an ergonomic `recordedActivity` wrapper that runs an activity, projects its result, and logs it. Properties:
+
+- **Display-only / read-model.** The workflow never *depends* on it; same relationship the case entity has to workflow state — a curated business view, not an authority. It passes the read-model scope test only while it stays optional and display-only.
+- **Actor-tagged.** `actor: human | system | agent` gives automated steps and AI agents a *first-class, honestly-labeled* slot in the timeline — the alternative to letting an agent masquerade as a human by completing a task.
+- **Curated, not a Temporal mirror.** The workflow records the business-meaningful moments with projected payloads (like `persist`'s allowlist), not every internal activity. The full execution trace stays in the Temporal UI for developers.
+- **Carries an instrumentation cost.** Every recorded event is a line of workflow code, so it is opt-in, never automatic — the same trade weighed for the milestone stepper.
+
+This one primitive answers several otherwise-separate requests — service-task visibility, connector-execution visibility, RPA/agent actors in the case view, and the milestone stepper's long-automated-phase gap. That convergence is the signal it is the right abstraction rather than four features.
