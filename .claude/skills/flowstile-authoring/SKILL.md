@@ -145,7 +145,10 @@ code. Conventions (see `ORDER_APPROVAL` in the seed for a canonical example):
 - The decision field is an enum (`DECISION: { enum: ['APPROVED','REJECTED'] }`)
   and is in `required`. Free-text fields use `options: { multi: true }`.
 - Only fields a human actually edits belong in `required` — completion validates
-  `submissionData` against this schema.
+  `submissionData` against this schema. **Do not put read-only context fields in
+  `required`**: the assignee never edits them, so they're absent from
+  `submissionData` and completion 422s. `required` = the editable decision fields
+  only (the doctor does not catch this — it's a completion-time error).
 
 Via API (agent-draftable; draft → publish is the human gate in production):
 
@@ -212,10 +215,10 @@ rules; this skill adds only the Flowstile-specific bridge:
 
 **Portal-start and read-back contracts** (these live in the examples; here so you don't have to reverse-engineer them):
 
-- **Start a case:** `POST /processes/:id/start` with `{ data: { ...start-form fields }, idempotencyKey? }` → `201 { processInstanceId, caseId }`. Requires `workflowType` + `taskQueue` set on the process (422 otherwise; 503 if `TEMPORAL_ADDRESS` isn't configured on the server).
+- **Start a case:** `POST /processes/:id/start` with `{ data: { ...start-form fields }, idempotencyKey? }` → `201 { processInstanceId, caseId }`. Requires `workflowType` + `taskQueue` set on the process (422 otherwise; 503 if `TEMPORAL_ADDRESS` isn't configured on the server). **The Temporal `workflowId` *is* the `processInstanceId`** — pass it straight to `check-workflow.ts`/`getHandle(id)`; the `/start` response gives you no separate workflow id.
 - **Workflow input shape:** a portal-started workflow receives `{ processInstanceId: string, data: { ...start-form fields }, startedBy?: { id, email, displayName } | null }`. Start-form fields are nested under `data`, never at the top level. The start form's `required` constrains the *submitted form*, not your workflow input type — type fields you read as you actually use them.
-- **Read case variables back:** `GET /cases/by-process-instance/:pid/entity` → `{ entity, entityVersion }` (as a logged-in user, not the service key). This is how an e2e asserts that `persist` / `patchFlowstileCaseEntity` writes landed.
-- **Human task lifecycle (the SDK omits these by design — a workflow never completes a human task):** locate a case's open task with `GET /cases/by-process-instance/:pid` → `tasks[]` (filter by `taskDefinition.code` + `status` of `created`/`claimed`; `/tasks` is **not** filterable by `processInstanceId`), then `POST /tasks/:id/claim` (no body) and `POST /tasks/:id/complete` with `{ data: { ...submission fields } }` — the completion body key is **`data`**, not `submissionData`. An e2e drives the human side this way.
+- **Read case variables back:** `GET /cases/by-process-instance/:pid/entity` → `{ entity, entityVersion }` (as a logged-in user, not the service key). This is how an e2e asserts that `persist` / `patchFlowstileCaseEntity` writes landed. **Timing trap:** the entity exists *immediately* (seeded with start-form data), but `persist`/`patch` writes only land after the task-completion signal round-trips — so poll until the *expected key* is present (and/or the workflow is `COMPLETED`), never just until the entity exists, or you'll assert on stale data.
+- **Human task lifecycle (the SDK omits these by design — a workflow never completes a human task):** locate a case's open task with `GET /cases/by-process-instance/:pid` → `tasks[]` (a **trimmed** shape: `taskDefinition.code` nested, status, id — *not* the full `/tasks` list schema, and no `workflowId`). Filter by `taskDefinition.code` + `status` of `created`/`claimed` (`/tasks` is **not** filterable by `processInstanceId`), then `POST /tasks/:id/claim` (no body) and `POST /tasks/:id/complete` with `{ data: { ...submission fields } }` — the completion body key is **`data`**, not `submissionData`. An e2e drives the human side this way.
 - **Fresh-start 404 race:** right after `POST /start`, `GET /cases/by-process-instance/:pid` **404s for a beat** until the workflow runs far enough to create its first task. Poll: treat 404 as "not ready yet" and retry, don't fail.
 
 ## 6 — Validate, inner loop
