@@ -7,7 +7,7 @@ Flowstile is a human-task inbox and form layer for Temporal.io workflows. Workfl
 Five packages in a pnpm monorepo:
 
 - **`packages/server`** — Fastify REST API, TypeORM + PostgreSQL, auth (JWT cookies), RBAC, task lifecycle, form versioning, signal delivery to Temporal
-- **`packages/worker`** — Temporal worker hosting workflow definitions and activities (including the Order Fulfillment demo)
+- **`packages/worker`** — Temporal worker hosting workflow definitions and activities (five demo processes: Order Fulfillment, Loan Origination, Expense Approval, Vacation Leave, Purchase Requisition)
 - **`packages/sdk`** — `@flowstile/sdk` npm package: `FlowstileClient` for API calls, `createTaskAndWait` workflow helper, typed errors
 - **`packages/ui`** — React + Vite + Tailwind inbox and JSON Forms-based form designer
 - **`packages/react`** — `@flowstile/react` npm package: embeddable React SDK for embedding Flowstile task forms into third-party apps (`FlowstileTask`, `FlowstileForm`, `useFlowstileTask`)
@@ -127,6 +127,11 @@ For everything else, push to `master`.
 - `docs/ui-direction.md` — frontend stack and visual principles
 - `docs/openapi.yaml` — auto-generated OpenAPI 3.1 spec (regenerate with `pnpm --filter @flowstile/server openapi:generate`)
 
+### Agent skills (`.claude/skills/`)
+
+- `flowstile-authoring/` — the agent-runnable skill for authoring a process end to end: a brainstorm gate, test-first (write the e2e red contract before building), code-first definition, forms, typed workflow, and the full validation loop. The five demo processes were authored against it; the `docs/process-authoring-guide.md` is its prose companion.
+- `temporal-developer/` — the official Temporal Developer Skill (vendored, TypeScript subset; see its `VENDORED.md`). `flowstile-authoring` delegates workflow-code determinism, activity boundaries, and versioning to it.
+
 ## For Rewriting in Another Stack
 
 If you are reimplementing Flowstile in a different language or framework:
@@ -136,9 +141,9 @@ If you are reimplementing Flowstile in a different language or framework:
 2. **Read `docs/runtime-contract.md`** — this defines the behavioral rules (state machine transitions, validation order, versioning semantics, access control) that any implementation must follow.
 
 3. **Use the test suite as behavioral specs:**
-   - `packages/server/test/integration/` — 47 integration tests defining exact API behavior
-   - `packages/sdk/test/` — 18 unit tests for client auth/retry and workflow timeout/cancellation logic
-   - `e2e/order-fulfillment.spec.ts` — 9 end-to-end tests covering happy path, saga compensation, and early rejection
+   - `packages/server/test/integration/` — 197 integration tests (18 files) defining exact API behavior
+   - `packages/sdk/test/` — 79 unit tests for client auth/retry, workflow timeout/cancellation, the doctor, and `contextFrom`/`persist` mappings
+   - `e2e/order-fulfillment.spec.ts` — 9 end-to-end tests covering happy path, saga compensation, and early rejection; `e2e/{loan-origination,expense-approval,vacation-leave,purchase-requisition}.spec.ts` cover the other demo processes (case plans, milestone states, `persist`/`contextFrom`, trailing automated phases)
    - `e2e/visibility-scope.spec.ts` — need-to-know task/case visibility (group/user/orphan scoping, 404-not-403, case inheritance)
 
 4. **Key implementation details:**

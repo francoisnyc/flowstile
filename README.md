@@ -88,6 +88,10 @@ pnpm --filter @flowstile/worker tsx src/start-order-workflow.ts
 
 Then follow the on-screen instructions to approve/reject orders through the inbox as different users.
 
+### Other seeded demos
+
+The worker also hosts **Loan Origination**, **Expense Approval**, **Vacation Leave Request**, and **Purchase Requisition Approval** — multi-stage human-task processes with case plans and milestone steppers. They're portal-startable from the UI (or `POST /processes/:id/start`); each has an end-to-end walk-through under `e2e/`.
+
 ## Commands
 
 | Command | Description |

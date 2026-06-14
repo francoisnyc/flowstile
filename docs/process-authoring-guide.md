@@ -224,11 +224,13 @@ No curl, no manually invoked CLI, no foreign UI. Every seam either self-heals or
 
 ## The same loop, run by a coding agent
 
-**Status: mostly possible today; the missing artifact is the skill. Planned (Phase 2).**
+**Status: shipped — the skill exists and has authored real processes.**
 
-Increasingly, the "developer" running the loop above is a coding agent. The story is deliberately agent-legible — OpenAPI as the contract, code-first definitions, deterministic checks with printed remediation — and one packaging step makes it agent-*runnable*: a **`flowstile` skill** that restates this guide as agent instructions (loop steps, form-schema conventions, validation commands, API surface, auth via an API key). The skill and this guide are the same knowledge maintained once.
+Increasingly, the "developer" running the loop above is a coding agent. The story is deliberately agent-legible — OpenAPI as the contract, code-first definitions, deterministic checks with printed remediation — and the packaging step that makes it agent-*runnable* now exists: the **`flowstile-authoring` skill** (`.claude/skills/flowstile-authoring/`) restates this guide as agent instructions — a brainstorm gate, test-first ordering (write the e2e red contract before building), the loop steps, form-schema conventions, validation commands, the API surface, and auth via an API key. The skill and this guide are the same knowledge maintained once; it delegates Temporal workflow correctness (determinism, activity boundaries, versioning) to the vendored **`temporal-developer`** skill.
 
-The notable consequence: **a coding agent can author forms today, with no new product code.** The pieces already exist —
+This is validated, not aspirational: the Expense Approval, Vacation Leave, and Purchase Requisition demos were each authored by a fresh agent from the skill alone (cold-start tests), driving the e2e red-before-green and reaching for the Temporal skill when a step risked non-determinism. Each run also fed its surfaced gaps back into the skill.
+
+A further consequence: **a coding agent can author forms too, with no new product code.** The pieces already exist —
 
 1. Agent drafts the JSON Forms schema + UI schema + outcomes from the task definition and the workflow's data needs.
 2. Agent submits via `PUT /forms/:code/draft` (authenticated with an API key); the server validates and rejects malformed schema.
@@ -252,7 +254,7 @@ Explicitly out of bounds: the doctor's checks and "did you mean" hints (edit dis
 | Phase | Theme | Contents |
 |---|---|---|
 | **1 — Orientation & the doctor** ✅ *shipped* | Give users the map; fail at the seam | `plan` on `defineProcess`, required type-checked `phase` on `defineTask` (placement + plan membership as compile errors); `milestones` JSONB projection on `ProcessDefinition` + `milestoneCode` on `TaskDefinition`; phase-state derivation shipped as a table-driven test suite, then computed in `GET /cases/:id`; stepper on the case page and in `@flowstile/react`; worker doctor preflight |
-| **2 — Failure ergonomics & staleness** | Make breakage loud and typed | Non-retryable `404`/`422` task-creation errors with remediation hints; workflow failure status surfaced on the case page (cached, non-blocking); codegen staleness hash + `--watch`; `flowstile` skill packaging the agent-runnable authoring loop incl. agent-drafted forms (draft → preview → human publish) |
+| **2 — Failure ergonomics & staleness** | Make breakage loud and typed | Non-retryable `404`/`422` task-creation errors with remediation hints; workflow failure status surfaced on the case page (cached, non-blocking); codegen staleness hash + `--watch`. *(The `flowstile-authoring` skill — the agent-runnable loop incl. agent-drafted forms, draft → preview → human publish — shipped ahead of this phase.)* |
 | **3 — Sync & versioning** *(directional)* | Kill the curl steps; version the description | Dev-mode worker self-registration (loud override-skips, soft-deprecate deletions, no version minting in dev); explicit release sync minting versions; `Case.processDefinitionVersion`; per-version plan snapshots; MCP server projecting the authoring endpoints from `docs/openapi.yaml` |
 | **4 — Insight** *(directional)* | Let the map learn from reality | Mined phase durations, loop-back and skip rates on the stepper (min-sample thresholds, ranges with n, segmented by process version); UI process page as read-model (definitions, phases, form publish status, last sync, deprecated/orphan detection); optional developer-facing execution DAG in admin; in-product AI form drafting (BYO-key) and mining narratives |
 
