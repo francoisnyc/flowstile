@@ -39,6 +39,8 @@ async function seed() {
   const warehouse = await db.getRepository(Group).save({ name: 'warehouse' });
   const customerService = await db.getRepository(Group).save({ name: 'customer-service' });
   const underwriters = await db.getRepository(Group).save({ name: 'underwriters' });
+  const managers = await db.getRepository(Group).save({ name: 'managers' });
+  const finance = await db.getRepository(Group).save({ name: 'finance' });
 
   // Roles
   const adminRole = await db.getRepository(Role).save({
@@ -84,6 +86,20 @@ async function seed() {
     displayName: 'Dave (Underwriter)',
     passwordHash: devHash,
     groups: [underwriters],
+    roles: [taskUserRole],
+  });
+  await db.getRepository(User).save({
+    email: 'erin@example.com',
+    displayName: 'Erin (Manager)',
+    passwordHash: devHash,
+    groups: [managers],
+    roles: [taskUserRole],
+  });
+  await db.getRepository(User).save({
+    email: 'frank@example.com',
+    displayName: 'Frank (Finance)',
+    passwordHash: devHash,
+    groups: [finance],
     roles: [taskUserRole],
   });
 
@@ -525,6 +541,124 @@ async function seed() {
     defaultPriority: Priority.NORMAL,
   });
 
+  // ── Expense Approval ──────────────────────────────────────────────────────
+  // Portal-startable reimbursement flow: MANAGER_REVIEW → FINANCE_REVIEW
+  // (only when AMOUNT > 1000) → REIMBURSEMENT (fully automated, zero human
+  // tasks — a Temporal activity records the reimbursement reference).
+
+  const expenseStartForm = await db.getRepository(FormDefinition).save({
+    code: 'EXPENSE_APPROVAL_START',
+    version: 1,
+    jsonSchema: {
+      type: 'object',
+      properties: {
+        EMPLOYEE_NAME: { type: 'string' },
+        AMOUNT: { type: 'number', minimum: 0 },
+        CATEGORY: { type: 'string', enum: ['TRAVEL', 'MEALS', 'EQUIPMENT', 'OTHER'] },
+        DESCRIPTION: { type: 'string' },
+      },
+      required: ['EMPLOYEE_NAME', 'AMOUNT', 'CATEGORY', 'DESCRIPTION'],
+    },
+    uiSchema: {
+      type: 'VerticalLayout',
+      elements: [
+        { type: 'Control', scope: '#/properties/EMPLOYEE_NAME', label: 'Employee Name' },
+        { type: 'Control', scope: '#/properties/AMOUNT', label: 'Amount' },
+        { type: 'Control', scope: '#/properties/CATEGORY', label: 'Category' },
+        { type: 'Control', scope: '#/properties/DESCRIPTION', label: 'Description', options: { multi: true } },
+      ],
+    },
+    status: FormDefinitionStatus.PUBLISHED,
+  });
+
+  const expenseManagerReviewForm = await db.getRepository(FormDefinition).save({
+    code: 'EXPENSE_MANAGER_REVIEW',
+    version: 1,
+    jsonSchema: {
+      type: 'object',
+      properties: {
+        EMPLOYEE_NAME: { type: 'string' },
+        AMOUNT: { type: 'number' },
+        CATEGORY: { type: 'string', enum: ['TRAVEL', 'MEALS', 'EQUIPMENT', 'OTHER'] },
+        DESCRIPTION: { type: 'string' },
+        DECISION: { type: 'string', enum: ['APPROVE', 'REJECT'] },
+        NOTES: { type: 'string' },
+      },
+      required: ['EMPLOYEE_NAME', 'AMOUNT', 'CATEGORY', 'DECISION'],
+    },
+    uiSchema: {
+      type: 'VerticalLayout',
+      elements: [
+        { type: 'Control', scope: '#/properties/EMPLOYEE_NAME', options: { readonly: true } },
+        { type: 'Control', scope: '#/properties/AMOUNT', options: { readonly: true } },
+        { type: 'Control', scope: '#/properties/CATEGORY', options: { readonly: true } },
+        { type: 'Control', scope: '#/properties/DESCRIPTION', options: { readonly: true, multi: true } },
+        { type: 'Control', scope: '#/properties/DECISION' },
+        { type: 'Control', scope: '#/properties/NOTES', options: { multi: true } },
+      ],
+    },
+    status: FormDefinitionStatus.PUBLISHED,
+  });
+
+  const expenseFinanceReviewForm = await db.getRepository(FormDefinition).save({
+    code: 'EXPENSE_FINANCE_REVIEW',
+    version: 1,
+    jsonSchema: {
+      type: 'object',
+      properties: {
+        EMPLOYEE_NAME: { type: 'string' },
+        AMOUNT: { type: 'number' },
+        CATEGORY: { type: 'string', enum: ['TRAVEL', 'MEALS', 'EQUIPMENT', 'OTHER'] },
+        MANAGER_DECISION: { type: 'string' },
+        DECISION: { type: 'string', enum: ['APPROVE', 'REJECT'] },
+        NOTES: { type: 'string' },
+      },
+      required: ['EMPLOYEE_NAME', 'AMOUNT', 'CATEGORY', 'DECISION'],
+    },
+    uiSchema: {
+      type: 'VerticalLayout',
+      elements: [
+        { type: 'Control', scope: '#/properties/EMPLOYEE_NAME', options: { readonly: true } },
+        { type: 'Control', scope: '#/properties/AMOUNT', options: { readonly: true } },
+        { type: 'Control', scope: '#/properties/CATEGORY', options: { readonly: true } },
+        { type: 'Control', scope: '#/properties/MANAGER_DECISION', options: { readonly: true } },
+        { type: 'Control', scope: '#/properties/DECISION' },
+        { type: 'Control', scope: '#/properties/NOTES', options: { multi: true } },
+      ],
+    },
+    status: FormDefinitionStatus.PUBLISHED,
+  });
+
+  const expenseApprovalProcess = await db.getRepository(ProcessDefinition).save({
+    name: 'Expense Approval',
+    startFormCode: expenseStartForm.code,
+    workflowType: 'expenseApprovalWorkflow',
+    taskQueue: 'flowstile',
+    milestones: [
+      { code: 'MANAGER_REVIEW', name: 'Manager Review' },
+      { code: 'FINANCE_REVIEW', name: 'Finance Review' },
+      { code: 'REIMBURSEMENT', name: 'Reimbursement' },
+    ],
+  });
+
+  await db.getRepository(TaskDefinition).save({
+    code: 'EXPENSE_MANAGER_REVIEW',
+    processDefinitionId: expenseApprovalProcess.id,
+    formDefinitionCode: expenseManagerReviewForm.code,
+    milestoneCode: 'MANAGER_REVIEW',
+    candidateGroups: ['managers'],
+    defaultPriority: Priority.HIGH,
+  });
+
+  await db.getRepository(TaskDefinition).save({
+    code: 'EXPENSE_FINANCE_REVIEW',
+    processDefinitionId: expenseApprovalProcess.id,
+    formDefinitionCode: expenseFinanceReviewForm.code,
+    milestoneCode: 'FINANCE_REVIEW',
+    candidateGroups: ['finance'],
+    defaultPriority: Priority.NORMAL,
+  });
+
   // Sample tasks
   await db.getRepository(Task).save({
     taskDefinitionId: reviewLoan.id,
@@ -611,13 +745,13 @@ async function seed() {
   });
 
   console.log('Seed complete:');
-  console.log('  6 groups: loan-officers, hr-team, order-reviewers, warehouse, customer-service, underwriters');
+  console.log('  8 groups: loan-officers, hr-team, order-reviewers, warehouse, customer-service, underwriters, managers, finance');
   console.log('  2 roles: admin, task-user');
-  console.log('  5 users: alice (admin), bob (loan officer + warehouse), carol (customer service), dave (underwriter), service (worker)');
+  console.log('  7 users: alice (admin), bob (loan officer + warehouse), carol (customer service), dave (underwriter), erin (manager), frank (finance), service (worker)');
   console.log(`  1 dev API key (name "dev-worker"): ${DEV_API_KEY}`);
-  console.log('  10 forms: LOAN_APPLICATION_START, LOAN_APPLICATION, ORDER_APPROVAL, SHIPMENT_CONFIRMATION, ORDER_EXCEPTION, LOAN_ORIGINATION_START, LOAN_APPLICATION_REVIEW, LOAN_RISK_ASSESSMENT, LOAN_SENIOR_REVIEW, LOAN_FINAL_DECISION');
-  console.log('  3 processes: Loan Processing, Order Fulfillment, Loan Origination');
-  console.log('  8 task definitions: REVIEW_LOAN, APPROVE_ORDER, CONFIRM_SHIPMENT, HANDLE_EXCEPTION, LOAN_REVIEW_APPLICATION, LOAN_ASSESS_RISK, LOAN_SENIOR_REVIEW, LOAN_FINAL_DECISION');
+  console.log('  13 forms: LOAN_APPLICATION_START, LOAN_APPLICATION, ORDER_APPROVAL, SHIPMENT_CONFIRMATION, ORDER_EXCEPTION, LOAN_ORIGINATION_START, LOAN_APPLICATION_REVIEW, LOAN_RISK_ASSESSMENT, LOAN_SENIOR_REVIEW, LOAN_FINAL_DECISION, EXPENSE_APPROVAL_START, EXPENSE_MANAGER_REVIEW, EXPENSE_FINANCE_REVIEW');
+  console.log('  4 processes: Loan Processing, Order Fulfillment, Loan Origination, Expense Approval');
+  console.log('  10 task definitions: REVIEW_LOAN, APPROVE_ORDER, CONFIRM_SHIPMENT, HANDLE_EXCEPTION, LOAN_REVIEW_APPLICATION, LOAN_ASSESS_RISK, LOAN_SENIOR_REVIEW, LOAN_FINAL_DECISION, EXPENSE_MANAGER_REVIEW, EXPENSE_FINANCE_REVIEW');
   console.log('  4 tasks: 2 loan tasks, 2 order tasks');
 
   await db.destroy();

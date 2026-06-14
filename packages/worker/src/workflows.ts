@@ -61,3 +61,4 @@ export async function loanApprovalWorkflow(
 
 export { orderFulfillmentWorkflow } from './order-fulfillment/workflow.js';
 export { loanOriginationWorkflow } from './loan-origination/workflow.js';
+export { expenseApprovalWorkflow } from './expense-approval/workflow.js';

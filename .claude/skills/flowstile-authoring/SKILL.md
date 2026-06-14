@@ -165,6 +165,12 @@ In `packages/worker/src/<slug>/workflow.ts`:
   try/catch + a compensations array (see `order-fulfillment/workflow.ts`).
 - Long waits: pass `timeoutMs`; handle `TaskTimeoutError` / `TaskCancelledError`.
 
+**Portal-start and read-back contracts** (these live in the examples; here so you don't have to reverse-engineer them):
+
+- **Start a case:** `POST /processes/:id/start` with `{ data: { ...start-form fields }, idempotencyKey? }` → `201 { processInstanceId, caseId }`. Requires `workflowType` + `taskQueue` set on the process (422 otherwise; 503 if `TEMPORAL_ADDRESS` isn't configured on the server).
+- **Workflow input shape:** a portal-started workflow receives `{ processInstanceId: string, data: { ...start-form fields }, startedBy?: { id, email, displayName } | null }`. Start-form fields are nested under `data`, never at the top level. The start form's `required` constrains the *submitted form*, not your workflow input type — type fields you read as you actually use them.
+- **Read case variables back:** `GET /cases/by-process-instance/:pid/entity` → `{ entity, entityVersion }` (as a logged-in user, not the service key). This is how an e2e asserts that `persist` / `patchFlowstileCaseEntity` writes landed.
+
 ## 6 — Validate, inner loop
 
 1. **Boot the worker** — the doctor preflights every task code, published form,
@@ -176,7 +182,10 @@ In `packages/worker/src/<slug>/workflow.ts`:
    404, not 403 — check candidate groups when "missing").
 3. **Check the case page**: `GET /cases/:id` → `milestones[].state` and the
    stepper at `http://localhost:5173/cases/<id>`. Verify the workflow result via
-   Temporal (`e2e/helpers/check-workflow.ts` or temporal-ui :8080).
+   Temporal: `pnpm exec tsx --tsconfig <repo>/tsconfig.base.json e2e/helpers/check-workflow.ts '<wfId>'`
+   **run with `cwd: packages/worker`** (the `@temporalio/client` dep is the
+   worker's, not hoisted — running from repo root fails with "tsx not found").
+   Or use temporal-ui on :8080.
 
 ## 7 — Validate, outer loop (the rubric)
 
@@ -214,8 +223,16 @@ missing instruction in THIS skill, fix the skill in the same commit.
   e2e API calls as a group member, or you'll get 404s and think the task vanished.
 - `createTaskAndWait` retries task creation 3×; a missing task def or unpublished
   form fails the workflow — that's what the doctor exists to pre-empt.
-- The milestone stepper derives from task statuses at read time; an automated
-  phase shows pending until a later phase's task exists (expected, not a bug).
+- The milestone stepper derives from task statuses at read time, so a phase with
+  **no human task** depends on its position. A **mid-plan** automated phase (a
+  human task comes after it, as in loan-origination's CREDIT_ASSESSMENT) renders
+  `achieved` once the next phase opens. A **trailing** automated phase (nothing
+  after it, e.g. a final REIMBURSEMENT/PAYOUT) renders `skipped` once the case
+  closes — the derivation can't tell "ran automatically" from "skipped via early
+  exit" without a task. Two takeaways: assert `skipped` (not `achieved`) for a
+  trailing automated milestone, and **put automated work mid-plan if you want it
+  to read `achieved`.** (Surfacing trailing automated work as `achieved` is the
+  lead use case for the proposed case-event log — see `docs/design-decisions.md`.)
 - Case `status` derives from tasks: all-terminal = completed/cancelled — a case
   with only the first task completed already reads "completed" until the workflow
   creates the next task (brief; re-fetch after the signal round-trip in tests).
