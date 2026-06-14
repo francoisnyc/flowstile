@@ -43,6 +43,8 @@ async function seed() {
   const finance = await db.getRepository(Group).save({ name: 'finance' });
   const peopleManagers = await db.getRepository(Group).save({ name: 'people-managers' });
   const hrReviewers = await db.getRepository(Group).save({ name: 'hr-reviewers' });
+  const purchasingManagers = await db.getRepository(Group).save({ name: 'purchasing-managers' });
+  const financeApprovers = await db.getRepository(Group).save({ name: 'finance-approvers' });
 
   // Roles
   const adminRole = await db.getRepository(Role).save({
@@ -116,6 +118,20 @@ async function seed() {
     displayName: 'Helen (HR Reviewer)',
     passwordHash: devHash,
     groups: [hrReviewers],
+    roles: [taskUserRole],
+  });
+  await db.getRepository(User).save({
+    email: 'pat@example.com',
+    displayName: 'Pat (Purchasing Manager)',
+    passwordHash: devHash,
+    groups: [purchasingManagers],
+    roles: [taskUserRole],
+  });
+  await db.getRepository(User).save({
+    email: 'quinn@example.com',
+    displayName: 'Quinn (Finance Approver)',
+    passwordHash: devHash,
+    groups: [financeApprovers],
     roles: [taskUserRole],
   });
 
@@ -798,6 +814,130 @@ async function seed() {
     defaultPriority: Priority.NORMAL,
   });
 
+  // ── Purchase Requisition Approval ─────────────────────────────────────────
+  // Portal-startable procurement flow: MANAGER_APPROVAL → FINANCE_APPROVAL
+  // (only when AMOUNT > 5000) → PO_ISSUANCE (trailing automated phase — a
+  // Temporal activity issues a unique purchase-order number; no human task, so
+  // the stepper reads it as `skipped` once the case closes).
+
+  const prStartForm = await db.getRepository(FormDefinition).save({
+    code: 'PURCHASE_REQUISITION_START',
+    version: 1,
+    jsonSchema: {
+      type: 'object',
+      properties: {
+        REQUESTER_NAME: { type: 'string' },
+        ITEM: { type: 'string' },
+        AMOUNT: { type: 'number', minimum: 0 },
+        JUSTIFICATION: { type: 'string' },
+      },
+      required: ['REQUESTER_NAME', 'ITEM', 'AMOUNT', 'JUSTIFICATION'],
+    },
+    uiSchema: {
+      type: 'VerticalLayout',
+      elements: [
+        { type: 'Control', scope: '#/properties/REQUESTER_NAME', label: 'Requester Name' },
+        { type: 'Control', scope: '#/properties/ITEM', label: 'Item' },
+        { type: 'Control', scope: '#/properties/AMOUNT', label: 'Amount' },
+        { type: 'Control', scope: '#/properties/JUSTIFICATION', label: 'Justification', options: { multi: true } },
+      ],
+    },
+    status: FormDefinitionStatus.PUBLISHED,
+  });
+
+  const prManagerApprovalForm = await db.getRepository(FormDefinition).save({
+    code: 'PR_MANAGER_APPROVAL_FORM',
+    version: 1,
+    jsonSchema: {
+      type: 'object',
+      properties: {
+        REQUESTER_NAME: { type: 'string' },
+        ITEM: { type: 'string' },
+        AMOUNT: { type: 'number' },
+        JUSTIFICATION: { type: 'string' },
+        DECISION: { type: 'string', enum: ['APPROVED', 'REJECTED'] },
+        NOTES: { type: 'string' },
+      },
+      // Only the human-edited field is required; the rest are read-only context
+      // delivered via contextData (skill §3).
+      required: ['DECISION'],
+    },
+    uiSchema: {
+      type: 'VerticalLayout',
+      elements: [
+        { type: 'Control', scope: '#/properties/REQUESTER_NAME', options: { readonly: true } },
+        { type: 'Control', scope: '#/properties/ITEM', options: { readonly: true } },
+        { type: 'Control', scope: '#/properties/AMOUNT', options: { readonly: true } },
+        { type: 'Control', scope: '#/properties/JUSTIFICATION', options: { readonly: true, multi: true } },
+        { type: 'Control', scope: '#/properties/DECISION' },
+        { type: 'Control', scope: '#/properties/NOTES', options: { multi: true } },
+      ],
+    },
+    status: FormDefinitionStatus.PUBLISHED,
+  });
+
+  const prFinanceApprovalForm = await db.getRepository(FormDefinition).save({
+    code: 'PR_FINANCE_APPROVAL_FORM',
+    version: 1,
+    jsonSchema: {
+      type: 'object',
+      properties: {
+        REQUESTER_NAME: { type: 'string' },
+        ITEM: { type: 'string' },
+        AMOUNT: { type: 'number' },
+        JUSTIFICATION: { type: 'string' },
+        MANAGER_DECISION: { type: 'string' },
+        DECISION: { type: 'string', enum: ['APPROVED', 'REJECTED'] },
+        NOTES: { type: 'string' },
+      },
+      // Only the human-edited field is required (skill §3).
+      required: ['DECISION'],
+    },
+    uiSchema: {
+      type: 'VerticalLayout',
+      elements: [
+        { type: 'Control', scope: '#/properties/REQUESTER_NAME', options: { readonly: true } },
+        { type: 'Control', scope: '#/properties/ITEM', options: { readonly: true } },
+        { type: 'Control', scope: '#/properties/AMOUNT', options: { readonly: true } },
+        { type: 'Control', scope: '#/properties/JUSTIFICATION', options: { readonly: true, multi: true } },
+        { type: 'Control', scope: '#/properties/MANAGER_DECISION', options: { readonly: true } },
+        { type: 'Control', scope: '#/properties/DECISION' },
+        { type: 'Control', scope: '#/properties/NOTES', options: { multi: true } },
+      ],
+    },
+    status: FormDefinitionStatus.PUBLISHED,
+  });
+
+  const purchaseRequisitionProcess = await db.getRepository(ProcessDefinition).save({
+    name: 'Purchase Requisition Approval',
+    startFormCode: prStartForm.code,
+    workflowType: 'purchaseRequisitionWorkflow',
+    taskQueue: 'flowstile',
+    milestones: [
+      { code: 'MANAGER_APPROVAL', name: 'Manager Approval' },
+      { code: 'FINANCE_APPROVAL', name: 'Finance Approval' },
+      { code: 'PO_ISSUANCE', name: 'PO Issuance' },
+    ],
+  });
+
+  await db.getRepository(TaskDefinition).save({
+    code: 'PR_MANAGER_APPROVAL',
+    processDefinitionId: purchaseRequisitionProcess.id,
+    formDefinitionCode: prManagerApprovalForm.code,
+    milestoneCode: 'MANAGER_APPROVAL',
+    candidateGroups: ['purchasing-managers'],
+    defaultPriority: Priority.HIGH,
+  });
+
+  await db.getRepository(TaskDefinition).save({
+    code: 'PR_FINANCE_APPROVAL',
+    processDefinitionId: purchaseRequisitionProcess.id,
+    formDefinitionCode: prFinanceApprovalForm.code,
+    milestoneCode: 'FINANCE_APPROVAL',
+    candidateGroups: ['finance-approvers'],
+    defaultPriority: Priority.NORMAL,
+  });
+
   // Sample tasks
   await db.getRepository(Task).save({
     taskDefinitionId: reviewLoan.id,
@@ -884,13 +1024,13 @@ async function seed() {
   });
 
   console.log('Seed complete:');
-  console.log('  10 groups: loan-officers, hr-team, order-reviewers, warehouse, customer-service, underwriters, managers, finance, people-managers, hr-reviewers');
+  console.log('  12 groups: ..., purchasing-managers, finance-approvers');
   console.log('  2 roles: admin, task-user');
-  console.log('  9 users: alice (admin), bob (loan officer + warehouse), carol (customer service), dave (underwriter), erin (manager), frank (finance), mona (people manager), helen (hr reviewer), service (worker)');
+  console.log('  11 users: ..., pat (purchasing manager), quinn (finance approver)');
   console.log(`  1 dev API key (name "dev-worker"): ${DEV_API_KEY}`);
-  console.log('  16 forms: ..., VACATION_LEAVE_START, VACATION_MANAGER_REVIEW, VACATION_HR_REVIEW');
-  console.log('  5 processes: Loan Processing, Order Fulfillment, Loan Origination, Expense Approval, Vacation Leave Request');
-  console.log('  12 task definitions: ..., VACATION_MANAGER_REVIEW, VACATION_HR_REVIEW');
+  console.log('  19 forms: ..., PURCHASE_REQUISITION_START, PR_MANAGER_APPROVAL_FORM, PR_FINANCE_APPROVAL_FORM');
+  console.log('  6 processes: ..., Vacation Leave Request, Purchase Requisition Approval');
+  console.log('  14 task definitions: ..., PR_MANAGER_APPROVAL, PR_FINANCE_APPROVAL');
   console.log('  4 tasks: 2 loan tasks, 2 order tasks');
 
   await db.destroy();

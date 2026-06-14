@@ -63,3 +63,4 @@ export { orderFulfillmentWorkflow } from './order-fulfillment/workflow.js';
 export { loanOriginationWorkflow } from './loan-origination/workflow.js';
 export { expenseApprovalWorkflow } from './expense-approval/workflow.js';
 export { vacationLeaveWorkflow } from './vacation-leave/workflow.js';
+export { purchaseRequisitionWorkflow } from './purchase-requisition/workflow.js';
