@@ -1,3 +1,5 @@
+import type { VariableMapping } from './mapping.js';
+
 export type Priority = 'low' | 'normal' | 'high' | 'urgent';
 export type TaskStatus = 'created' | 'claimed' | 'completed' | 'cancelled';
 
@@ -53,6 +55,13 @@ export interface CreateTaskAndWaitInput {
   /** Timeout in milliseconds. If the task is not completed within this time,
    *  a TaskTimeoutError is thrown and the task is cancelled (best-effort). */
   timeoutMs?: number;
+  /** Project named case-entity variables into this task's `contextData` before
+   *  creation (input mapping). Requires `processInstanceId`. Plumbing only. */
+  contextFrom?: VariableMapping;
+  /** Promote an allowlist of submission fields into the case entity on
+   *  completion (output mapping). Requires `processInstanceId`. Plumbing only —
+   *  derived values are computed and written in the workflow. */
+  persist?: VariableMapping;
 }
 
 export interface TaskResult<

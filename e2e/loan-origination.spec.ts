@@ -249,6 +249,18 @@ test.describe.serial('Loan Origination — Happy Path', () => {
     // No senior review below the threshold
     expect(result.tasks.some((t) => t.taskDefinition?.code === 'LOAN_SENIOR_REVIEW')).toBe(false);
     await expectWorkflowCompleted(pid);
+
+    // The workflow accumulated case variables: computed (creditScore), derived
+    // (riskTier), and promoted task outcomes (underwritingDecision, decision).
+    // expectWorkflowCompleted guarantees the final persist landed before return.
+    const entityRes = await api('GET', `/cases/by-process-instance/${pid}/entity`, alice);
+    expect(entityRes.status).toBe(200);
+    const vars = entityRes.body.entity;
+    expect(vars.creditScore).toBeGreaterThan(500);
+    expect(['LOW', 'MEDIUM', 'HIGH']).toContain(vars.riskTier);
+    expect(vars.underwritingDecision).toBe('APPROVE');
+    expect(vars.decision).toBe('APPROVED');
+    expect(vars.apr).toBe(6.2);
   });
 });
 

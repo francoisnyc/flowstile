@@ -1,9 +1,18 @@
 import { proxyActivities, log } from '@temporalio/workflow';
 import { loanOriginationProcess } from './process.js';
 import type * as loanActivities from './activities.js';
+import type * as flowstileActivities from '@flowstile/sdk/activities';
 
 const { fetchCreditScore } = proxyActivities<typeof loanActivities>({
   startToCloseTimeout: '1 minute',
+  retry: { maximumAttempts: 3 },
+});
+
+// Built-in Flowstile case-entity activity, used here for the *computed* values
+// (creditScore, riskTier) that aren't submission fields. Submission-field
+// plumbing uses the declarative contextFrom/persist mappings on createAndWait.
+const { patchFlowstileCaseEntity } = proxyActivities<typeof flowstileActivities>({
+  startToCloseTimeout: '30 seconds',
   retry: { maximumAttempts: 3 },
 });
 
@@ -20,11 +29,23 @@ export interface LoanOriginationInput {
 }
 
 export type LoanOriginationResult =
-  | { status: 'approved'; creditScore: number; apr: number | null; terms: string | null }
+  | { status: 'approved'; creditScore: number; riskTier: RiskTier; apr: number | null; terms: string | null }
   | { status: 'declined'; stage: 'underwriting' | 'senior-review' | 'final-decision'; reason: string }
   | { status: 'rejected'; reason: string };
 
 const SENIOR_REVIEW_THRESHOLD = 50_000;
+
+type RiskTier = 'LOW' | 'MEDIUM' | 'HIGH';
+
+// A derived ("calculated") business value: computed in workflow code from the
+// automated credit score and the loan amount, then persisted as a case
+// variable. This is the deliberate pattern — calculation lives in the workflow
+// (the source of truth), never in a form-side or server-side expression engine.
+function deriveRiskTier(creditScore: number, amount: number): RiskTier {
+  if (creditScore < 640 || amount > 75_000) return 'HIGH';
+  if (creditScore < 720) return 'MEDIUM';
+  return 'LOW';
+}
 
 /**
  * Multi-stage loan approval. The case plan (APPLICATION_REVIEW →
@@ -32,6 +53,24 @@ const SENIOR_REVIEW_THRESHOLD = 50_000;
  * all sequencing lives here, in code: a rework loop from underwriting back to
  * application review, a fully automated credit phase, and a senior review
  * that only exists above the amount threshold.
+ *
+ * This workflow also doubles as the reference for the variable lifecycle:
+ *   - COMPUTE in workflow code (creditScore via an activity; riskTier derived)
+ *     and PERSIST those *computed* values with patchFlowstileCaseEntity — they
+ *     aren't submission fields, so they're written explicitly.
+ *   - For *submission* fields, the declarative mappings on createAndWait do the
+ *     plumbing: `persist` promotes an allowlist of submitted fields to the case
+ *     entity on completion; `contextFrom` projects case variables into a task's
+ *     contextData for display (a point-in-time copy). No manual get/patch.
+ *
+ * Concurrency note: every write here is a disjoint-field `add`, so no
+ * expectedVersion is needed — the server applies them under a row lock and
+ * distinct paths never collide. A *same-field* write from concurrent branches
+ * (e.g. two parallel approvers incrementing one counter) is the case that needs
+ * optimistic concurrency: read { entity, entityVersion }, recompute, write back
+ * with expectedVersion, and on a 409 re-read and retry — that retry loop belongs
+ * in workflow code, NOT in this activity's Temporal retry policy (blindly
+ * retrying a 409 just re-sends the same stale version).
  */
 export async function loanOriginationWorkflow(
   input: LoanOriginationInput,
@@ -61,14 +100,27 @@ export async function loanOriginationWorkflow(
       return { status: 'rejected', reason: review.data.NOTES ?? 'Rejected at application review' };
     }
 
-    // Phase: CREDIT_ASSESSMENT — automated, no human task
+    // Phase: CREDIT_ASSESSMENT — automated, no human task.
+    // COMPUTE creditScore, derive riskTier, then PERSIST both as case variables
+    // (disjoint-field adds; on a rework re-pass these replace prior values).
     const creditScore = await fetchCreditScore({ customerName: CUSTOMER_NAME, amount: AMOUNT });
-    log.info('Credit assessment complete', { pid, creditScore });
+    const riskTier = deriveRiskTier(creditScore, AMOUNT);
+    log.info('Credit assessment complete', { pid, creditScore, riskTier });
+    await patchFlowstileCaseEntity(pid, [
+      { op: 'add', path: '/creditScore', value: creditScore },
+      { op: 'add', path: '/riskTier', value: riskTier },
+    ]);
 
-    // Phase: UNDERWRITING (underwriters)
+    // Phase: UNDERWRITING (underwriters). PROJECT the derived riskTier into the
+    // task for display alongside the working input.
     const risk = await loanAssessRisk.createAndWait({
       processInstanceId: pid,
       inputData: { CUSTOMER_NAME, AMOUNT, CREDIT_SCORE: creditScore },
+      contextData: { RISK_TIER: riskTier },
+      // OUTPUT MAPPING (persist): promote the underwriting outcome to the case
+      // entity on completion — an allowlist of submission fields, renamed. The
+      // SDK applies it after completion; no manual patch needed.
+      persist: { DECISION: 'underwritingDecision', RATIONALE: 'underwritingRationale' },
     });
     if (risk.data.DECISION === 'SEND_BACK') {
       reworkReason = risk.data.RATIONALE;
@@ -78,11 +130,12 @@ export async function loanOriginationWorkflow(
       return { status: 'declined', stage: 'underwriting', reason: risk.data.RATIONALE };
     }
 
-    // Still UNDERWRITING: senior review, only above the threshold
+    // Still UNDERWRITING: senior review, only above the threshold.
     if (AMOUNT > SENIOR_REVIEW_THRESHOLD) {
       const senior = await loanSeniorReview.createAndWait({
         processInstanceId: pid,
         inputData: { AMOUNT, CREDIT_SCORE: creditScore, RISK_RATIONALE: risk.data.RATIONALE },
+        contextData: { RISK_TIER: riskTier },
       });
       if (senior.data.DECISION === 'REJECT') {
         return {
@@ -93,15 +146,24 @@ export async function loanOriginationWorkflow(
       }
     }
 
-    // Phase: FINAL_DECISION (loan-officers)
+    // Phase: FINAL_DECISION (loan-officers).
+    // INPUT MAPPING (contextFrom): project the accumulated case variables into
+    // the task for display — read from the entity, not threaded through locals
+    // (the form that matters when data came from another branch). OUTPUT MAPPING
+    // (persist): promote the final decision + APR back to the entity. Both are
+    // applied by the SDK; no manual get/patch here.
     const finalDecision = await loanFinalDecision.createAndWait({
       processInstanceId: pid,
       inputData: { CUSTOMER_NAME, AMOUNT, CREDIT_SCORE: creditScore },
+      contextFrom: ['creditScore', 'riskTier', 'underwritingDecision'],
+      persist: { DECISION: 'decision', APR: 'apr' },
     });
+
     if (finalDecision.data.DECISION === 'APPROVED') {
       return {
         status: 'approved',
         creditScore,
+        riskTier,
         apr: finalDecision.data.APR ?? null,
         terms: finalDecision.data.TERMS ?? null,
       };

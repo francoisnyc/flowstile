@@ -32,30 +32,45 @@ interface ServerTaskDef {
 }
 
 /**
- * Preflight: validates this worker's process declaration against the server
- * before accepting work. Catches the seams that otherwise fail at runtime,
- * minutes later, in the Temporal UI:
- *
- * - every `defineTask` code exists as a task definition on the server
- * - every task definition's form has a published version
- * - the process's workflowType / taskQueue are configured and consistent
- * - the declared plan and phases match the server's milestones (warn-only)
- *
- * Pure read-only — never mutates the server.
+ * The server-side snapshot the doctor's decision logic compares against. This
+ * is the seam between the imperative shell (`runDoctor`, which fetches) and the
+ * pure core (`evaluateProcessHealth`, which decides) — mirroring how
+ * `deriveMilestoneStates` keeps milestone logic pure and the route does I/O.
  */
-export async function runDoctor(
-  flowstile: FlowstileClientOptions,
+export interface DoctorSnapshot {
+  /** The server's process definition, or null if no process matches by name. */
+  process: ServerProcess | null;
+  /** Task definitions registered under the process (empty if process is null). */
+  taskDefs: ServerTaskDef[];
+  /** Form codes that have at least one published version. */
+  publishedFormCodes: Set<string>;
+}
+
+/**
+ * Pure decision core: given a worker's process declaration and a snapshot of
+ * the server, produce the findings. No I/O — every branch is a unit test.
+ *
+ * Checks:
+ * - the process exists on the server (missing → error, short-circuits)
+ * - queue / workflowType are configured and consistent
+ * - every `defineTask` code exists as a server task definition
+ * - declared phases agree with server milestoneCodes
+ * - the declared plan matches the server's milestones (order-sensitive)
+ * - every server task's milestoneCode resolves to a server milestone
+ *   (catches direct-write/seed drift the POST/PATCH 422 never sees)
+ * - every referenced form has a published version
+ */
+export function evaluateProcessHealth(
   proc: ProcessDefinition,
-): Promise<DoctorReport> {
-  const client = new FlowstileClient(flowstile);
+  snapshot: DoctorSnapshot,
+): DoctorReport {
   const findings: DoctorFinding[] = [];
   const error = (check: string, detail: string) => findings.push({ severity: 'error', check, detail });
   const warn = (check: string, detail: string) => findings.push({ severity: 'warn', check, detail });
   const ok = (check: string, detail: string) => findings.push({ severity: 'ok', check, detail });
 
   // 1. The process definition exists on the server
-  const processes = await client.get<Paginated<ServerProcess>>('/processes?limit=200');
-  const serverProc = processes.items.find((p) => p.name === proc.name);
+  const serverProc = snapshot.process;
   if (!serverProc) {
     error(
       'process',
@@ -83,11 +98,8 @@ export async function runDoctor(
   }
 
   // 3. Every declared task code exists; phases agree with server milestones
-  const taskDefs = await client.get<Paginated<ServerTaskDef>>(
-    `/processes/${serverProc.id}/tasks?limit=200`,
-  );
-  const byCode = new Map(taskDefs.items.map((td) => [td.code, td]));
-  const formCodes = new Set<string>();
+  const byCode = new Map(snapshot.taskDefs.map((td) => [td.code, td]));
+  const referencedFormCodes = new Set<string>();
 
   for (const [key, descriptor] of Object.entries(proc.tasks)) {
     const td = byCode.get(descriptor.taskDefinitionCode);
@@ -102,7 +114,7 @@ export async function runDoctor(
       );
       continue;
     }
-    formCodes.add(td.formDefinitionCode);
+    referencedFormCodes.add(td.formDefinitionCode);
     if ((td.milestoneCode ?? null) !== descriptor.phase) {
       warn(
         `task:${key}`,
@@ -115,37 +127,95 @@ export async function runDoctor(
   }
 
   // 4. Plan vs server milestones (order-sensitive)
-  const serverPlan = (serverProc.milestones ?? []).map((m) => m.code);
+  const serverMilestoneCodes = (serverProc.milestones ?? []).map((m) => m.code);
   const codePlan = [...proc.plan];
-  if (codePlan.length && JSON.stringify(serverPlan) !== JSON.stringify(codePlan)) {
+  if (codePlan.length && JSON.stringify(serverMilestoneCodes) !== JSON.stringify(codePlan)) {
     warn(
       'plan',
       `Plan drift: code declares [${codePlan.join(' → ')}], server has ` +
-        `[${serverPlan.join(' → ') || '(none)'}]. The case stepper follows the server.`,
+        `[${serverMilestoneCodes.join(' → ') || '(none)'}]. The case stepper follows the server.`,
     );
   } else if (codePlan.length) {
     ok('plan', codePlan.join(' → '));
   }
 
-  // 5. Every referenced form has a published version
-  for (const code of formCodes) {
-    try {
-      await client.get(`/forms/${encodeURIComponent(code)}`);
+  // 5. Intra-server consistency: every server task's milestoneCode must resolve
+  // to a server milestone. The POST/PATCH 422 enforces this at write time, but
+  // the seed script and any direct DB write bypass that route — and a dangling
+  // milestoneCode fails silently (the stepper derivation renders the task
+  // unphased), so the doctor is the only place this surfaces.
+  const milestoneCodeSet = new Set(serverMilestoneCodes);
+  for (const td of snapshot.taskDefs) {
+    if (td.milestoneCode !== null && !milestoneCodeSet.has(td.milestoneCode)) {
+      error(
+        `milestone:${td.code}`,
+        `Task definition '${td.code}' references milestone '${td.milestoneCode}', ` +
+          `which is not in the server's plan [${serverMilestoneCodes.join(', ') || '(none)'}]. ` +
+          `Its tasks will render unphased on the stepper. Fix the seed or the plan.`,
+      );
+    }
+  }
+
+  // 6. Every referenced form has a published version
+  for (const code of referencedFormCodes) {
+    if (snapshot.publishedFormCodes.has(code)) {
       ok(`form:${code}`, 'published version found');
-    } catch (err) {
-      if (err instanceof FlowstileApiError && err.statusCode === 404) {
-        error(
-          `form:${code}`,
-          `No published version of form '${code}' — tasks using it will fail to create (422). ` +
-            `Design and publish it in the form designer.`,
-        );
-      } else {
-        throw err;
-      }
+    } else {
+      error(
+        `form:${code}`,
+        `No published version of form '${code}' — tasks using it will fail to create (422). ` +
+          `Design and publish it in the form designer.`,
+      );
     }
   }
 
   return { ok: !findings.some((f) => f.severity === 'error'), findings };
+}
+
+/**
+ * Preflight: validates this worker's process declaration against the server
+ * before accepting work. Catches the seams that otherwise fail at runtime,
+ * minutes later, in the Temporal UI. The imperative shell — fetches the
+ * snapshot, then delegates every decision to `evaluateProcessHealth`.
+ *
+ * Pure read-only — never mutates the server.
+ */
+export async function runDoctor(
+  flowstile: FlowstileClientOptions,
+  proc: ProcessDefinition,
+): Promise<DoctorReport> {
+  const client = new FlowstileClient(flowstile);
+
+  // The process definition, by name
+  const processes = await client.get<Paginated<ServerProcess>>('/processes?limit=200');
+  const serverProc = processes.items.find((p) => p.name === proc.name) ?? null;
+
+  if (!serverProc) {
+    return evaluateProcessHealth(proc, { process: null, taskDefs: [], publishedFormCodes: new Set() });
+  }
+
+  // Its task definitions
+  const taskDefsPage = await client.get<Paginated<ServerTaskDef>>(
+    `/processes/${serverProc.id}/tasks?limit=200`,
+  );
+  const taskDefs = taskDefsPage.items;
+
+  // Which referenced forms have a published version. Resolve per unique code;
+  // a 404 means "no published version" (recorded as not-published), any other
+  // error propagates — the worker's try/catch treats that as "doctor couldn't
+  // run, boot anyway" (fail-open on doctor infrastructure errors).
+  const referenced = new Set(taskDefs.map((td) => td.formDefinitionCode));
+  const publishedFormCodes = new Set<string>();
+  for (const code of referenced) {
+    try {
+      await client.get(`/forms/${encodeURIComponent(code)}`);
+      publishedFormCodes.add(code);
+    } catch (err) {
+      if (!(err instanceof FlowstileApiError && err.statusCode === 404)) throw err;
+    }
+  }
+
+  return evaluateProcessHealth(proc, { process: serverProc, taskDefs, publishedFormCodes });
 }
 
 /** Render a doctor report for terminal output. */
