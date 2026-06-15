@@ -212,7 +212,7 @@ Two firm boundaries follow:
 
 ## Surfacing Automated and Agent Work: A Case-Event Log (Proposed — Not Built)
 
-> **Status: design direction, not implemented.** Recorded so the shape is agreed before any code.
+> **Status: design direction, not implemented.** Recorded so the shape is agreed before any code. **See the refinement below — a later pass narrowed this to additive timeline detail only, and removed milestone state from its scope.**
 
 The asymmetry above has a cost. KuFlow makes automated work a first-class "automatic task" the worker completes programmatically, so it appears in the process view *for free* — its **symmetric** SDK buys uniform visibility of human and automated steps. Flowstile's **asymmetric** SDK (human-only completion) buys clean human-decision semantics but means automated steps (Temporal activities) are **invisible** in the case view: only their *results* land in case variables, and the milestone stepper jumps over automated phases.
 
@@ -224,3 +224,13 @@ The principled answer — consistent with "Flowstile records the business map, T
 - **Carries an instrumentation cost.** Every recorded event is a line of workflow code, so it is opt-in, never automatic — the same trade weighed for the milestone stepper.
 
 This one primitive answers several otherwise-separate requests — service-task visibility, connector-execution visibility, RPA/agent actors in the case view, and the milestone stepper's long-automated-phase gap. That convergence is the signal it is the right abstraction rather than four features.
+
+### Refinement: milestone state is derived or declared, never logged
+
+A later pass pressure-tested the "milestone stepper's long-automated-phase gap" motivation above and narrowed it sharply. Two conclusions:
+
+**Separate load-bearing state from additive richness.** Whether a milestone is *achieved* is load-bearing: it must never depend on an author remembering to call `recordCaseEvent`. That would reintroduce silent omission — a hole on the case page with no error — the exact failure the *derived* stepper was built to avoid, and a regression from "milestones are derived, not remembered." Only *additive* timeline detail (an agent's note, a connector's payload) is safe to log explicitly, because forgetting one costs a line of detail, not a wrong milestone. A skill can *teach the model* but is the wrong guardrail for an omission; guardrails for omission must be automatic or detected, not documented.
+
+**A milestone is a human-meaningful checkpoint or a status-bearing async wait — not every automated step.** The discriminator: is there a meaningful gap in time between the last human action and this outcome, during which a stakeholder asks "where's my thing?" Walking the three demo processes (Expense `REIMBURSEMENT`, Vacation `LEDGER_UPDATE`, Purchase `PO_ISSUANCE`), every trailing automated phase is an *instantaneous* activity that derives a reference string the moment the last approval lands. None is a checkpoint anyone waits on — the real checkpoint was the preceding human decision — so they render `skipped`, and that is the plan telling the truth, not a missing feature. The genuinely milestone-worthy automated steps are the ones with *real duration* (e.g. a reimbursement that runs on the next payroll cycle), and those are modeled as **async activities with status** (pending → issued → paid) whose state derives the same clean, pure way human-task status already does. Either way, milestone state needs no event log.
+
+**Consequence.** The case-event log, if ever built, is scoped to the *additive* timeline only and remains deferred on YAGNI grounds; it is explicitly **not** the mechanism for milestone state, and the `recordedActivity` wrapper sketched above is correspondingly de-scoped. The demos keep their trailing automated milestones deliberately — as the worked example of `skipped`, not as a template: prefer not to plan instantaneous plumbing as a milestone. (A future doctor nudge could warn on "a planned milestone with no human task and no async-status source.")
