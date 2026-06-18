@@ -1,4 +1,5 @@
 import { DataSource, DataSourceOptions } from 'typeorm';
+import { join } from 'node:path';
 import { User } from '../entities/user.entity.js';
 import { Group } from '../entities/group.entity.js';
 import { Role } from '../entities/role.entity.js';
@@ -12,6 +13,8 @@ import { Case } from '../entities/case.entity.js';
 import { ApiKey } from '../entities/api-key.entity.js';
 import { CaseComment } from '../entities/case-comment.entity.js';
 
+const isProduction = process.env.NODE_ENV === 'production';
+
 export const dataSourceOptions: DataSourceOptions = {
   type: 'postgres',
   host: process.env.DATABASE_HOST ?? 'localhost',
@@ -20,9 +23,16 @@ export const dataSourceOptions: DataSourceOptions = {
   username: process.env.DATABASE_USER ?? 'flowstile',
   password: process.env.DATABASE_PASSWORD ?? 'flowstile',
   entities: [User, Group, Role, FormDefinition, ProcessDefinition, TaskDefinition, Task, SignalOutbox, Attachment, Case, ApiKey, CaseComment],
-  migrations: [],
-  synchronize: process.env.NODE_ENV !== 'production',
-  logging: process.env.NODE_ENV !== 'production',
+  // Migrations are wired ONLY in production, where the server runs compiled JS
+  // (node dist/...) and applies them on boot via migrationsRun. Dev and tests
+  // use schema sync instead, so the migration files are never loaded there —
+  // which also avoids TypeORM eagerly require()-ing the .ts sources under the
+  // vitest/ESM test runner. __dirname is dist/config at runtime, so the glob
+  // resolves to dist/migrations/*.js.
+  migrations: isProduction ? [join(__dirname, '..', 'migrations', '*.js')] : [],
+  synchronize: !isProduction,
+  migrationsRun: isProduction,
+  logging: !isProduction,
 };
 
 // Exported for TypeORM CLI (db:generate, db:migrate)

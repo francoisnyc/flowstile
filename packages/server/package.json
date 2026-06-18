@@ -9,8 +9,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:integration": "vitest run --config vitest.integration.config.ts",
-    "db:generate": "typeorm migration:generate -d src/config/database.ts",
-    "db:migrate": "typeorm migration:run -d src/config/database.ts",
+    "db:generate": "NODE_OPTIONS=\"--import tsx\" typeorm migration:generate -d src/config/database.ts",
+    "db:migrate": "NODE_ENV=production NODE_OPTIONS=\"-r reflect-metadata\" typeorm migration:run -d dist/config/database.js",
     "db:seed": "tsx src/seed.ts",
     "openapi:generate": "tsx src/generate-openapi.ts"
   },
