@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from temporalio import workflow
 
+from flowstile.errors import TaskCancelledError, TaskTimeoutError
 from flowstile.workflows import FlowstileWorkflowBase
 
 
@@ -24,3 +25,28 @@ class E2EApprovalWorkflow(FlowstileWorkflowBase):
             persist={"DECISION": "decision"},
         )
         return {"decision": result.data["DECISION"], "completed_by": result.completed_by.email}
+
+
+@workflow.defn
+class LifecycleWorkflow(FlowstileWorkflowBase):
+    """Surfaces how create_task_and_wait ends: completed, timed_out, or cancelled.
+
+    Used to validate the timeout (timeout_ms → TaskTimeoutError) and the
+    server-sent task-cancelled signal (→ TaskCancelledError) paths. Workflow
+    *cancellation* is validated separately by cancelling the handle (it cannot
+    return a marker — it re-raises and the workflow ends CANCELLED).
+    """
+
+    @workflow.run
+    async def run(self, params: dict) -> dict:
+        try:
+            result = await self.create_task_and_wait(
+                task_definition_code=params["task_code"],
+                process_instance_id=params["process_instance_id"],
+                timeout_ms=params.get("timeout_ms"),
+            )
+            return {"outcome": "completed", "decision": result.data.get("DECISION")}
+        except TaskTimeoutError:
+            return {"outcome": "timed_out"}
+        except TaskCancelledError:
+            return {"outcome": "cancelled"}

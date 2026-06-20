@@ -71,16 +71,15 @@ case-entity read/patch) alongside your own.
 
 Mirror of the TypeScript SDK's produce-and-await core: REST client, the
 `create_task_and_wait` workflow helper, the case-entity activities, and the
-`context_from`/`persist` mappings. The happy path (create → human-complete →
-resume → `persist`) is validated **end to end against a live Temporal + Flowstile
-server** in `tests/integration/test_e2e_approval.py` (run with `FLOWSTILE_E2E=1`),
-which doubles as the worked Python example.
+`context_from`/`persist` mappings. Validated **end to end against a live Temporal
++ Flowstile server** (`tests/integration/`, run with `FLOWSTILE_E2E=1`) across all
+four paths: the happy path (create → human-complete → resume → `persist`),
+`timeout_ms` (→ `TaskTimeoutError` + task cancelled), the server-sent
+task-cancelled signal (→ `TaskCancelledError`), and workflow cancellation
+(best-effort task cleanup). These doubles as the worked Python example.
 
 Not yet ported: the typed code generator, the preflight doctor, and the
-`define_process`/`define_task` authoring sugar. The one path still wanting
-dedicated coverage is cleanup-after-*workflow-cancellation* (timeout and the
-cancelled-signal paths are covered by the helper's logic; validate the cancel
-path against a Temporal test environment before relying on it in production).
+`define_process`/`define_task` authoring sugar.
 
 ## Development
 
