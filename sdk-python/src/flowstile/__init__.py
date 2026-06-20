@@ -11,7 +11,8 @@ submodules so importing the client never pulls in the workflow sandbox:
 
 from __future__ import annotations
 
-from .client import FlowstileClient
+from typing import TYPE_CHECKING, Any
+
 from .errors import FlowstileApiError, TaskCancelledError, TaskTimeoutError
 from .mapping import build_persist_patch, normalize_mapping, project_context
 from .types import (
@@ -26,6 +27,21 @@ from .types import (
 )
 
 __version__ = "0.0.1"
+
+if TYPE_CHECKING:
+    from .client import FlowstileClient
+
+
+def __getattr__(name: str) -> Any:
+    # Lazy-import the httpx-backed client so that importing workflow-safe
+    # submodules (flowstile.workflows, .types, .mapping) — which run this
+    # package __init__ first — never drags httpx into the Temporal sandbox.
+    if name == "FlowstileClient":
+        from .client import FlowstileClient
+
+        return FlowstileClient
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 __all__ = [
     "FlowstileClient",

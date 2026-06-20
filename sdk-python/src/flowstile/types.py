@@ -36,12 +36,15 @@ class CompletedBy(_Model):
 
 
 class Task(_Model):
+    # Lenient on purpose: the only field the workflow helper relies on is ``id``.
+    # The server's task response shape varies by endpoint, so everything else is
+    # optional and unknown fields are ignored (extra="ignore").
     id: str
-    task_definition_id: str = Field(alias="taskDefinitionId")
-    status: TaskStatus
-    workflow_id: str = Field(alias="workflowId")
+    status: Optional[TaskStatus] = None
+    task_definition_id: Optional[str] = Field(default=None, alias="taskDefinitionId")
+    workflow_id: Optional[str] = Field(default=None, alias="workflowId")
     process_instance_id: Optional[str] = Field(default=None, alias="processInstanceId")
-    priority: Priority = "normal"
+    priority: Optional[Priority] = None
     input_data: dict[str, Any] = Field(default_factory=dict, alias="inputData")
     context_data: dict[str, Any] = Field(default_factory=dict, alias="contextData")
     submission_data: dict[str, Any] = Field(default_factory=dict, alias="submissionData")

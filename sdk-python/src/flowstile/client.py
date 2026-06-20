@@ -116,12 +116,11 @@ class FlowstileClient:
         patch: list[JsonPatchOperation],
         expected_version: Optional[int] = None,
     ) -> CaseEntityResult:
+        body: dict[str, Any] = {"patch": patch}
+        if expected_version is not None:
+            body["expectedVersion"] = expected_version  # omitted (not null) when absent
         return CaseEntityResult.model_validate(
-            await self.request(
-                "PATCH",
-                self._entity_path(process_instance_id),
-                json={"patch": patch, "expectedVersion": expected_version},
-            )
+            await self.request("PATCH", self._entity_path(process_instance_id), json=body)
         )
 
     async def set_case_entity(
@@ -130,12 +129,11 @@ class FlowstileClient:
         entity: dict[str, Any],
         expected_version: Optional[int] = None,
     ) -> CaseEntityResult:
+        body: dict[str, Any] = {"entity": entity}
+        if expected_version is not None:
+            body["expectedVersion"] = expected_version
         return CaseEntityResult.model_validate(
-            await self.request(
-                "PUT",
-                self._entity_path(process_instance_id),
-                json={"entity": entity, "expectedVersion": expected_version},
-            )
+            await self.request("PUT", self._entity_path(process_instance_id), json=body)
         )
 
     # ── Cases ────────────────────────────────────────────────────────────────
