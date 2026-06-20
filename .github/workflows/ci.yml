@@ -75,6 +75,32 @@ jobs:
       - name: Integration tests
         run: pnpm --filter @flowstile/server test:integration
 
+  # ── Python SDK: lint, types, unit tests ────────────────────────────────────
+  sdk-python:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sdk-python
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Sync dependencies
+        run: uv sync
+
+      - name: Lint (ruff)
+        run: uv run ruff check .
+
+      - name: Types (mypy)
+        run: uv run mypy
+
+      - name: Unit tests
+        # The live-stack e2e test self-skips without FLOWSTILE_E2E.
+        run: uv run pytest -q
+
   # ── E2E: full stack including Temporal + browser ───────────────────────────
   e2e:
     runs-on: ubuntu-latest

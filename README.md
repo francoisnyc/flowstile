@@ -38,11 +38,20 @@ if (result.data.DECISION === 'approved') {
 packages/
   server/   Fastify REST API, TypeORM (PostgreSQL), auth, task lifecycle
   worker/   Temporal worker with workflow definitions and activities
-  sdk/      @flowstile/sdk — client, workflow helpers, typed errors
+  sdk/      @flowstile/sdk — TypeScript client, workflow helpers, typed errors
   ui/       React inbox and form designer (Vite + Tailwind)
+  react/    @flowstile/react — embeddable task-form components
+sdk-python/ flowstile — Python SDK for writing Temporal workers
 e2e/        Playwright end-to-end tests
 docs/       Developer documentation
 ```
+
+## Language SDKs
+
+Write your Temporal workers in either language against the same (language-agnostic) server:
+
+- **TypeScript** — [`@flowstile/sdk`](packages/sdk): `createTaskAndWait`
+- **Python** — [`flowstile`](sdk-python): `create_task_and_wait` (a method on `FlowstileWorkflowBase`)
 
 ## Prerequisites
 
@@ -105,9 +114,17 @@ The worker also hosts **Loan Origination**, **Expense Approval**, **Vacation Lea
 | `docker compose up -d` | Start PostgreSQL + Temporal |
 | `docker compose down` | Stop all services |
 
+## Self-hosting
+
+Flowstile is self-hosted and single-tenant (one deployment per organization). See
+the [Self-Hosting runbook](docs/self-hosting.md) for production topology, environment
+variables, database migrations, first-run admin bootstrap, and the secret checklist.
+
 ## Documentation
 
 - [Developer Guide](docs/developer-guide.md) — architecture, concepts, and integration
+- [Self-Hosting](docs/self-hosting.md) — production deployment runbook
+- [Process Authoring Guide](docs/process-authoring-guide.md) — author a process end to end
 - [Design Decisions](docs/design-decisions.md) — why the task model works the way it does
 - [Runtime Contract](docs/runtime-contract.md) — payload model, lifecycle, and access rules
 - [UI Direction](docs/ui-direction.md) — frontend stack and interaction principles
