@@ -124,6 +124,7 @@ For everything else, push to `master`.
 ## Documentation
 
 - `docs/developer-guide.md` — concepts and integration guide
+- `docs/self-hosting.md` — production deployment runbook (topology, env vars, migrations, first-run admin bootstrap, secret checklist)
 - `docs/process-authoring-guide.md` — step-by-step authoring journey (code-first process definition, task→form mapping, case plan/phases, versioning, mining); doubles as the process-visibility & DX roadmap
 - `docs/design-decisions.md` — why the task data model is split; declarative-data/imperative-control; why BPMN constructs map to Temporal code (not Flowstile features); the proposed case-event log for automated/agent work
 - `docs/kuflow-comparison.md` — method-by-method Flowstile vs KuFlow SDK comparison; what diverges (authoring surface, asymmetric SDK) vs converges (case entity) and why

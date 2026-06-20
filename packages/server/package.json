@@ -12,6 +12,7 @@
     "db:generate": "NODE_OPTIONS=\"--import tsx\" typeorm migration:generate -d src/config/database.ts",
     "db:migrate": "NODE_ENV=production NODE_OPTIONS=\"-r reflect-metadata\" typeorm migration:run -d dist/config/database.js",
     "db:seed": "tsx src/seed.ts",
+    "db:bootstrap": "NODE_ENV=production node dist/bootstrap.js",
     "openapi:generate": "tsx src/generate-openapi.ts"
   },
   "dependencies": {
