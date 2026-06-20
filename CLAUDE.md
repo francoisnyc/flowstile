@@ -12,6 +12,10 @@ Five packages in a pnpm monorepo:
 - **`packages/ui`** — React + Vite + Tailwind inbox and JSON Forms-based form designer
 - **`packages/react`** — `@flowstile/react` npm package: embeddable React SDK for embedding Flowstile task forms into third-party apps (`FlowstileTask`, `FlowstileForm`, `useFlowstileTask`)
 
+Plus a Python SDK outside the pnpm workspace:
+
+- **`sdk-python/`** — `flowstile` PyPI package: the Python SDK for writing Temporal workers against the same (language-agnostic) server — `FlowstileClient`, `create_task_and_wait` (a method on `FlowstileWorkflowBase`, since Python registers signal handlers on the class), the case-entity activities, and the `context_from`/`persist` mappings. Managed with `uv`; mirrors the produce-and-await core of `@flowstile/sdk`.
+
 ## Key Contracts
 
 ### API
