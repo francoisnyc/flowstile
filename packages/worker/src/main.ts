@@ -27,6 +27,7 @@ createFlowstileWorker({
     apiKey,
   },
   temporal: { address: process.env.TEMPORAL_ADDRESS },
+  metricsPort: process.env.WORKER_METRICS_PORT ? Number(process.env.WORKER_METRICS_PORT) : undefined,
   workflowsPath: new URL('./workflows.js', import.meta.url).pathname,
   activities: { processPayment, refundPayment, cancelShipment, fetchCreditScore, recordReimbursement, recordLeaveLedger, issuePurchaseOrder },
 }).catch((err) => {

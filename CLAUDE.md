@@ -146,7 +146,7 @@ If you are reimplementing Flowstile in a different language or framework:
 2. **Read `docs/runtime-contract.md`** — this defines the behavioral rules (state machine transitions, validation order, versioning semantics, access control) that any implementation must follow.
 
 3. **Use the test suite as behavioral specs:**
-   - `packages/server/test/integration/` — 197 integration tests (18 files) defining exact API behavior
+   - `packages/server/test/integration/` — 200 integration tests (19 files) defining exact API behavior
    - `packages/sdk/test/` — 79 unit tests for client auth/retry, workflow timeout/cancellation, the doctor, and `contextFrom`/`persist` mappings
    - `e2e/order-fulfillment.spec.ts` — 9 end-to-end tests covering happy path, saga compensation, and early rejection; `e2e/{loan-origination,expense-approval,vacation-leave,purchase-requisition}.spec.ts` cover the other demo processes (case plans, milestone states, `persist`/`contextFrom`, trailing automated phases)
    - `e2e/visibility-scope.spec.ts` — need-to-know task/case visibility (group/user/orphan scoping, 404-not-403, case inheritance)

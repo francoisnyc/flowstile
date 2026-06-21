@@ -8,6 +8,7 @@ import { swaggerOptions } from './config/swagger.js';
 import corsPlugin from './plugins/cors.js';
 import csrfPlugin from './plugins/csrf.js';
 import typeormPlugin from './plugins/typeorm.js';
+import metricsPlugin from './plugins/metrics.js';
 import authPlugin from './plugins/auth.js';
 import temporalPlugin from './plugins/temporal.js';
 import signalRelayPlugin from './plugins/signal-relay.js';
@@ -41,6 +42,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(rateLimit, { global: false });
   await app.register(multipart);
   await app.register(typeormPlugin);
+  await app.register(metricsPlugin);
   await app.register(authPlugin);
   await app.register(csrfPlugin);
   await app.register(temporalPlugin);

@@ -135,8 +135,27 @@ A Python worker (see `sdk-python/`) is a drop-in alternative to `packages/worker
    workflow-shape changes as versioned (see the `temporal-developer` skill's
    versioning references).
 
+## 8. Observability
+
+- **Logs** — structured (pino) JSON on stdout. **Liveness** — `GET /health`.
+- **Server metrics** — Prometheus at `GET /metrics` (unauthenticated like
+  `/health`; restrict at the network layer). Exposes HTTP RED (request rate,
+  latency histogram, errors by route/status), Node defaults, and domain gauges:
+  - `flowstile_signal_outbox_messages{status}` and
+    `flowstile_signal_outbox_oldest_pending_age_seconds` — **the most important
+    signals**: a rising pending count / oldest age or `failed > 0` means signal
+    delivery is stuck and workflows may be hung. Alert on these.
+  - `flowstile_open_tasks{status}` and `flowstile_oldest_open_task_age_seconds`
+    — the inbox backlog and human-SLA signal.
+- **Worker metrics** — set `WORKER_METRICS_PORT` to expose the Temporal SDK's own
+  metrics (workflow/activity latency, task-slot usage, poller counts, failures)
+  in Prometheus format at `0.0.0.0:<port>/metrics`.
+- **Workflow execution** — the Temporal UI / Temporal Cloud for per-workflow
+  history and failures.
+
+Not yet shipped: distributed **tracing** (OpenTelemetry across the human-task
+boundary) and prebuilt alert rules.
+
 ## Known gaps
 
-- **Observability** is minimal: structured (pino) logs + `GET /health`. There are
-  no metrics/tracing endpoints yet — scrape logs and the Temporal UI for now.
 - **Single-tenant** by design — run separate deployments per organization.

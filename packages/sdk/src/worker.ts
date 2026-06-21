@@ -1,4 +1,4 @@
-import { Worker, NativeConnection } from '@temporalio/worker';
+import { Worker, NativeConnection, Runtime } from '@temporalio/worker';
 import {
   configureFlowstileActivities,
   createFlowstileTask,
@@ -47,6 +47,13 @@ export interface FlowstileWorkerConfig {
   /** Additional activities to register alongside the built-in Flowstile ones. */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   activities?: Record<string, (...args: any[]) => any>;
+  /**
+   * If set, expose the Temporal SDK's own metrics (workflow/activity latency,
+   * task-slot usage, failures) in Prometheus format at `0.0.0.0:<port>/metrics`.
+   * Installs the Temporal Runtime telemetry, so it must be the only worker in
+   * the process. Typically wired from `WORKER_METRICS_PORT`.
+   */
+  metricsPort?: number;
 }
 
 /**
@@ -75,6 +82,16 @@ export async function createFlowstileWorker(config: FlowstileWorkerConfig): Prom
   }
   const proc = procs[0];
   const temporalAddress = temporal.address ?? 'localhost:7233';
+
+  // Install Temporal Runtime telemetry (Prometheus) before any connection/worker
+  // is created. Must happen once per process.
+  if (config.metricsPort) {
+    Runtime.install({
+      telemetryOptions: {
+        metrics: { prometheus: { bindAddress: `0.0.0.0:${config.metricsPort}` } },
+      },
+    });
+  }
 
   // Health check — fail fast with a helpful message if the server is unreachable
   try {
