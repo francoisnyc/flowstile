@@ -71,15 +71,17 @@ case-entity read/patch) alongside your own.
 
 Mirror of the TypeScript SDK's produce-and-await core: REST client, the
 `create_task_and_wait` workflow helper, the case-entity activities, and the
-`context_from`/`persist` mappings. Validated **end to end against a live Temporal
-+ Flowstile server** (`tests/integration/`, run with `FLOWSTILE_E2E=1`) across all
-four paths: the happy path (create → human-complete → resume → `persist`),
-`timeout_ms` (→ `TaskTimeoutError` + task cancelled), the server-sent
-task-cancelled signal (→ `TaskCancelledError`), and workflow cancellation
-(best-effort task cleanup). These doubles as the worked Python example.
+`context_from`/`persist` mappings. The runtime surface is validated **end to end
+against a live Temporal + Flowstile server** (`tests/integration/`, run with
+`FLOWSTILE_E2E=1`): the happy path (create → human-complete → resume); both
+mappings — `persist` (output) and `context_from` (input), with the case-entity
+read/patch activities; `timeout_ms` (→ `TaskTimeoutError` + task cancelled); the
+server-sent task-cancelled signal (→ `TaskCancelledError`); and workflow
+cancellation (best-effort task cleanup). These double as the worked Python example.
 
-Not yet ported: the typed code generator, the preflight doctor, and the
-`define_process`/`define_task` authoring sugar.
+Not yet ported (no TypeScript feature-parity yet): the typed code generator, the
+preflight doctor, and the `define_process`/`define_task` authoring sugar — write
+processes by calling `create_task_and_wait` with the task code and dicts directly.
 
 ## Development
 

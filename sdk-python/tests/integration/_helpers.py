@@ -82,14 +82,29 @@ async def find_task(http: httpx.AsyncClient, token: str, pid: str, code: str) ->
     return None
 
 
-async def wait_for_open_task(http: httpx.AsyncClient, token: str, pid: str, code: str, timeout: float = 20) -> str:
+async def wait_for_open_task(
+    http: httpx.AsyncClient, token: str, pid: str, code: str, timeout: float = 20, exclude: Optional[set[str]] = None
+) -> str:
+    exclude = exclude or set()
     deadline = time.time() + timeout
     while time.time() < deadline:
-        task = await find_task(http, token, pid, code)
-        if task and task["status"] in ("created", "claimed"):
-            return task["id"]
+        resp = await http.get(
+            f"{BASE}/cases/by-process-instance/{pid}", headers={"Authorization": f"Bearer {token}"}
+        )
+        if resp.status_code == 200:
+            for task in resp.json().get("tasks", []):
+                td = task.get("taskDefinition") or {}
+                if td.get("code") == code and task["status"] in ("created", "claimed") and task["id"] not in exclude:
+                    return task["id"]
         await asyncio.sleep(0.5)
     raise AssertionError(f"open task {code} not found on {pid}")
+
+
+async def get_task_detail(http: httpx.AsyncClient, token: str, task_id: str) -> dict[str, Any]:
+    """GET /tasks/:id — the full task including contextData (the case view omits it)."""
+    resp = await http.get(f"{BASE}/tasks/{task_id}", headers={"Authorization": f"Bearer {token}"})
+    resp.raise_for_status()
+    return resp.json()
 
 
 async def wait_for_task_status(

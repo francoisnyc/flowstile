@@ -50,3 +50,27 @@ class LifecycleWorkflow(FlowstileWorkflowBase):
             return {"outcome": "timed_out"}
         except TaskCancelledError:
             return {"outcome": "cancelled"}
+
+
+@workflow.defn
+class ContextFromWorkflow(FlowstileWorkflowBase):
+    """Two sequential tasks: the first persists DECISION onto the case entity;
+    the second uses context_from to project it back into its own contextData.
+    Validates the input mapping + the get_flowstile_case_entity activity e2e.
+    """
+
+    @workflow.run
+    async def run(self, params: dict) -> dict:
+        code = params["task_code"]
+        pid = params["process_instance_id"]
+        first = await self.create_task_and_wait(
+            task_definition_code=code,
+            process_instance_id=pid,
+            persist={"DECISION": "decision"},
+        )
+        second = await self.create_task_and_wait(
+            task_definition_code=code,
+            process_instance_id=pid,
+            context_from=["decision"],
+        )
+        return {"first": first.data["DECISION"], "second": second.data["DECISION"]}
