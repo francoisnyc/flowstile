@@ -13,6 +13,13 @@ dependencies = [
     "pydantic>=2.7",
 ]
 
+[project.optional-dependencies]
+# Codegen is a build-time-only tool, not needed at runtime.
+codegen = ["datamodel-code-generator>=0.25"]
+
+[project.scripts]
+flowstile-codegen = "flowstile.codegen:main"
+
 [dependency-groups]
 dev = [
     "pytest>=8",
@@ -20,6 +27,7 @@ dev = [
     "respx>=0.21",
     "ruff>=0.6",
     "mypy>=1.11",
+    "datamodel-code-generator>=0.25",
 ]
 
 [build-system]
@@ -42,3 +50,7 @@ python_version = "3.10"
 packages = ["flowstile"]
 mypy_path = "src"
 strict = false
+
+[[tool.mypy.overrides]]
+module = "datamodel_code_generator.*"
+ignore_missing_imports = true

@@ -45,26 +45,36 @@ class LoanApprovalWorkflow(FlowstileWorkflowBase):
 + best-effort cancel), the task-cancelled signal (→ `TaskCancelledError`), and the
 declarative `context_from` / `persist` case-entity mappings.
 
-### Typed results, no codegen
+### Typed results
 
 Pass a pydantic model as `output` and `result.data` is a validated instance —
-typed attribute access instead of dict keys, without any code-generation step
-(the Python DX divergence from the TypeScript SDK, which generates types):
+typed attribute access instead of dict keys:
 
 ```python
-from typing import Literal
-from pydantic import BaseModel
-
-class LoanReview(BaseModel):
-    DECISION: Literal["APPROVE", "REJECT"]
-    NOTES: str = ""
-
 result = await self.create_task_and_wait(output=LoanReview, task_definition_code="LOAN_REVIEW", ...)
 if result.data.DECISION == "APPROVE":   # typed; mypy-checked
     ...
 ```
 
-Omit `output` and `result.data` is a plain dict. A complete runnable worker is in
+Get the model two ways:
+
+- **Generate it** (recommended — stays mechanically faithful to the server form,
+  so it can't drift):
+  ```bash
+  pip install 'flowstile[codegen]'
+  flowstile-codegen --process "Loan Origination" --api-key fsk_... --out loan_models.py
+  ```
+  emits one `BaseModel` per form (`LoanApplicationReviewOutput`, …) with inline
+  `Literal` enums — a thin wrapper over `datamodel-code-generator`.
+- **Hand-write it** for quick or dynamic cases (no tooling, but you keep it in
+  sync with the form yourself):
+  ```python
+  class LoanReview(BaseModel):
+      DECISION: Literal["APPROVE", "REJECT"]
+      NOTES: str = ""
+  ```
+
+Omit `output` entirely and `result.data` is a plain dict. Runnable worker:
 [`examples/loan_approval_worker.py`](examples/loan_approval_worker.py).
 
 ## Running a worker
@@ -101,9 +111,10 @@ read/patch activities; `timeout_ms` (→ `TaskTimeoutError` + task cancelled); t
 server-sent task-cancelled signal (→ `TaskCancelledError`); and workflow
 cancellation (best-effort task cleanup). These double as the worked Python example.
 
-Not yet ported (no TypeScript feature-parity yet): the typed code generator, the
-preflight doctor, and the `define_process`/`define_task` authoring sugar — write
-processes by calling `create_task_and_wait` with the task code and dicts directly.
+The typed-model code generator is ported (`flowstile-codegen`, above). Not yet
+ported: the preflight doctor and the `define_process`/`define_task` authoring
+sugar that binds a task code to its model in one place (today you pass
+`task_definition_code` and `output` separately).
 
 ## Development
 
