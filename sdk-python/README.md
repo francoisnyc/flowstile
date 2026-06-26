@@ -45,36 +45,45 @@ class LoanApprovalWorkflow(FlowstileWorkflowBase):
 + best-effort cancel), the task-cancelled signal (→ `TaskCancelledError`), and the
 declarative `context_from` / `persist` case-entity mappings.
 
-### Typed results
+### Typed results & task descriptors (codegen)
 
-Pass a pydantic model as `output` and `result.data` is a validated instance —
-typed attribute access instead of dict keys:
+`flowstile-codegen` reads a process's live forms and generates a typed model per
+form **and** a `FlowstileTask` descriptor per task that binds the task code to its
+model (a thin wrapper over `datamodel-code-generator`):
+
+```bash
+pip install 'flowstile[codegen]'
+flowstile-codegen --process "Loan Origination" --api-key fsk_... --out loan_models.py
+```
 
 ```python
-result = await self.create_task_and_wait(output=LoanReview, task_definition_code="LOAN_REVIEW", ...)
-if result.data.DECISION == "APPROVE":   # typed; mypy-checked
+# loan_models.py (generated — do not edit)
+class LoanApplicationReviewOutput(BaseModel):
+    DECISION: Literal["PROCEED", "REJECT"]
+    ...
+
+LOAN_REVIEW_APPLICATION = FlowstileTask("LOAN_REVIEW_APPLICATION", output=LoanApplicationReviewOutput)
+```
+
+Pass the descriptor — the code and model **can't be mismatched**, and `result.data`
+is typed and validated:
+
+```python
+from loan_models import LOAN_REVIEW_APPLICATION
+
+result = await self.create_task_and_wait(LOAN_REVIEW_APPLICATION, input_data={...})
+if result.data.DECISION == "PROCEED":   # typed; mypy-checked
     ...
 ```
 
-Get the model two ways:
+Keep it honest in CI with the drift guard (regenerate-and-diff; non-zero if stale):
 
-- **Generate it** (recommended — stays mechanically faithful to the server form,
-  so it can't drift):
-  ```bash
-  pip install 'flowstile[codegen]'
-  flowstile-codegen --process "Loan Origination" --api-key fsk_... --out loan_models.py
-  ```
-  emits one `BaseModel` per form (`LoanApplicationReviewOutput`, …) with inline
-  `Literal` enums — a thin wrapper over `datamodel-code-generator`.
-- **Hand-write it** for quick or dynamic cases (no tooling, but you keep it in
-  sync with the form yourself):
-  ```python
-  class LoanReview(BaseModel):
-      DECISION: Literal["APPROVE", "REJECT"]
-      NOTES: str = ""
-  ```
+```bash
+flowstile-codegen --process "Loan Origination" --api-key fsk_... --out loan_models.py --check
+```
 
-Omit `output` entirely and `result.data` is a plain dict. Runnable worker:
+For quick or dynamic cases, skip codegen: pass an `output=AModel` you hand-write,
+or omit it and `result.data` is a plain dict. Runnable worker:
 [`examples/loan_approval_worker.py`](examples/loan_approval_worker.py).
 
 ## Running a worker
@@ -111,10 +120,11 @@ read/patch activities; `timeout_ms` (→ `TaskTimeoutError` + task cancelled); t
 server-sent task-cancelled signal (→ `TaskCancelledError`); and workflow
 cancellation (best-effort task cleanup). These double as the worked Python example.
 
-The typed-model code generator is ported (`flowstile-codegen`, above). Not yet
-ported: the preflight doctor and the `define_process`/`define_task` authoring
-sugar that binds a task code to its model in one place (today you pass
-`task_definition_code` and `output` separately).
+The typed-model code generator and task descriptors are ported
+(`flowstile-codegen`), and model/form drift is caught by `--check` in CI. Not yet
+ported: the worker-boot preflight doctor — a runtime check that task codes resolve
+to published forms at startup, distinct from the model drift `--check` already
+covers.
 
 ## Development
 

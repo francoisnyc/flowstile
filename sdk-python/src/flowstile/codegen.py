@@ -80,49 +80,103 @@ def render_models(forms: list[tuple[str, dict[str, Any]]], *, regenerate_cmd: st
     return header + text.lstrip("\n")
 
 
-async def collect_forms(
+def render(
+    tasks: list[tuple[str, str]],
+    form_models: list[tuple[str, dict[str, Any]]],
+    *,
+    regenerate_cmd: str,
+) -> str:
+    """Render the full module: one model per form + a FlowstileTask descriptor
+    per task (binding the task code to its model so they can't be mismatched).
+
+    `tasks` is ``[(task_code, class_name), ...]``; `form_models` is the unique
+    ``[(class_name, json_schema), ...]``.
+    """
+    source = render_models(form_models, regenerate_cmd=regenerate_cmd)
+    if not tasks:
+        return source
+    lines = [
+        "",
+        "# Task descriptors — bind each task code to its form-output model.",
+        "from flowstile import FlowstileTask",
+        "",
+    ]
+    for task_code, class_name in tasks:
+        lines.append(f'{task_code} = FlowstileTask("{task_code}", output={class_name})')
+    return source.rstrip() + "\n\n\n" + "\n".join(lines) + "\n"
+
+
+async def collect_process(
     client: FlowstileClient, process_name: str
-) -> list[tuple[str, dict[str, Any]]]:
-    """Fetch a process's task definitions and each one's published form schema."""
+) -> tuple[list[tuple[str, str]], list[tuple[str, dict[str, Any]]]]:
+    """Fetch a process's tasks and forms.
+
+    Returns ``(tasks, form_models)`` where tasks is ``[(task_code, class_name)]``
+    and form_models is the unique ``[(class_name, json_schema)]``.
+    """
     procs = await client.request("GET", "/processes?limit=200")
     proc = next((p for p in procs["items"] if p["name"] == process_name), None)
     if proc is None:
         raise RuntimeError(f"process {process_name!r} not found")
 
-    tasks = await client.request("GET", f"/processes/{proc['id']}/tasks")
-    forms: list[tuple[str, dict[str, Any]]] = []
-    seen: set[str] = set()
-    for task in tasks["items"]:
-        code = task.get("formDefinitionCode")
-        if not code or code in seen:
+    task_defs = await client.request("GET", f"/processes/{proc['id']}/tasks")
+    tasks: list[tuple[str, str]] = []
+    form_models: list[tuple[str, dict[str, Any]]] = []
+    seen_forms: set[str] = set()
+    for task in task_defs["items"]:
+        form_code = task.get("formDefinitionCode")
+        if not form_code:
             continue
-        seen.add(code)
-        form = await client.request("GET", f"/forms/{code}")
-        forms.append((class_name_for(code), form["jsonSchema"]))
-    return forms
+        class_name = class_name_for(form_code)
+        if form_code not in seen_forms:
+            seen_forms.add(form_code)
+            form = await client.request("GET", f"/forms/{form_code}")
+            form_models.append((class_name, form["jsonSchema"]))
+        tasks.append((task["code"], class_name))
+    return tasks, form_models
 
 
-async def _run(process: str, out: str, base_url: str, api_key: str | None) -> None:
+async def _run(process: str, out: str, base_url: str, api_key: str | None, check: bool) -> None:
     client = FlowstileClient(base_url, api_key=api_key)
     try:
-        forms = await collect_forms(client, process)
+        tasks, form_models = await collect_process(client, process)
     finally:
         await client.aclose()
-    if not forms:
+    if not form_models:
         raise SystemExit(f"No published forms found for process {process!r}")
+
     cmd = f'flowstile-codegen --process "{process}" --out {out}'
-    Path(out).write_text(render_models(forms, regenerate_cmd=cmd))
-    print(f"Wrote {len(forms)} model(s) to {out}: {', '.join(n for n, _ in forms)}")
+    rendered = render(tasks, form_models, regenerate_cmd=cmd)
+
+    if check:
+        # Drift guard for CI: fail if the committed file is missing or stale.
+        current = Path(out).read_text() if Path(out).exists() else None
+        if current == rendered:
+            print(f"{out} is up to date.")
+            return
+        print(f"::error:: {out} is out of date — regenerate with: {cmd}")
+        raise SystemExit(1)
+
+    Path(out).write_text(rendered)
+    print(
+        f"Wrote {len(form_models)} model(s) and {len(tasks)} descriptor(s) to {out}: "
+        f"{', '.join(c for c, _ in form_models)}"
+    )
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="flowstile-codegen",
-        description="Generate pydantic models from a Flowstile process's form schemas.",
+        description="Generate typed pydantic models + task descriptors from a Flowstile process.",
     )
     parser.add_argument("--process", required=True, help="Process name")
     parser.add_argument("--out", required=True, help="Output .py file")
     parser.add_argument("--base-url", default=os.environ.get("FLOWSTILE_SERVER_URL", "http://localhost:3000"))
     parser.add_argument("--api-key", default=os.environ.get("FLOWSTILE_API_KEY"), help="Service API key")
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="Exit non-zero if --out is missing or out of date, without writing (for CI).",
+    )
     args = parser.parse_args()
-    asyncio.run(_run(args.process, args.out, args.base_url, args.api_key))
+    asyncio.run(_run(args.process, args.out, args.base_url, args.api_key, args.check))

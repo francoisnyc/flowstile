@@ -20,7 +20,7 @@ from _helpers import (
     provision,
     wait_for_open_task,
 )
-from approval_workflow import TypedOutputWorkflow
+from approval_workflow import DescriptorWorkflow, TypedOutputWorkflow
 from temporalio.client import Client
 
 from flowstile.worker import create_flowstile_worker
@@ -31,9 +31,9 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-async def test_typed_output_model() -> None:
+async def _drive(workflow_cls: type, pid_prefix: str) -> dict:
     suffix = uuid.uuid4().hex[:8]
-    pid = f"py-typed-{suffix}"
+    pid = f"{pid_prefix}-{suffix}"
     async with httpx.AsyncClient(timeout=20) as http:
         token = await login(http)
         task_code = await provision(http, token, suffix)
@@ -41,19 +41,27 @@ async def test_typed_output_model() -> None:
         client = await Client.connect(TEMPORAL, namespace="default")
         worker = await create_flowstile_worker(
             task_queue=TASK_QUEUE,
-            workflows=[TypedOutputWorkflow],
+            workflows=[workflow_cls],
             flowstile={"base_url": BASE, "api_key": API_KEY},
             client=client,
         )
         async with worker:
             handle = await client.start_workflow(
-                TypedOutputWorkflow.run,
+                workflow_cls.run,
                 {"task_code": task_code, "process_instance_id": pid},
                 id=pid,
                 task_queue=TASK_QUEUE,
             )
             task_id = await wait_for_open_task(http, token, pid, task_code)
             await claim_and_complete(http, token, task_id, {"DECISION": "APPROVE", "NOTES": "typed"})
-            result = await handle.result()
+            return await handle.result()
 
-        assert result == {"decision": "APPROVE", "notes": "typed"}
+
+async def test_typed_output_model() -> None:
+    """output= pydantic model → typed result.data."""
+    assert await _drive(TypedOutputWorkflow, "py-typed") == {"decision": "APPROVE", "notes": "typed"}
+
+
+async def test_descriptor_binding() -> None:
+    """A FlowstileTask descriptor binds code + model + persist in one object."""
+    assert await _drive(DescriptorWorkflow, "py-desc") == {"decision": "APPROVE", "notes": "typed"}

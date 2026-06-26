@@ -18,6 +18,7 @@ from .mapping import build_persist_patch, normalize_mapping, project_context
 from .types import (
     CaseEntityResult,
     CompletedBy,
+    FlowstileTask,
     Task,
     TaskCompletedSignalPayload,
     TaskResult,
@@ -53,6 +54,7 @@ __all__ = [
     "project_context",
     "CaseEntityResult",
     "CompletedBy",
+    "FlowstileTask",
     "Task",
     "TaskCompletedSignalPayload",
     "TaskResult",

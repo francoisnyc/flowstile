@@ -87,6 +87,27 @@ class TaskResult(Generic[TData]):
     form_version: int
 
 
+# A pydantic form-output model bound to a task by a FlowstileTask descriptor.
+TFormModel = TypeVar("TFormModel", bound=BaseModel)
+
+
+@dataclass
+class FlowstileTask(Generic[TFormModel]):
+    """Binds a task code to its form-output model (and default mappings).
+
+    Pass a descriptor to ``create_task_and_wait`` so the code and the model can't
+    be mismatched and ``result.data`` is typed from the descriptor. Usually
+    *generated* by ``flowstile-codegen`` (keeping the binding faithful to the
+    server), but you can write one by hand too.
+    """
+
+    code: str
+    output: type[TFormModel]
+    persist: Optional[VariableMapping] = None
+    context_from: Optional[VariableMapping] = None
+    priority: Optional[str] = None
+
+
 def task_completed_signal_name(task_id: str) -> str:
     """Signal name convention: ``flowstile:task:completed:<taskId>``."""
     return f"flowstile:task:completed:{task_id}"

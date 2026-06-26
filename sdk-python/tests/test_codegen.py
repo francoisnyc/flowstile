@@ -6,7 +6,7 @@ import importlib.util
 import sys
 from pathlib import Path
 
-from flowstile.codegen import class_name_for, render_models
+from flowstile.codegen import class_name_for, render, render_models
 
 
 def test_class_name_for() -> None:
@@ -50,6 +50,39 @@ def test_render_models_emits_typed_models() -> None:
     # No empty root wrapper, no datamodel-codegen timestamp header.
     assert "    pass\n" not in src
     assert "datamodel-codegen" not in src
+
+
+def test_render_emits_bound_descriptors(tmp_path: Path) -> None:
+    form_models = [
+        (
+            "ReviewOutput",
+            {
+                "type": "object",
+                "properties": {"DECISION": {"type": "string", "enum": ["APPROVE", "REJECT"]}},
+                "required": ["DECISION"],
+            },
+        )
+    ]
+    tasks = [("MANAGER_REVIEW", "ReviewOutput"), ("SENIOR_REVIEW", "ReviewOutput")]
+    src = render(tasks, form_models, regenerate_cmd="flowstile-codegen ...")
+
+    assert "from flowstile import FlowstileTask" in src
+    assert 'MANAGER_REVIEW = FlowstileTask("MANAGER_REVIEW", output=ReviewOutput)' in src
+    assert 'SENIOR_REVIEW = FlowstileTask("SENIOR_REVIEW", output=ReviewOutput)' in src
+
+    # The whole module imports and the descriptor binds the code to the model.
+    out = tmp_path / "gen.py"
+    out.write_text(src)
+    spec = importlib.util.spec_from_file_location("gen_desc", out)
+    assert spec and spec.loader
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["gen_desc"] = mod
+    try:
+        spec.loader.exec_module(mod)
+        assert mod.MANAGER_REVIEW.code == "MANAGER_REVIEW"
+        assert mod.MANAGER_REVIEW.output is mod.ReviewOutput
+    finally:
+        sys.modules.pop("gen_desc", None)
 
 
 def test_rendered_models_import_and_validate(tmp_path: Path) -> None:

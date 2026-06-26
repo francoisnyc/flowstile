@@ -13,6 +13,7 @@ from typing import Literal
 from pydantic import BaseModel
 from temporalio import workflow
 
+from flowstile import FlowstileTask
 from flowstile.errors import TaskCancelledError, TaskTimeoutError
 from flowstile.workflows import FlowstileWorkflowBase
 
@@ -22,6 +23,22 @@ class LoanReview(BaseModel):
 
     DECISION: Literal["APPROVE", "REJECT"]
     NOTES: str = ""
+
+
+@workflow.defn
+class DescriptorWorkflow(FlowstileWorkflowBase):
+    """Drives a FlowstileTask descriptor (code + model + persist bound together)
+    through create_task_and_wait — the generated-binding path."""
+
+    @workflow.run
+    async def run(self, params: dict) -> dict:
+        # In real use this descriptor is generated; here we build it from the
+        # per-test task code so the test is self-contained.
+        review = FlowstileTask(params["task_code"], output=LoanReview, persist={"DECISION": "decision"})
+        result = await self.create_task_and_wait(
+            review, process_instance_id=params["process_instance_id"]
+        )
+        return {"decision": result.data.DECISION, "notes": result.data.NOTES}
 
 
 @workflow.defn

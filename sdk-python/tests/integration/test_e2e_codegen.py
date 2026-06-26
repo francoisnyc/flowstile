@@ -14,7 +14,7 @@ import pytest
 from _helpers import API_KEY, BASE
 
 from flowstile import FlowstileClient
-from flowstile.codegen import class_name_for, collect_forms, render_models
+from flowstile.codegen import class_name_for, collect_process, render
 
 pytestmark = pytest.mark.skipif(
     not os.getenv("FLOWSTILE_E2E"),
@@ -44,29 +44,35 @@ def _dummy(schema: dict[str, Any]) -> dict[str, Any]:
 async def test_codegen_against_live_process(tmp_path: Path) -> None:
     client = FlowstileClient(BASE, api_key=API_KEY)
     try:
-        forms = await collect_forms(client, "Loan Origination")
+        tasks, form_models = await collect_process(client, "Loan Origination")
     finally:
         await client.aclose()
 
-    assert forms, "expected at least one form for Loan Origination"
+    assert form_models, "expected at least one form for Loan Origination"
+    assert tasks, "expected at least one task for Loan Origination"
 
     out = tmp_path / "loan_models.py"
-    out.write_text(render_models(forms, regenerate_cmd="flowstile-codegen --process 'Loan Origination'"))
+    out.write_text(render(tasks, form_models, regenerate_cmd="flowstile-codegen --process 'Loan Origination'"))
 
-    # The generated module imports cleanly and exposes one model per form.
+    # The generated module imports cleanly and exposes one model per form and a
+    # FlowstileTask descriptor per task.
     spec = importlib.util.spec_from_file_location("loan_models_test", out)
     assert spec and spec.loader
     mod = importlib.util.module_from_spec(spec)
     sys.modules["loan_models_test"] = mod
     try:
         spec.loader.exec_module(mod)
-        for class_name, schema in forms:
+        schema_by_class = dict(form_models)
+        for class_name, schema in form_models:
             model = getattr(mod, class_name)
-            # Runtime validation works against a real schema.
-            instance = model.model_validate(_dummy(schema))
-            assert instance is not None
+            assert model.model_validate(_dummy(schema)) is not None
+        # Each task code is a descriptor bound to its form's model.
+        for task_code, class_name in tasks:
+            descriptor = getattr(mod, task_code)
+            assert descriptor.code == task_code
+            assert descriptor.output is getattr(mod, class_name)
+            assert class_name in schema_by_class
     finally:
         sys.modules.pop("loan_models_test", None)
 
-    # The codegen-derived names match the convention the workflow author uses.
-    assert any(class_name_for("LOAN_APPLICATION_REVIEW") == n for n, _ in forms)
+    assert any(class_name_for("LOAN_APPLICATION_REVIEW") == n for n, _ in form_models)

@@ -40,7 +40,7 @@ from temporalio.common import RawValue, RetryPolicy
 
 from .errors import TaskCancelledError, TaskTimeoutError
 from .mapping import build_persist_patch, project_context
-from .types import CompletedBy, TaskResult, VariableMapping
+from .types import CompletedBy, FlowstileTask, TaskResult, VariableMapping
 
 # An optional pydantic model the caller passes to type the task's submission data.
 TModel = TypeVar("TModel", bound=BaseModel)
@@ -77,9 +77,29 @@ class FlowstileWorkflowBase:
             self._ft_cancelled.add(name[len(_CANCELLED_PREFIX) :])
         # Non-Flowstile signals are ignored by this handler.
 
-    # Overloads so `result.data` is typed as the pydantic model when `output` is
-    # given, and a plain dict otherwise. (Python can't express this in one
-    # signature the way TypeScript's generic can, hence the duplication.)
+    # Overloads so `result.data` is typed: from the descriptor's model when a
+    # FlowstileTask is passed positionally, from `output=` otherwise, else a
+    # plain dict. (Python can't express this in one signature the way
+    # TypeScript's generic can, hence the duplication.)
+    @overload
+    async def create_task_and_wait(
+        self,
+        task: FlowstileTask[TModel],
+        /,
+        *,
+        input_data: Optional[dict[str, Any]] = ...,
+        context_data: Optional[dict[str, Any]] = ...,
+        process_instance_id: Optional[str] = ...,
+        priority: Optional[str] = ...,
+        due_date: Optional[str] = ...,
+        follow_up_date: Optional[str] = ...,
+        candidate_users: Optional[list[str]] = ...,
+        candidate_groups: Optional[list[str]] = ...,
+        timeout_ms: Optional[int] = ...,
+        context_from: Optional[VariableMapping] = ...,
+        persist: Optional[VariableMapping] = ...,
+    ) -> TaskResult[TModel]: ...
+
     @overload
     async def create_task_and_wait(
         self,
@@ -122,6 +142,7 @@ class FlowstileWorkflowBase:
 
     async def create_task_and_wait(
         self,
+        task: Optional[FlowstileTask[Any]] = None,
         *,
         output: Optional[type[BaseModel]] = None,
         task_definition_id: Optional[str] = None,
@@ -140,10 +161,19 @@ class FlowstileWorkflowBase:
     ) -> TaskResult[Any]:
         """Create a Flowstile task and durably wait for a human to complete it.
 
-        Pass ``output=MyModel`` (a pydantic ``BaseModel``) to get a typed,
-        validated ``result.data`` — no code generation required. Omit it and
-        ``result.data`` is a plain dict.
+        Pass a ``FlowstileTask`` descriptor (usually generated) so the code and
+        model can't mismatch, or ``output=MyModel`` for an ad-hoc typed result,
+        or neither for a plain-dict ``result.data``.
         """
+        # A descriptor supplies the code, model, and default mappings; explicit
+        # keyword arguments still win.
+        if task is not None:
+            task_definition_code = task_definition_code or task.code
+            output = output or task.output
+            persist = persist if persist is not None else task.persist
+            context_from = context_from if context_from is not None else task.context_from
+            priority = priority if priority is not None else task.priority
+
         # context_from (input mapping): project case-entity variables into
         # contextData before creating the task. Explicit context_data wins per
         # key. The activity returns entity=None for a case with no entity yet.
@@ -171,13 +201,13 @@ class FlowstileWorkflowBase:
             candidate_groups=candidate_groups,
             workflow_id=workflow.info().workflow_id,
         )
-        task = await workflow.execute_activity(
+        created = await workflow.execute_activity(
             _CREATE_TASK,
             body,
             start_to_close_timeout=_ACTIVITY_TIMEOUT,
             retry_policy=_ACTIVITY_RETRY,
         )
-        task_id: str = task["id"]
+        task_id: str = created["id"]
 
         def _resolved() -> bool:
             return task_id in self._ft_completed or task_id in self._ft_cancelled
