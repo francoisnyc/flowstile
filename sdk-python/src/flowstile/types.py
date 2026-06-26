@@ -8,9 +8,14 @@ user form fields and are never transformed.
 
 from __future__ import annotations
 
-from typing import Any, Literal, Optional, Union
+from dataclasses import dataclass
+from typing import Any, Generic, Literal, Optional, TypeVar, Union
 
 from pydantic import BaseModel, ConfigDict, Field
+
+# The form-output payload type of a completed task: a plain dict, or a pydantic
+# model when create_task_and_wait is given an ``output`` model.
+TData = TypeVar("TData")
 
 Priority = Literal["low", "normal", "high", "urgent"]
 TaskStatus = Literal["created", "claimed", "completed", "cancelled"]
@@ -66,11 +71,17 @@ class TaskCompletedSignalPayload(_Model):
     form_version: int = Field(alias="formVersion")
 
 
-class TaskResult(_Model):
-    """The typed result of a completed human task."""
+@dataclass
+class TaskResult(Generic[TData]):
+    """The result of a completed human task.
+
+    ``data`` is a plain dict by default, or — when ``create_task_and_wait`` is
+    given an ``output`` model — a validated instance of that pydantic model, so
+    ``result.data.DECISION`` is typed without any code generation step.
+    """
 
     task_id: str
-    data: dict[str, Any]
+    data: TData
     completed_by: CompletedBy
     completed_at: str
     form_version: int

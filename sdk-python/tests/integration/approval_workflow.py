@@ -8,10 +8,33 @@ mirrors the TypeScript rule that `workflows.ts` imports only
 
 from __future__ import annotations
 
+from typing import Literal
+
+from pydantic import BaseModel
 from temporalio import workflow
 
 from flowstile.errors import TaskCancelledError, TaskTimeoutError
 from flowstile.workflows import FlowstileWorkflowBase
+
+
+class LoanReview(BaseModel):
+    """A developer-authored form-output model — no codegen. Passed as `output`."""
+
+    DECISION: Literal["APPROVE", "REJECT"]
+    NOTES: str = ""
+
+
+@workflow.defn
+class TypedOutputWorkflow(FlowstileWorkflowBase):
+    @workflow.run
+    async def run(self, params: dict) -> dict:
+        result = await self.create_task_and_wait(
+            output=LoanReview,
+            task_definition_code=params["task_code"],
+            process_instance_id=params["process_instance_id"],
+        )
+        # Typed attribute access — result.data.DECISION, not result.data["DECISION"].
+        return {"decision": result.data.DECISION, "notes": result.data.NOTES}
 
 
 @workflow.defn

@@ -32,14 +32,18 @@ from __future__ import annotations
 
 import asyncio
 from datetime import timedelta
-from typing import Any, Optional, Sequence
+from typing import Any, Optional, Sequence, TypeVar, overload
 
+from pydantic import BaseModel
 from temporalio import workflow
 from temporalio.common import RawValue, RetryPolicy
 
 from .errors import TaskCancelledError, TaskTimeoutError
 from .mapping import build_persist_patch, project_context
 from .types import CompletedBy, TaskResult, VariableMapping
+
+# An optional pydantic model the caller passes to type the task's submission data.
+TModel = TypeVar("TModel", bound=BaseModel)
 
 _COMPLETED_PREFIX = "flowstile:task:completed:"
 _CANCELLED_PREFIX = "flowstile:task:cancelled:"
@@ -73,9 +77,53 @@ class FlowstileWorkflowBase:
             self._ft_cancelled.add(name[len(_CANCELLED_PREFIX) :])
         # Non-Flowstile signals are ignored by this handler.
 
+    # Overloads so `result.data` is typed as the pydantic model when `output` is
+    # given, and a plain dict otherwise. (Python can't express this in one
+    # signature the way TypeScript's generic can, hence the duplication.)
+    @overload
     async def create_task_and_wait(
         self,
         *,
+        output: type[TModel],
+        task_definition_id: Optional[str] = ...,
+        task_definition_code: Optional[str] = ...,
+        process_instance_id: Optional[str] = ...,
+        input_data: Optional[dict[str, Any]] = ...,
+        context_data: Optional[dict[str, Any]] = ...,
+        priority: Optional[str] = ...,
+        due_date: Optional[str] = ...,
+        follow_up_date: Optional[str] = ...,
+        candidate_users: Optional[list[str]] = ...,
+        candidate_groups: Optional[list[str]] = ...,
+        timeout_ms: Optional[int] = ...,
+        context_from: Optional[VariableMapping] = ...,
+        persist: Optional[VariableMapping] = ...,
+    ) -> TaskResult[TModel]: ...
+
+    @overload
+    async def create_task_and_wait(
+        self,
+        *,
+        output: None = ...,
+        task_definition_id: Optional[str] = ...,
+        task_definition_code: Optional[str] = ...,
+        process_instance_id: Optional[str] = ...,
+        input_data: Optional[dict[str, Any]] = ...,
+        context_data: Optional[dict[str, Any]] = ...,
+        priority: Optional[str] = ...,
+        due_date: Optional[str] = ...,
+        follow_up_date: Optional[str] = ...,
+        candidate_users: Optional[list[str]] = ...,
+        candidate_groups: Optional[list[str]] = ...,
+        timeout_ms: Optional[int] = ...,
+        context_from: Optional[VariableMapping] = ...,
+        persist: Optional[VariableMapping] = ...,
+    ) -> TaskResult[dict[str, Any]]: ...
+
+    async def create_task_and_wait(
+        self,
+        *,
+        output: Optional[type[BaseModel]] = None,
         task_definition_id: Optional[str] = None,
         task_definition_code: Optional[str] = None,
         process_instance_id: Optional[str] = None,
@@ -89,8 +137,13 @@ class FlowstileWorkflowBase:
         timeout_ms: Optional[int] = None,
         context_from: Optional[VariableMapping] = None,
         persist: Optional[VariableMapping] = None,
-    ) -> TaskResult:
-        """Create a Flowstile task and durably wait for a human to complete it."""
+    ) -> TaskResult[Any]:
+        """Create a Flowstile task and durably wait for a human to complete it.
+
+        Pass ``output=MyModel`` (a pydantic ``BaseModel``) to get a typed,
+        validated ``result.data`` — no code generation required. Omit it and
+        ``result.data`` is a plain dict.
+        """
         # context_from (input mapping): project case-entity variables into
         # contextData before creating the task. Explicit context_data wins per
         # key. The activity returns entity=None for a case with no entity yet.
@@ -160,9 +213,11 @@ class FlowstileWorkflowBase:
                     retry_policy=_ACTIVITY_RETRY,
                 )
 
+        raw_data: dict[str, Any] = payload.get("data", {})
+        data: Any = output.model_validate(raw_data) if output is not None else raw_data
         return TaskResult(
             task_id=task_id,
-            data=payload.get("data", {}),
+            data=data,
             completed_by=CompletedBy.model_validate(payload["completedBy"]),
             completed_at=payload["completedAt"],
             form_version=payload["formVersion"],

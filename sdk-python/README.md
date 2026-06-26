@@ -45,6 +45,28 @@ class LoanApprovalWorkflow(FlowstileWorkflowBase):
 + best-effort cancel), the task-cancelled signal (→ `TaskCancelledError`), and the
 declarative `context_from` / `persist` case-entity mappings.
 
+### Typed results, no codegen
+
+Pass a pydantic model as `output` and `result.data` is a validated instance —
+typed attribute access instead of dict keys, without any code-generation step
+(the Python DX divergence from the TypeScript SDK, which generates types):
+
+```python
+from typing import Literal
+from pydantic import BaseModel
+
+class LoanReview(BaseModel):
+    DECISION: Literal["APPROVE", "REJECT"]
+    NOTES: str = ""
+
+result = await self.create_task_and_wait(output=LoanReview, task_definition_code="LOAN_REVIEW", ...)
+if result.data.DECISION == "APPROVE":   # typed; mypy-checked
+    ...
+```
+
+Omit `output` and `result.data` is a plain dict. A complete runnable worker is in
+[`examples/loan_approval_worker.py`](examples/loan_approval_worker.py).
+
 ## Running a worker
 
 ```python
