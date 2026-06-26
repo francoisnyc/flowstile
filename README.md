@@ -51,7 +51,7 @@ docs/       Developer documentation
 Write your Temporal workers in either language against the same (language-agnostic) server:
 
 - **TypeScript** — [`@flowstile/sdk`](packages/sdk): `createTaskAndWait`
-- **Python** — [`flowstile`](sdk-python): `create_task_and_wait` (a method on `FlowstileWorkflowBase`)
+- **Python** — [`flowstile`](sdk-python): `create_task_and_wait` (a method on `FlowstileWorkflowBase`), with typed results and generated task descriptors via `flowstile-codegen`
 
 ## Prerequisites
 
