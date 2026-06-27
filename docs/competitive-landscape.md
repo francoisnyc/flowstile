@@ -1,7 +1,8 @@
 # Competitive Landscape & Positioning
 
 Complements [`kuflow-comparison.md`](kuflow-comparison.md) (the method-by-method
-KuFlow SDK comparison) with the market map and the **adopted positioning**.
+KuFlow SDK comparison) with a market map and an honest read of where Flowstile
+fits among the alternatives.
 
 ## Where Flowstile sits
 
@@ -47,27 +48,25 @@ Camunda's "AI" is two distinct products; only one overlaps Flowstile.
    refines iteratively in the Web Modeler (FEEL logic in 8.8; code→BPMN too).
    **This overlaps Flowstile's agent-authoring directly.**
 
-## Adopted positioning
+## Where Flowstile fits — and what it isn't
 
-1. **Do not claim "agent-authored" as a unique differentiator.** Camunda ships a
-   credible BPMN Copilot. Lead instead with the *how*: code-first output (version
-   control, tests, full Temporal power), an **autonomous** agent that authors and
-   drives the process to a tested **e2e-green** state (not a GUI copilot draft),
-   running on **your** Temporal (no per-instance pricing or engine lock-in), inside
-   the **developer's** own toolchain.
+- **Agent-authoring isn't unique; the *how* is.** Camunda ships a credible BPMN
+  Copilot, so "an AI builds the process" is no longer a standalone claim. The
+  distinction is the *how*: code-first output (version control, tests, full
+  Temporal power), an **autonomous** agent that authors and drives a process to a
+  tested **e2e-green** state (not a GUI copilot draft), running on **your** Temporal
+  (no per-instance pricing or engine lock-in), inside the **developer's** own
+  toolchain.
 
-2. **Runtime agentic orchestration is out of scope — for now (deliberate).** AI
-   agents as first-class process participants is Camunda's strength and a different
-   product axis. Flowstile keeps agent/automated work as a Temporal activity
-   (surfaced, if ever needed, via the proposed case-event log in
-   `design-decisions.md`). Revisit only if the human-in-the-loop + agent-authored
-   core is validated with real adopters first.
+- **Runtime agentic orchestration is out of scope.** AI agents as first-class
+  process *participants* — Camunda's biggest investment — is a different product
+  axis. Flowstile keeps agent and automated work as ordinary Temporal activities
+  (surfaced, if needed, via the proposed case-event log in `design-decisions.md`).
 
-3. **The defensible position:** the human-in-the-loop layer for **developers** on
-   Temporal, where the developer's coding agent authors and tests the process **as
-   code** — versus Camunda's business-analyst, visual, managed-engine approach.
-   Different audience, different artifact, different pricing. That, plus
-   Temporal-native durability and no lock-in, is the line to hold.
+- **The defensible position:** the human-in-the-loop layer for **developers** on
+  Temporal, where the developer's own coding agent authors and tests the process
+  **as code** — versus Camunda's business-analyst, visual, managed-engine approach.
+  Different audience, artifact, and pricing, on durable Temporal with no lock-in.
 
 ## Sources
 

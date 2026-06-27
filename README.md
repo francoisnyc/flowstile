@@ -1,6 +1,8 @@
 # Flowstile
 
-Open-source human-task inbox and form designer for [Temporal.io](https://temporal.io) workflows. Create forms, assign tasks to humans, and wire the results back into durable workflows via signals.
+Open-source human-task inbox and form layer for [Temporal.io](https://temporal.io) workflows. Pause a workflow for human input, render a typed form, route it to the right people, and resume with the submitted data — defined in **code** (TypeScript or Python), on durable Temporal, with **no visual modeler and no engine lock-in**.
+
+![The Flowstile inbox — the task list on the left, the selected task's form on the right](docs/images/inbox.png)
 
 ## What It Does
 
@@ -20,6 +22,10 @@ if (result.data.DECISION === 'approved') {
   // continue workflow...
 }
 ```
+
+## Code-first, and agent-authorable
+
+Processes are defined in **code** — TypeScript or Python — on top of Temporal: version-controlled, tested, and free of engine lock-in (no BPMN, no proprietary runtime). Because the whole loop is code plus a documented contract, an **AI coding agent can author a process end to end** — design the plan, draft the forms, generate typed models, write the workflow, and drive an end-to-end test to green. The [`flowstile-authoring`](.claude/skills/flowstile-authoring) skill packages that loop (delegating workflow-determinism to a vendored Temporal skill), and the demo processes were authored against it — validated for both the TypeScript and Python worker tracks.
 
 ## Features
 
