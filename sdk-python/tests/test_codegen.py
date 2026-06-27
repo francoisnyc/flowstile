@@ -67,6 +67,9 @@ def test_render_emits_bound_descriptors(tmp_path: Path) -> None:
     src = render(tasks, form_models, regenerate_cmd="flowstile-codegen ...")
 
     assert "from flowstile import FlowstileTask" in src
+    # The import is in the import block (before the first class), so the generated
+    # file is E402-clean — no per-file ruff ignore needed.
+    assert src.index("from flowstile import FlowstileTask") < src.index("class ")
     assert 'MANAGER_REVIEW = FlowstileTask("MANAGER_REVIEW", output=ReviewOutput)' in src
     assert 'SENIOR_REVIEW = FlowstileTask("SENIOR_REVIEW", output=ReviewOutput)' in src
 

@@ -95,12 +95,14 @@ def render(
     source = render_models(form_models, regenerate_cmd=regenerate_cmd)
     if not tasks:
         return source
-    lines = [
-        "",
-        "# Task descriptors — bind each task code to its form-output model.",
-        "from flowstile import FlowstileTask",
-        "",
-    ]
+    # Put the FlowstileTask import in the import block (not before the descriptors
+    # at the bottom) so the generated file is import-order/E402 clean.
+    import_line = "from flowstile import FlowstileTask"
+    if "\nfrom pydantic import" in source:
+        source = source.replace("\nfrom pydantic import", f"\n{import_line}\nfrom pydantic import", 1)
+    else:  # no models emitted an import — fall back to before the first class
+        source = source.replace("\n\nclass ", f"\n\n{import_line}\n\nclass ", 1)
+    lines = ["", "# Task descriptors — bind each task code to its form-output model."]
     for task_code, class_name in tasks:
         lines.append(f'{task_code} = FlowstileTask("{task_code}", output={class_name})')
     return source.rstrip() + "\n\n\n" + "\n".join(lines) + "\n"

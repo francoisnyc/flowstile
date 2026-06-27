@@ -159,10 +159,13 @@ code. Conventions (see `ORDER_APPROVAL` in the seed for a canonical example):
 Via API (agent-draftable; draft → publish is the human gate in production):
 
 ```
-PUT  /forms/:code/draft     { jsonSchema, uiSchema }   # 201 create, 200 update
-POST /forms/:code/publish                              # locks + bumps version
+POST /forms                 { code, jsonSchema, uiSchema }   # create a NEW form (201, v1 draft)
+PUT  /forms/:code/draft     { jsonSchema, uiSchema }         # update/version an EXISTING form
+POST /forms/:code/publish                                    # locks + bumps version
 ```
 
+**Create a brand-new form with `POST /forms`** — `PUT /forms/:code/draft` only
+updates or versions a form that already exists and **404s for an unknown code**.
 Tasks can only be created against a **published** form (422 otherwise). Preview a
 draft in the designer: `http://localhost:5173/forms/<CODE>`.
 
@@ -275,14 +278,18 @@ differ. The proven templates are in `sdk-python/`:
 `examples/loan_approval_worker.py` (a worker) and `tests/integration/test_e2e_*.py`
 (API-driven e2e). Read those; the deltas:
 
-**§4 — Generate types (Python codegen).** From the published forms:
+**§4 — Generate types (Python codegen).** The forms must be **published on the
+server first** (§3) — codegen reads them live. Then:
 
 ```bash
 cd sdk-python && uv run flowstile-codegen \
   --process "<Process Name>" --api-key "$TOKEN" --out <slug>_models.py
 ```
 
-emits one pydantic model per form **and** a `FlowstileTask` descriptor per task
+`--api-key` takes any authenticated principal that can read processes/forms — use
+the admin `$TOKEN` from §0 (a Bearer JWT works; the dev `fsk_…` service key can't
+register the process in the first place). It emits one pydantic model per form
+**and** a `FlowstileTask` descriptor per task
 (`MY_TASK = FlowstileTask("MY_TASK", output=MyFormOutput)`). Regenerate on any
 form/task change; wire `flowstile-codegen … --check` into CI to catch drift.
 
@@ -308,6 +315,9 @@ class MyWorkflow(FlowstileWorkflowBase):
   `flowstile.workflows`/generated models; **no httpx** (don't import the client,
   the worker bootstrap, or anything that pulls httpx, or the Temporal sandbox
   rejects the workflow). This is the Python analogue of the `workflows.ts` rule.
+  The generated `<slug>_models.py` is safe to import directly here — it pulls only
+  `typing`/`pydantic`/`flowstile`, all sandbox-safe — so keep it next to the
+  workflow as a normal importable module (the worker and e2e both import it).
 - **`create_task_and_wait` is a method** on the base class (Python registers
   signal handlers on the class), not a free function — pass the descriptor in.
 - Determinism is owned by the **`temporal-developer`** skill's
