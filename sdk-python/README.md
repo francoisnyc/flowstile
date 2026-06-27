@@ -99,6 +99,7 @@ async def main():
         workflows=[LoanApprovalWorkflow],
         flowstile={"base_url": "http://localhost:3000", "api_key": "fsk_..."},
         temporal_address="localhost:7233",
+        preflight=[LOAN_REVIEW_APPLICATION],   # codes/descriptors → fail boot on a typo
     )
     await worker.run()
 
@@ -106,7 +107,10 @@ asyncio.run(main())
 ```
 
 `create_flowstile_worker` registers the Flowstile activities (task create/cancel,
-case-entity read/patch) alongside your own.
+case-entity read/patch) alongside your own. The optional `preflight=` checks each
+task code resolves to a published form at startup (with a "did you mean" hint),
+so a typo fails loudly at boot, not mid-workflow (`FLOWSTILE_DOCTOR=warn`/`off`
+to soften/skip).
 
 ## Status
 
@@ -120,11 +124,12 @@ read/patch activities; `timeout_ms` (→ `TaskTimeoutError` + task cancelled); t
 server-sent task-cancelled signal (→ `TaskCancelledError`); and workflow
 cancellation (best-effort task cleanup). These double as the worked Python example.
 
-The typed-model code generator and task descriptors are ported
-(`flowstile-codegen`), and model/form drift is caught by `--check` in CI. Not yet
-ported: the worker-boot preflight doctor — a runtime check that task codes resolve
-to published forms at startup, distinct from the model drift `--check` already
-covers.
+At parity with the TypeScript SDK's authoring DX: typed results (`output=` or
+generated models), generated task descriptors that bind code↔model, the `--check`
+drift guard, and a worker-boot `preflight=` that validates task codes resolve to
+published forms. The `define_process` sugar is intentionally not ported —
+descriptors + `create_task_and_wait` cover the same ground more idiomatically in
+Python.
 
 ## Development
 
