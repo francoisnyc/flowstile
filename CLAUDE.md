@@ -128,6 +128,7 @@ For everything else, push to `master`.
 - `docs/process-authoring-guide.md` — step-by-step authoring journey (code-first process definition, task→form mapping, case plan/phases, versioning, mining); doubles as the process-visibility & DX roadmap
 - `docs/design-decisions.md` — why the task data model is split; declarative-data/imperative-control; why BPMN constructs map to Temporal code (not Flowstile features); the proposed case-event log for automated/agent work
 - `docs/kuflow-comparison.md` — method-by-method Flowstile vs KuFlow SDK comparison; what diverges (authoring surface, asymmetric SDK) vs converges (case entity) and why
+- `docs/competitive-landscape.md` — market map (KuFlow, DIY-on-Temporal, Camunda) + Camunda's two-axis AI (runtime agentic orchestration vs BPMN Copilot) + the adopted positioning (don't claim agent-authoring as unique; defensible edge is code-first/autonomous/dev-native/no-lock-in; runtime agent orchestration out of scope for now)
 - `docs/runtime-contract.md` — detailed payload, lifecycle, and access rules
 - `docs/ui-direction.md` — frontend stack and visual principles
 - `docs/openapi.yaml` — auto-generated OpenAPI 3.1 spec (regenerate with `pnpm --filter @flowstile/server openapi:generate`)
