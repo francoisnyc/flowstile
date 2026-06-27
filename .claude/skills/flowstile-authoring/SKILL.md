@@ -316,10 +316,19 @@ class MyWorkflow(FlowstileWorkflowBase):
   the worker bootstrap, or anything that pulls httpx, or the Temporal sandbox
   rejects the workflow). This is the Python analogue of the `workflows.ts` rule.
   The generated `<slug>_models.py` is safe to import directly here — it pulls only
-  `typing`/`pydantic`/`flowstile`, all sandbox-safe — so keep it next to the
-  workflow as a normal importable module (the worker and e2e both import it).
+  `typing`/`pydantic`/`flowstile`, all sandbox-safe. In this repo's e2e setup, put
+  the generated models, the workflow, and any custom activity under
+  `tests/integration/` (next to the e2e) so pytest's prepend-import resolves the
+  bare `from <slug>_models import …` — modules under `examples/` aren't importable
+  by the tests.
 - **`create_task_and_wait` is a method** on the base class (Python registers
   signal handlers on the class), not a free function — pass the descriptor in.
+- **Persist a workflow-computed value** (a derived reference, a total) by calling
+  the built-in `patch_flowstile_case_entity` activity **by name** from the
+  workflow — it's already registered, so you do **not** need a custom activity for
+  case-entity writes. Reserve custom `@activity.defn`s for genuinely external work
+  (API/ERP/payment calls). (`persist`/`context_from` still handle submission-field
+  plumbing automatically; this is only for values you compute in the workflow.)
 - Determinism is owned by the **`temporal-developer`** skill's
   `references/python/` (e.g. `workflow.now()`/`workflow.random()`, not
   `datetime.now()`/`random`); read it before non-trivial workflow code.
@@ -340,6 +349,9 @@ cd sdk-python
 uv run ruff check . && uv run mypy && uv run pytest          # unit
 FLOWSTILE_E2E=1 uv run pytest tests/integration/             # e2e (running stack)
 ```
+
+`uv run mypy` as configured checks only the `flowstile` package — **not** your
+worker/workflow/e2e files. Type-check those explicitly: `uv run mypy <your_files>`.
 
 ## Gotchas that cost real time
 
