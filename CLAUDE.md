@@ -134,8 +134,8 @@ For everything else, push to `master`.
 
 ### Agent skills (`.claude/skills/`)
 
-- `flowstile-authoring/` — the agent-runnable skill for authoring a process end to end: a brainstorm gate, test-first (write the e2e red contract before building), code-first definition, forms, typed workflow, and the full validation loop. The five demo processes were authored against it; the `docs/process-authoring-guide.md` is its prose companion.
-- `temporal-developer/` — the official Temporal Developer Skill (vendored, TypeScript subset; see its `VENDORED.md`). `flowstile-authoring` delegates workflow-code determinism, activity boundaries, and versioning to it.
+- `flowstile-authoring/` — the agent-runnable skill for authoring a process end to end: a brainstorm gate, test-first (write the e2e red contract before building), code-first definition, forms, typed workflow, and the full validation loop. Covers both worker tracks — TypeScript (`packages/worker`) and Python (`sdk-python`). The five demo processes were authored against it; the `docs/process-authoring-guide.md` is its prose companion.
+- `temporal-developer/` — the official Temporal Developer Skill (vendored, TypeScript + Python subset; see its `VENDORED.md`). `flowstile-authoring` delegates workflow-code determinism, activity boundaries, and versioning to it.
 
 ## For Rewriting in Another Stack
 

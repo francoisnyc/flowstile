@@ -23,6 +23,12 @@ Every step has a deterministic check — run it before moving on.
   live in the vendored `temporal-developer` skill, not here; this skill adds only
   the Flowstile bridge (§5).
 
+**Two worker tracks.** The numbered steps below use the **TypeScript** worker
+(`packages/worker`). For a **Python** worker (`sdk-python`) the server-side steps
+— design (§1), registration (§2), forms (§3) — are *identical*; only the worker
+code, codegen, and e2e differ. See **"Authoring with a Python worker"** below for
+the §4–§7 deltas.
+
 ## Coming from BPMN? Translate the mental model first
 
 If you — or the prompt you're following — think in BPMN / Camunda / Bonita / KuFlow
@@ -258,6 +264,72 @@ npx playwright test e2e/<slug>.spec.ts    # requires running stack incl. worker
 
 All green = done. Red e2e → fix → rerun; if a failure traces to a wrong or
 missing instruction in THIS skill, fix the skill in the same commit.
+
+## Authoring with a Python worker
+
+The Flowstile server is language-agnostic, so a process can be driven by a
+**Python** Temporal worker using the `flowstile` SDK (`sdk-python/`) instead of
+the TypeScript one. **§1–§3 are unchanged** — design, the `seed.ts`/API process &
+task registration, and the JSON-Forms forms all live server-side. Only §4–§7
+differ. The proven templates are in `sdk-python/`:
+`examples/loan_approval_worker.py` (a worker) and `tests/integration/test_e2e_*.py`
+(API-driven e2e). Read those; the deltas:
+
+**§4 — Generate types (Python codegen).** From the published forms:
+
+```bash
+cd sdk-python && uv run flowstile-codegen \
+  --process "<Process Name>" --api-key "$TOKEN" --out <slug>_models.py
+```
+
+emits one pydantic model per form **and** a `FlowstileTask` descriptor per task
+(`MY_TASK = FlowstileTask("MY_TASK", output=MyFormOutput)`). Regenerate on any
+form/task change; wire `flowstile-codegen … --check` into CI to catch drift.
+
+**§5 — Write the workflow (Python).** Subclass `FlowstileWorkflowBase` and await
+the descriptor (code + model + mappings bound together):
+
+```python
+from flowstile.workflows import FlowstileWorkflowBase
+from <slug>_models import MY_TASK            # generated descriptor
+
+@workflow.defn
+class MyWorkflow(FlowstileWorkflowBase):
+    @workflow.run
+    async def run(self, payload: dict) -> dict:
+        result = await self.create_task_and_wait(
+            MY_TASK, process_instance_id=payload["processInstanceId"],
+            input_data={...},
+        )
+        return {"decision": result.data.DECISION}   # typed
+```
+
+- **The workflow module must be sandbox-clean** — only `temporalio.workflow` +
+  `flowstile.workflows`/generated models; **no httpx** (don't import the client,
+  the worker bootstrap, or anything that pulls httpx, or the Temporal sandbox
+  rejects the workflow). This is the Python analogue of the `workflows.ts` rule.
+- **`create_task_and_wait` is a method** on the base class (Python registers
+  signal handlers on the class), not a free function — pass the descriptor in.
+- Determinism is owned by the **`temporal-developer`** skill's
+  `references/python/` (e.g. `workflow.now()`/`workflow.random()`, not
+  `datetime.now()`/`random`); read it before non-trivial workflow code.
+
+**§5 — Run the worker (Python).** `create_flowstile_worker(task_queue=…,
+workflows=[MyWorkflow], flowstile={"base_url":…, "api_key":…},
+preflight=[MY_TASK])` — `preflight=` validates the codes resolve to published
+forms at boot (the lite doctor; `FLOWSTILE_DOCTOR=warn`/`off` to soften/skip).
+
+**§7 — e2e (pytest, API-driven).** Mirror `sdk-python/tests/integration/`: a
+`FLOWSTILE_E2E=1`-gated test that provisions/uses the process via REST, runs the
+worker in-process (`async with worker:`), drives the human side over the REST API
+(`POST /tasks/:id/claim` then `/complete` with `{data}`), and asserts the typed
+result + persisted entity. The Python gate:
+
+```bash
+cd sdk-python
+uv run ruff check . && uv run mypy && uv run pytest          # unit
+FLOWSTILE_E2E=1 uv run pytest tests/integration/             # e2e (running stack)
+```
 
 ## Gotchas that cost real time
 
