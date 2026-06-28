@@ -233,4 +233,41 @@ A later pass pressure-tested the "milestone stepper's long-automated-phase gap" 
 
 **A milestone is a human-meaningful checkpoint or a status-bearing async wait — not every automated step.** The discriminator: is there a meaningful gap in time between the last human action and this outcome, during which a stakeholder asks "where's my thing?" Walking the three demo processes (Expense `REIMBURSEMENT`, Vacation `LEDGER_UPDATE`, Purchase `PO_ISSUANCE`), every trailing automated phase is an *instantaneous* activity that derives a reference string the moment the last approval lands. None is a checkpoint anyone waits on — the real checkpoint was the preceding human decision — so they render `skipped`, and that is the plan telling the truth, not a missing feature. The genuinely milestone-worthy automated steps are the ones with *real duration* (e.g. a reimbursement that runs on the next payroll cycle), and those are modeled as **async activities with status** (pending → issued → paid) whose state derives the same clean, pure way human-task status already does. Either way, milestone state needs no event log.
 
-**Consequence.** The case-event log, if ever built, is scoped to the *additive* timeline only and remains deferred on YAGNI grounds; it is explicitly **not** the mechanism for milestone state, and the `recordedActivity` wrapper sketched above is correspondingly de-scoped. The demos keep their trailing automated milestones deliberately — as the worked example of `skipped`, not as a template: prefer not to plan instantaneous plumbing as a milestone. (A future doctor nudge could warn on "a planned milestone with no human task and no async-status source.")
+**Consequence.** The case-event log (now shipped) is scoped to the *additive* timeline only; it is explicitly **not** the mechanism for milestone state. In the build, the `recordedActivity` wrapper sketched above was not needed — workflows call `record_case_event` directly. The demos keep their trailing automated milestones deliberately — as the worked example of `skipped`, not as a template: prefer not to plan instantaneous plumbing as a milestone. (A future doctor nudge could warn on "a planned milestone with no human task and no async-status source.")
+
+## AI-Assisted Form Drafting in the Designer (Proposed)
+
+> **Status: design direction, not built.** Already foreshadowed in "Where AI fits" (this doc) and the authoring-guide Phase 4 ("in-product AI form drafting, BYO-key"). Sharpened here against competitors (Workflow86's AI form generator, Camunda Copilot) — see `competitive-landscape.md`.
+
+A "Draft with AI" affordance in the form designer: the user describes a form in
+natural language (with an optional clarifying-questions round), and the AI emits a
+**JSON Schema + UI Schema draft** that loads into the existing designer canvas for
+review and editing, then follows the normal **draft → publish** lifecycle.
+
+Why it fits cleanly — it changes nothing structural:
+
+- **Same artifacts.** Forms are already JSON Schema + UI Schema; the AI produces
+  exactly what a human authors. No new form format, no new runtime path. The
+  output flows through `fromSchema` into the visual builder, and out via the
+  existing `PUT /forms/:code/draft` → `POST /forms/:code/publish`.
+- **The human publish gate stays.** AI *drafts*; a human reviews, edits, and
+  **publishes**. Consistent with "Where AI fits: form drafting, gated by publish."
+  The AI never auto-publishes and never touches in-flight tasks (form versioning
+  is unchanged).
+- **Bring-your-own-key, hidden when unconfigured.** The generation calls the
+  user's own LLM (thin client/server proxy), so there's no vendor AI dependency
+  baked into the product and no lock-in — the affordance simply doesn't appear if
+  no key is set. This is the dev-native / no-lock-in posture, not a managed AI
+  feature.
+
+Reused: the whole designer (`FormDesignerPage`, `VisualBuilder`, `FromSchema`),
+the draft/publish API, server-side schema validation, and the visibility-rules
+editor. New and small: one NL→`{jsonSchema, uiSchema}` generation step (a prompt
+with the JSON-Forms conventions as guardrails), a key-config setting, and a
+toolbar affordance with the clarifying-questions loop.
+
+Relation to the rest: this is the **human-facing UX** of the same agent-drafts-
+forms capability the API already exposes (`PUT /forms/:code/draft`) and that the
+`flowstile-authoring` skill uses headlessly. The competitive read (Workflow86,
+Camunda Copilot ship NL→form): match the *form-drafting* UX, but keep it
+code-first/governed — don't drift into being a managed visual workflow builder.

@@ -25,6 +25,16 @@ no engine lock-in — aimed at **developers**.
   Orkes Conductor). BPMN modeling, a drag-and-drop form builder, Tasklist. The
   philosophical split: *Camunda = the visual business-process planner; Temporal /
   Flowstile = the code-first distributed-systems engineer.*
+- **AI-native workflow SaaS (the new wave) — the closest competition on the
+  agent-authoring axis.** Workflow86 ("AI workflow engineer": describe a process
+  in natural language → a fully configured workflow with **forms + tasks + AI
+  steps + integrations**, on a visual canvas, with human-in-the-loop), plus
+  Jotform's AI workflow generator and similar. This is the *most direct* rival to
+  the "an AI authors the human-in-the-loop process + forms" pitch — but built as a
+  **managed, visual, non-developer** SaaS. Flowstile's differentiation is the same
+  one as against Camunda, sharpened: the output is **code in your repo** authored
+  by the **developer's own coding agent**, on **your** Temporal, no lock-in — not
+  a managed visual platform.
 - **Adjacent, different buyer:** durable-execution engines (Restate, Inngest,
   Hatchet, Trigger.dev, Windmill) compete with *Temporal*, not the human layer;
   internal-tool builders (Retool, Appsmith, Superblocks) nail the human UI but
