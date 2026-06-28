@@ -23,6 +23,9 @@ New here? Skim the **Developer Guide**, then run the demo from the
 - [Self-Hosting](./self-hosting.md) — production deployment runbook: topology,
   environment variables, migrations, first-run admin bootstrap, secrets,
   observability.
+- [Ad-Hoc Tasks with Inline Forms](./ad-hoc-tasks.md) — raise a one-off human task
+  whose form is supplied at runtime, for emergent/agent-driven steps with no
+  pre-published form.
 
 ## Reference & Architecture
 
