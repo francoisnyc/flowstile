@@ -271,3 +271,122 @@ forms capability the API already exposes (`PUT /forms/:code/draft`) and that the
 `flowstile-authoring` skill uses headlessly. The competitive read (Workflow86,
 Camunda Copilot ship NL→form): match the *form-drafting* UX, but keep it
 code-first/governed — don't drift into being a managed visual workflow builder.
+
+## Runtime-Emergent Human Tasks: Inline Forms and Chat (Proposed)
+
+> **Status: design direction, not built.** This is about *runtime* (an agent
+> raising a human task mid-workflow), not the *author-time* form drafting above.
+> Anchored in two real competitors — Camunda's agentic orchestration and
+> Workflow86's AI dynamic forms — see `competitive-landscape.md`.
+
+### What the competitors actually do at runtime
+
+The motivation is concrete, not hypothetical. Two products ship runtime-emergent
+human work today, at two different levels of "emergence":
+
+- **Camunda — the agent *picks* a pre-modeled human task.** An AI agent runs
+  inside an **ad-hoc subprocess** whose contained activities are its tool palette,
+  and a **user task is one of those tools**. A gateway evaluates the agent's
+  confidence or a policy constraint (e.g. a refund over a threshold); when it isn't
+  met, control routes to a user task, and the human sees a custom form showing
+  *"the entire case history, the conversation thread, and the agent's proposed next
+  action,"* with a checkbox to confirm or deny. What's runtime-decided is **which
+  human task fires and when** — the *form schema is still author-time-modeled and
+  governed*. The agent chooses from a fixed palette; it does not synthesize fields.
+
+- **Workflow86 — the agent *generates* the form itself.** Its "AI dynamic form"
+  feature lets an agent *"dynamically generate forms and review tasks as part of a
+  workflow."* The loop is **Ask → Review → Adapt → Continue**: the agent reviews
+  context and *"if something is missing, unclear, risky, or approval-worthy, the
+  agent generates the next form or review task,"* whose response folds back into
+  workflow context. Here the **form's fields themselves are shaped at runtime** by
+  what the agent found missing on this specific run. Even Workflow86 keeps it
+  governed: *"Let the agent prepare the form or review task. Let the workflow
+  control the process. Let humans approve where accountability matters."*
+
+### The unifying invariant
+
+Whatever the human surface does, a Flowstile task still resolves to **exactly one
+validated `submissionData`**, and the workflow only ever sees `createTaskAndWait →
+typed result`. The agent driving any of this runs in an **activity or sidecar
+service, never the workflow** (determinism is preserved), and the workflow stays
+blocked on a single `createTaskAndWait` for the whole interaction — the task's
+lifetime *spans* it. So the workflow contract never changes regardless of how rich
+the elicitation gets. The variation is purely in the **elicitation layer**, which
+makes the design a ladder, not a pile of features:
+
+| Rung | How the human's data is elicited | New server primitive | Status |
+|---|---|---|---|
+| 1. Static form (today) | published schema, locked version | — | shipped |
+| 2. Agent-gated form (Camunda-style) | workflow conditionally raises a *published* form | — (control flow + case-event log) | possible today |
+| 3. Agent-generated inline form (Workflow86-style) | task carries its own `formSchema`/`uiSchema` | task carries inline schema | **proposed v1 slice** |
+| 4. Chat-as-form | multi-turn conversation that resolves to `submissionData` | a conversation surface on the task | deferred (UI-heavy) |
+| 5. Hybrid (chat + generative forms) | chat that embeds inline mini-forms per turn | rungs 3 + 4 | deferred (UI-heavy) |
+
+**Rung 2 needs nothing new** — an agent step (a Temporal activity) computes a
+confidence/policy decision and the workflow conditionally calls `createTaskAndWait`
+against an existing, versioned form code; the **case-event log** (shipped) records
+*why* the agent raised it. This is the governed default and matches even
+Workflow86's own "let the workflow control the process" guidance. Worth documenting
+as the recommended path before reaching for anything emergent.
+
+### Rung 3 is the genuine gap — and the concrete v1
+
+Flowstile's task model binds every task to a published form `code` + locked
+version (the whole form-versioning contract). The one thing it cannot do is
+Workflow86's move: a task whose **schema is supplied at runtime** and validated
+server-side against *itself* rather than a looked-up published version — explicitly
+outside form-versioning and field-visibility governance, by design. That's the
+small, well-scoped new primitive:
+
+- A task may carry an inline `formSchema` (+ optional `uiSchema`) instead of a form
+  `code`. The two are mutually exclusive.
+- Completion validates `submissionData` against the **inline** schema (reusing the
+  existing AJV pipeline), instead of resolving a published version.
+- It is **opt-in and ungoverned**: no version locking, no `visibilityRules`
+  filtering, no draft/publish gate. The published-form path stays the default and
+  the recommendation; inline is the escape hatch for emergent, single-use tasks.
+- The UI **reuses the existing JSON Forms renderer as-is** — it already renders an
+  arbitrary schema, so an inline schema needs no new frontend. This is what makes
+  rung 3 cheap relative to rungs 4–5.
+
+### Rungs 4–5 are the same primitive over a chat transport
+
+A chat surface is just a *conversational renderer* of a task whose output is still
+typed. **Chat-as-form (rung 4):** the human converses with an agent that asks
+follow-ups based on prior answers (loan intake that branches on "self-employed,"
+incident triage, requisition gather-just-enough); when the agent has enough, it
+submits one structured `submissionData` and the task completes. **Hybrid
+(rung 5):** the agent chats *and* renders inline mini-forms mid-conversation
+("confirm these line items," "pick a date," "approve/reject + reason") — generative
+UI, à la Claude artifacts. Rung 5 is literally **rung 3's inline schema as the
+payload of a chat turn**: one primitive, two delivery modes.
+
+Three honest tensions belong on the record:
+
+1. **Conversation state can't live in the workflow** (too chatty, non-deterministic).
+   Either a new "messages on a task" server surface, or — cleaner — the agent
+   sidecar owns the transcript and the server stays thin, storing only the final
+   `submissionData`.
+2. **The case-event log already is the audit answer.** Each agent turn / decision
+   → a case event (`actor: agent`). An agentic chat is therefore auditable *for
+   free* with what shipped: the chat is the live surface, the event log is the
+   durable record.
+3. **Chat is the least-governed surface** — field-visibility and form-versioning
+   don't bite until the final `submissionData`. So rungs 4–5 are firmly opt-in
+   escape-hatch territory, and "published form stays the default" holds even harder.
+
+The cost split is the reason to defer them: rung 3 is a small server change that
+reuses the existing renderer; rungs 4–5 are a **real frontend build** (a streaming
+chat UI, with embedded JSON-Forms rendering for rung 5).
+
+### Current direction
+
+Build rung 3 (inline ad-hoc form) as the concrete v1 slice if and when an emergent
+use case demands it — it is a small, contained server primitive that closes the
+genuine Workflow86 gap while keeping the workflow contract (`createTaskAndWait →
+typed `submissionData``) intact. Document rung 2 (agent-gated published form) as
+the governed default available today. Keep rungs 4–5 (chat, hybrid) as the
+natural top of the same ladder, deferred on UI cost, not on architecture — they
+reuse rung 3's primitive and the shipped case-event log, and change nothing about
+the durable, typed completion contract.
