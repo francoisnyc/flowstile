@@ -51,4 +51,12 @@ export enum AttachmentStatus {
   LINKED  = 'linked',
 }
 
+// Who performed a case-timeline event. Automated and agent work get their own
+// honestly-labelled slot — never disguised as a human.
+export enum CaseEventActor {
+  HUMAN  = 'human',
+  SYSTEM = 'system',
+  AGENT  = 'agent',
+}
+
 export type PayloadScope = 'input' | 'context' | 'submission';

@@ -12,6 +12,7 @@ import { Attachment } from '../entities/attachment.entity.js';
 import { Case } from '../entities/case.entity.js';
 import { ApiKey } from '../entities/api-key.entity.js';
 import { CaseComment } from '../entities/case-comment.entity.js';
+import { CaseEvent } from '../entities/case-event.entity.js';
 
 const isProduction = process.env.NODE_ENV === 'production';
 
@@ -22,7 +23,7 @@ export const dataSourceOptions: DataSourceOptions = {
   database: process.env.DATABASE_NAME ?? 'flowstile',
   username: process.env.DATABASE_USER ?? 'flowstile',
   password: process.env.DATABASE_PASSWORD ?? 'flowstile',
-  entities: [User, Group, Role, FormDefinition, ProcessDefinition, TaskDefinition, Task, SignalOutbox, Attachment, Case, ApiKey, CaseComment],
+  entities: [User, Group, Role, FormDefinition, ProcessDefinition, TaskDefinition, Task, SignalOutbox, Attachment, Case, ApiKey, CaseComment, CaseEvent],
   // Migrations are wired ONLY in production, where the server runs compiled JS
   // (node dist/...) and applies them on boot via migrationsRun. Dev and tests
   // use schema sync instead, so the migration files are never loaded there —

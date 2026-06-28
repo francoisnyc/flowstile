@@ -98,6 +98,19 @@ async def set_flowstile_case_entity(
     return result.model_dump(by_alias=True)
 
 
+@activity.defn
+async def record_flowstile_case_event(
+    process_instance_id: str,
+    actor: str,
+    label: str,
+    payload: Optional[dict[str, Any]] = None,
+    phase: Optional[str] = None,
+) -> dict[str, Any]:
+    return await _require_client().record_case_event(
+        process_instance_id, actor, label, payload, phase
+    )
+
+
 # All Flowstile-provided activities, for registration on a Temporal worker.
 FLOWSTILE_ACTIVITIES = [
     create_flowstile_task,
@@ -105,4 +118,5 @@ FLOWSTILE_ACTIVITIES = [
     get_flowstile_case_entity,
     patch_flowstile_case_entity,
     set_flowstile_case_entity,
+    record_flowstile_case_event,
 ]

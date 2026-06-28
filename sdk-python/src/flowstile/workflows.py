@@ -53,6 +53,7 @@ _CREATE_TASK = "create_flowstile_task"
 _CANCEL_TASK = "cancel_flowstile_task"
 _GET_ENTITY = "get_flowstile_case_entity"
 _PATCH_ENTITY = "patch_flowstile_case_entity"
+_RECORD_EVENT = "record_flowstile_case_event"
 
 _ACTIVITY_TIMEOUT = timedelta(minutes=10)
 _ACTIVITY_RETRY = RetryPolicy(maximum_attempts=3)
@@ -251,6 +252,29 @@ class FlowstileWorkflowBase:
             completed_by=CompletedBy.model_validate(payload["completedBy"]),
             completed_at=payload["completedAt"],
             form_version=payload["formVersion"],
+        )
+
+    async def record_case_event(
+        self,
+        process_instance_id: str,
+        actor: str,
+        label: str,
+        *,
+        payload: Optional[dict[str, Any]] = None,
+        phase: Optional[str] = None,
+    ) -> None:
+        """Append a display-only event to the case timeline (``actor`` =
+        ``"human"`` | ``"system"`` | ``"agent"``).
+
+        Display-only: never read back to drive workflow logic — values the
+        workflow needs go in the case entity (``persist`` / patch). Use this to
+        surface automated/agent work a human reviewing the case should see.
+        """
+        await workflow.execute_activity(
+            _RECORD_EVENT,
+            args=[process_instance_id, actor, label, payload, phase],
+            start_to_close_timeout=_ACTIVITY_TIMEOUT,
+            retry_policy=_ACTIVITY_RETRY,
         )
 
     async def _best_effort_cancel(self, task_id: str) -> None:

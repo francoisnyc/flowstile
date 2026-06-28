@@ -145,3 +145,23 @@ class FlowstileClient:
         return await self.request(
             "GET", f"/cases/by-process-instance/{quote(process_instance_id, safe='')}"
         )
+
+    async def record_case_event(
+        self,
+        process_instance_id: str,
+        actor: str,
+        label: str,
+        payload: Optional[dict[str, Any]] = None,
+        phase: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """Append a display-only timeline event (actor = human|system|agent)."""
+        body: dict[str, Any] = {"actor": actor, "label": label}
+        if payload is not None:
+            body["payload"] = payload
+        if phase is not None:
+            body["phase"] = phase
+        return await self.request(
+            "POST",
+            f"/cases/by-process-instance/{quote(process_instance_id, safe='')}/events",
+            json=body,
+        )

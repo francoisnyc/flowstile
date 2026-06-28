@@ -3,11 +3,12 @@ import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { In } from 'typeorm';
 import { Case } from '../entities/case.entity.js';
 import { CaseComment } from '../entities/case-comment.entity.js';
+import { CaseEvent } from '../entities/case-event.entity.js';
 import { Task } from '../entities/task.entity.js';
 import { FormDefinition } from '../entities/form-definition.entity.js';
 import { Attachment } from '../entities/attachment.entity.js';
 import { ProcessDefinition } from '../entities/process-definition.entity.js';
-import { AttachmentStatus } from '../common/enums.js';
+import { AttachmentStatus, CaseEventActor } from '../common/enums.js';
 import { requirePermission, requireUser } from '../plugins/auth.js';
 import { Permissions } from '../common/permissions.js';
 import { PaginationQuery, paginate } from '../common/pagination.js';
@@ -49,6 +50,13 @@ const PutCaseEntityBody = z.object({
 
 const CommentBody = z.object({
   body: z.string().min(1).max(2000),
+});
+
+const RecordEventBody = z.object({
+  actor: z.enum(['human', 'system', 'agent']),
+  label: z.string().min(1).max(200),
+  payload: z.record(z.string(), z.unknown()).nullable().optional(),
+  phase: z.string().min(1).max(100).nullable().optional(),
 });
 
 function serializeCaseTask(task: Task) {
@@ -149,6 +157,13 @@ async function loadCaseDetail(
     .getRepository(CaseComment)
     .count({ where: { caseId: c.id } });
 
+  // Display-only timeline of automated/agent/system events recorded against the
+  // case. Visible to anyone who can see the case (case-level scope already
+  // enforced above); payloads are curated by the author at write time.
+  const events = await app.db
+    .getRepository(CaseEvent)
+    .find({ where: { caseId: c.id }, order: { recordedAt: 'ASC' } });
+
   return {
     id: c.id,
     processInstanceId: c.processInstanceId,
@@ -163,6 +178,18 @@ async function loadCaseDetail(
     tasks: tasks.map(serializeCaseTask),
     attachments: visibleAttachments,
     commentCount,
+    events: events.map(serializeCaseEvent),
+  };
+}
+
+function serializeCaseEvent(e: CaseEvent) {
+  return {
+    id: e.id,
+    actor: e.actor,
+    label: e.label,
+    payload: e.payload,
+    phase: e.phase,
+    recordedAt: e.recordedAt,
   };
 }
 
@@ -561,6 +588,46 @@ export const caseRoutes: FastifyPluginAsyncZod = async (app) => {
       const saved = await commentRepo().findOneOrFail({ where: { id: comment.id } });
 
       return reply.code(201).send(serializeComment(saved));
+    },
+  );
+
+  // POST /cases/by-process-instance/:processInstanceId/events — record a
+  // display-only timeline event (system/agent/automated work). Written by the
+  // worker (service credential) with tasks:write; appears on the case timeline.
+  app.post(
+    '/cases/by-process-instance/:processInstanceId/events',
+    { ...write, schema: { params: PidParam, body: RecordEventBody, tags: ['Cases'] } },
+    async (request, reply) => {
+      const { processInstanceId } = request.params;
+      const { actor, label, payload, phase } = request.body;
+
+      let c = await caseRepo().findOne({ where: { processInstanceId } });
+      if (!c) {
+        // An event can be the first thing recorded for an instance — e.g. an
+        // agent step before any human task. Materialize the case (the process is
+        // backfilled when the first task is created).
+        try {
+          c = await caseRepo().save({ processInstanceId, processDefinitionId: null, entity: null });
+        } catch {
+          c = await caseRepo().findOne({ where: { processInstanceId } });
+        }
+        if (!c) return reply.code(404).send({ error: 'Case not found' });
+      } else if (!principalSeesAllCases(request.principal!)) {
+        const tasks = await app.db.getRepository(Task).find({ where: { processInstanceId } });
+        if (!canSeeCase(c.startedById, tasks, request.principal!)) {
+          return reply.code(404).send({ error: 'Case not found' });
+        }
+      }
+
+      const event = await app.db.getRepository(CaseEvent).save({
+        caseId: c.id,
+        actor: actor as CaseEventActor,
+        label,
+        payload: payload ?? null,
+        phase: phase ?? null,
+      });
+
+      return reply.code(201).send(serializeCaseEvent(event));
     },
   );
 };

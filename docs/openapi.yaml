@@ -1466,6 +1466,53 @@ paths:
       responses:
         "200":
           description: Default Response
+  /cases/by-process-instance/{processInstanceId}/events:
+    post:
+      tags:
+        - Cases
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                actor:
+                  type: string
+                  enum:
+                    - human
+                    - system
+                    - agent
+                label:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
+                payload:
+                  anyOf:
+                    - type: object
+                      propertyNames:
+                        type: string
+                      additionalProperties: {}
+                    - type: "null"
+                phase:
+                  anyOf:
+                    - type: string
+                      minLength: 1
+                      maxLength: 100
+                    - type: "null"
+              required:
+                - actor
+                - label
+      parameters:
+        - schema:
+            type: string
+            minLength: 1
+          in: path
+          name: processInstanceId
+          required: true
+      responses:
+        "200":
+          description: Default Response
 security:
   - cookieAuth: []
   - bearerAuth: []

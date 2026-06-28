@@ -299,6 +299,12 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
     if (processInstanceId) {
       const caseRepo = app.db.getRepository(Case);
       const existing = await caseRepo.findOne({ where: { processInstanceId } });
+      if (existing && !existing.processDefinitionId && td.processDefinitionId) {
+        // Backfill the process on a case that was materialized earlier by an
+        // event/entity write before any task existed.
+        existing.processDefinitionId = td.processDefinitionId;
+        await caseRepo.save(existing);
+      }
       if (!existing) {
         // If the process declares a case entity schema, initialize the entity to
         // null and let the workflow populate it (a scalar snapshot would likely
