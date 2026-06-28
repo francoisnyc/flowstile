@@ -48,8 +48,10 @@ What you still get with an ad-hoc task — unchanged from any other task:
 ## Python
 
 `create_task_and_wait` gains a `form_schema` (and optional `ui_schema`, `name`)
-keyword. Provide it *instead of* a task definition — no `task_definition_id`, no
-`task_definition_code`.
+keyword. Provide it **with no task definition** for a fully emergent task (the
+headline case below), or **alongside** a `task_definition_id` / `task_definition_code`
+to keep that definition's candidates, priority, and case attribution while
+replacing its form with your inline schema.
 
 The agent that generates the schema runs in an **ordinary Temporal activity**
 (not the workflow), so the workflow stays deterministic and the workflow module
@@ -205,12 +207,19 @@ Content-Type: application/json
 
 Rules:
 
-- **Provide exactly one of** `taskDefinitionId`, `taskDefinitionCode`, **or**
-  `formSchema`. (Supplying a task definition *and* a `formSchema` is a `400`.)
+- **Supply at least one of** `taskDefinitionId`, `taskDefinitionCode`, or
+  `formSchema`. You may **not** supply both `taskDefinitionId` and
+  `taskDefinitionCode` (that remains a `400`, unchanged).
+- `formSchema` may stand **alone** (a fully ad-hoc task, no definition) **or
+  accompany** a task definition. When it accompanies one, the inline schema
+  replaces the definition's published form, while the definition still supplies
+  default candidates, priority, and case attribution. When it stands alone,
+  `candidateUsers` / `candidateGroups` are taken directly from the request.
 - `uiSchema` and `name` are optional and only meaningful alongside `formSchema`.
-- An ad-hoc task has **no task definition** and **no locked form version**
-  (`formDefinitionVersion` is `null`). `candidateUsers` / `candidateGroups` are
-  taken directly from the request — there is no task definition to inherit from.
+- Whenever `formSchema` is present, the task has **no locked form version**
+  (`formDefinitionVersion` is `null`); the inline schema *is* the form. A task
+  created from a task definition with **no** `formSchema` behaves exactly as
+  before (published form, locked version).
 - If `inputData` is provided, it is validated leniently (no `required`
   enforcement) against the inline `formSchema`, the same as for a published form.
 
