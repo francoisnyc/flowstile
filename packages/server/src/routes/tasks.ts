@@ -30,6 +30,7 @@ import { applyTaskScope, canSeeTask } from '../common/task-scope.js';
 function serializeTask(task: Task) {
   return {
     id: task.id,
+    name: task.name ?? null,
     formDefinitionVersion: task.formDefinitionVersion,
     workflowId: task.workflowId,
     processInstanceId: task.processInstanceId ?? null,
@@ -75,6 +76,17 @@ const TasksQuery = PaginationQuery.extend({
 const CreateTaskBody = z.object({
   taskDefinitionId: z.string().uuid().optional(),
   taskDefinitionCode: z.string().min(1).optional(),
+  // Inline (ad-hoc) form: a JSON Schema supplied at creation. May stand alone (a
+  // fully ad-hoc task with no definition) or accompany a task definition (the
+  // inline schema replaces its published form; the definition still supplies
+  // default candidates, priority, and case attribution). When present, the task
+  // has no locked published-form version and is ungoverned (no version locking,
+  // field visibility, outcomes, or draft/publish).
+  formSchema: z.record(z.string(), z.unknown()).optional(),
+  uiSchema: z.record(z.string(), z.unknown()).optional(),
+  // Human-facing title for an ad-hoc task (definition-backed tasks use the
+  // definition's code). Only meaningful alongside formSchema.
+  name: z.string().min(1).optional(),
   workflowId: z.string().min(1),
   processInstanceId: z.string().min(1).optional(),
   // Per-instance candidate overrides. When omitted, the task inherits the task
@@ -88,8 +100,11 @@ const CreateTaskBody = z.object({
   contextData: z.record(z.string(), z.unknown()).optional(),
   submissionData: z.record(z.string(), z.unknown()).optional(),
 }).refine(
-  (b) => Boolean(b.taskDefinitionId) !== Boolean(b.taskDefinitionCode),
-  { message: 'Provide exactly one of taskDefinitionId or taskDefinitionCode' },
+  (b) => !(b.taskDefinitionId && b.taskDefinitionCode),
+  { message: 'Provide at most one of taskDefinitionId or taskDefinitionCode' },
+).refine(
+  (b) => Boolean(b.taskDefinitionId || b.taskDefinitionCode || b.formSchema),
+  { message: 'Provide a taskDefinitionId, taskDefinitionCode, or formSchema' },
 );
 
 const CompleteTaskBody = z.object({
@@ -237,6 +252,9 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
     const {
       taskDefinitionId,
       taskDefinitionCode,
+      formSchema,
+      uiSchema,
+      name,
       workflowId,
       processInstanceId,
       candidateGroups,
@@ -249,24 +267,43 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
       submissionData,
     } = request.body;
 
-    const td = await app.db.getRepository(TaskDefinition).findOne({
-      where: taskDefinitionId ? { id: taskDefinitionId } : { code: taskDefinitionCode },
-    });
-    if (!td) return reply.code(404).send({ error: 'Task definition not found' });
-
-    const form = await app.db.getRepository(FormDefinition).findOne({
-      where: { code: td.formDefinitionCode, status: FormDefinitionStatus.PUBLISHED },
-      order: { version: 'DESC' },
-    });
-    if (!form) {
-      return reply.code(422).send({
-        error: `No published form found for code '${td.formDefinitionCode}'`,
+    // A task definition is optional for ad-hoc (inline-form) tasks. Resolve one
+    // only when named — it still supplies default candidates, priority, and case
+    // attribution even when an inline formSchema overrides its published form.
+    let td: TaskDefinition | null = null;
+    if (taskDefinitionId || taskDefinitionCode) {
+      td = await app.db.getRepository(TaskDefinition).findOne({
+        where: taskDefinitionId ? { id: taskDefinitionId } : { code: taskDefinitionCode },
       });
+      if (!td) return reply.code(404).send({ error: 'Task definition not found' });
     }
 
-    // Validate inputData against the form's JSON Schema (lenient — no required enforcement)
+    // Resolve the form to validate against. An inline schema overrides any
+    // published form (and locks no version); otherwise look up the definition's
+    // latest published form.
+    let inputSchema: Record<string, unknown>;
+    let formVersion: number | null;
+    if (formSchema) {
+      inputSchema = formSchema;
+      formVersion = null;
+    } else {
+      // Without an inline schema, the refine guarantees a definition was named.
+      const form = await app.db.getRepository(FormDefinition).findOne({
+        where: { code: td!.formDefinitionCode, status: FormDefinitionStatus.PUBLISHED },
+        order: { version: 'DESC' },
+      });
+      if (!form) {
+        return reply.code(422).send({
+          error: `No published form found for code '${td!.formDefinitionCode}'`,
+        });
+      }
+      inputSchema = form.jsonSchema as Record<string, unknown>;
+      formVersion = form.version;
+    }
+
+    // Validate inputData against the resolved schema (lenient — no required enforcement)
     if (inputData && Object.keys(inputData).length > 0) {
-      const validation = validateInputData(inputData, form.jsonSchema as Record<string, unknown>);
+      const validation = validateInputData(inputData, inputSchema);
       if (!validation.valid) {
         return reply.code(422).send({
           error: 'inputData validation failed',
@@ -276,16 +313,20 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
     }
 
     const task = await repo().save({
-      taskDefinitionId: td.id,
+      taskDefinitionId: td?.id ?? null,
       workflowId,
       ...(processInstanceId ? { processInstanceId } : {}),
       // Snapshot candidates onto the instance so reads can be scoped without a
       // join, and so a definition change never retroactively re-scopes live tasks.
-      candidateGroups: candidateGroups ?? td.candidateGroups,
-      candidateUsers: candidateUsers ?? td.candidateUsers,
-      formDefinitionVersion: form.version,
+      // An ad-hoc task with no definition takes candidates from the request alone.
+      candidateGroups: candidateGroups ?? td?.candidateGroups ?? [],
+      candidateUsers: candidateUsers ?? td?.candidateUsers ?? [],
+      formDefinitionVersion: formVersion,
+      name: name ?? null,
+      inlineFormSchema: formSchema ?? null,
+      inlineUiSchema: uiSchema ?? null,
       status: TaskStatus.CREATED,
-      priority: priority ?? td.defaultPriority,
+      priority: priority ?? td?.defaultPriority ?? Priority.NORMAL,
       dueDate: dueDate ?? null,
       followUpDate: followUpDate ?? null,
       inputData: inputData ?? {},
@@ -299,7 +340,7 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
     if (processInstanceId) {
       const caseRepo = app.db.getRepository(Case);
       const existing = await caseRepo.findOne({ where: { processInstanceId } });
-      if (existing && !existing.processDefinitionId && td.processDefinitionId) {
+      if (existing && !existing.processDefinitionId && td?.processDefinitionId) {
         // Backfill the process on a case that was materialized earlier by an
         // event/entity write before any task existed.
         existing.processDefinitionId = td.processDefinitionId;
@@ -309,7 +350,8 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
         // If the process declares a case entity schema, initialize the entity to
         // null and let the workflow populate it (a scalar snapshot would likely
         // violate the schema). Otherwise snapshot top-level scalars for display.
-        const pd = td.processDefinitionId
+        // An ad-hoc task may have no definition (and so no process) at all.
+        const pd = td?.processDefinitionId
           ? await app.db.getRepository(ProcessDefinition).findOne({
               where: { id: td.processDefinitionId },
               select: ['id', 'caseEntitySchema'],
@@ -319,7 +361,7 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
         try {
           await caseRepo.save({
             processInstanceId,
-            processDefinitionId: td.processDefinitionId,
+            processDefinitionId: td?.processDefinitionId ?? null,
             entity,
           });
         } catch {
@@ -348,24 +390,57 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
       // that doesn't exist (404, not 403, to avoid leaking existence).
       if (!canSeeTask(task, request.principal!)) return reply.code(404).send({ error: 'Task not found' });
 
-      const form = await app.db.getRepository(FormDefinition).findOne({
-        where: {
-          code: task.taskDefinition.formDefinitionCode,
-          version: task.formDefinitionVersion,
-        },
-      });
-      if (!form) return reply.code(500).send({ error: 'Locked form version not found' });
-
       const userRoleNames = user.roles.map((r) => r.name);
       const userGroupNames = user.groups.map((g) => g.name);
 
-      const { jsonSchema, uiSchema } = filterFormSchemas(form, userRoleNames, userGroupNames);
-      const filteredData = filterSubmissionData(
-        task.submissionData,
-        form,
-        userRoleNames,
-        userGroupNames,
-      );
+      // Resolve the form envelope. An ad-hoc task carries an inline schema with
+      // no version and no field-visibility rules — delivered as-is. A
+      // definition-backed task loads its locked published version and applies
+      // visibility filtering to both schema and data.
+      let formEnvelope: {
+        code: string | null;
+        version: number | null;
+        jsonSchema: Record<string, unknown>;
+        uiSchema: Record<string, unknown>;
+        formMessages: Record<string, unknown>;
+        outcomes: unknown;
+        outcomeKey: string | null;
+      };
+      let filteredData: Record<string, unknown>;
+
+      if (task.inlineFormSchema) {
+        formEnvelope = {
+          code: null,
+          version: null,
+          jsonSchema: task.inlineFormSchema,
+          uiSchema: task.inlineUiSchema ?? {},
+          formMessages: {},
+          outcomes: null,
+          outcomeKey: null,
+        };
+        filteredData = task.submissionData;
+      } else {
+        const form = await app.db.getRepository(FormDefinition).findOne({
+          where: {
+            code: task.taskDefinition!.formDefinitionCode,
+            version: task.formDefinitionVersion!,
+          },
+        });
+        if (!form) return reply.code(500).send({ error: 'Locked form version not found' });
+
+        const { jsonSchema, uiSchema } = filterFormSchemas(form, userRoleNames, userGroupNames);
+        filteredData = filterSubmissionData(task.submissionData, form, userRoleNames, userGroupNames);
+        const hasOutcomes = Array.isArray(form.outcomes) && form.outcomes.length > 0;
+        formEnvelope = {
+          code: form.code,
+          version: form.version,
+          jsonSchema,
+          uiSchema,
+          formMessages: form.formMessages,
+          outcomes: hasOutcomes ? form.outcomes : null,
+          outcomeKey: hasOutcomes ? (form.outcomeKey ?? DEFAULT_OUTCOME_KEY) : null,
+        };
+      }
 
       const hasWrite = userHasPermission(user, Permissions.TASKS_WRITE);
       const hasManage = userHasPermission(user, Permissions.TASKS_MANAGE);
@@ -378,19 +453,9 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
         canCancel: hasWrite && TaskStateMachine.canTransition(task.status, 'cancel') && (task.status === 'created' || isAssignee || hasManage),
       };
 
-      const hasOutcomes = Array.isArray(form.outcomes) && form.outcomes.length > 0;
-
       return {
         ...serializeTask(task),
-        form: {
-          code: form.code,
-          version: form.version,
-          jsonSchema,
-          uiSchema,
-          formMessages: form.formMessages,
-          outcomes: hasOutcomes ? form.outcomes : null,
-          outcomeKey: hasOutcomes ? (form.outcomeKey ?? DEFAULT_OUTCOME_KEY) : null,
-        },
+        form: formEnvelope,
         submissionData: filteredData,
         actions,
       };
@@ -490,20 +555,30 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
 
       task.status = TaskStateMachine.transition(task.status, 'complete');
 
-      // Load the locked form version
-      const form = await app.db.getRepository(FormDefinition).findOne({
-        where: {
-          code: task.taskDefinition.formDefinitionCode,
-          version: task.formDefinitionVersion,
-        },
-      });
+      // Resolve the schema to validate against. An ad-hoc task validates against
+      // its inline schema (no published form, no visibility rules, no outcomes);
+      // a definition-backed task loads its locked published version.
+      let formDef: FormDefinition | null = null;
+      let schema: Record<string, unknown> | null = null;
+      if (task.inlineFormSchema) {
+        schema = task.inlineFormSchema;
+      } else {
+        formDef = await app.db.getRepository(FormDefinition).findOne({
+          where: {
+            code: task.taskDefinition!.formDefinitionCode,
+            version: task.formDefinitionVersion!,
+          },
+        });
+        schema = formDef ? (formDef.jsonSchema as Record<string, unknown>) : null;
+      }
 
-      // Strip non-writable fields from submitted data before merging
+      // Strip non-writable fields from submitted data before merging. Inline
+      // forms have no visibility rules, so every submitted field is writable.
       let acceptedData = data ?? {};
-      if (form) {
+      if (formDef) {
         const userRoleNames = user.roles.map((r) => r.name);
         const userGroupNames = user.groups.map((g) => g.name);
-        const writableFields = getWritableFields(form, userRoleNames, userGroupNames);
+        const writableFields = getWritableFields(formDef, userRoleNames, userGroupNames);
         acceptedData = Object.fromEntries(
           Object.entries(acceptedData).filter(([key]) => writableFields.has(key)),
         );
@@ -512,31 +587,31 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
       // Merge existing stored data with accepted submitted fields
       const mergedSubmission = { ...task.submissionData, ...acceptedData };
 
-      if (form) {
-        const validation = validateAgainstSchema(
-          mergedSubmission,
-          form.jsonSchema as Record<string, unknown>,
-        );
+      if (schema) {
+        const validation = validateAgainstSchema(mergedSubmission, schema);
         if (!validation.valid) {
           return reply.code(422).send({
             error: 'submissionData validation failed',
             details: validation.errors,
           });
         }
+      }
 
-        // If the form declares outcome buttons, enforce that the submitted
-        // outcome value is one we recognise and that its requireFields are
-        // present. Defense in depth — the schema enum covers the value too.
-        if (Array.isArray(form.outcomes) && form.outcomes.length > 0) {
-          const outcomeKey = form.outcomeKey ?? DEFAULT_OUTCOME_KEY;
+      // If the form declares outcome buttons, enforce that the submitted outcome
+      // value is one we recognise and that its requireFields are present.
+      // Defense in depth — the schema enum covers the value too. (Inline forms
+      // have no declarative outcomes.)
+      if (formDef) {
+        if (Array.isArray(formDef.outcomes) && formDef.outcomes.length > 0) {
+          const outcomeKey = formDef.outcomeKey ?? DEFAULT_OUTCOME_KEY;
           const chosen = mergedSubmission[outcomeKey];
-          const outcome = form.outcomes.find((o) => o.value === chosen);
+          const outcome = formDef.outcomes.find((o) => o.value === chosen);
           if (!outcome) {
             return reply.code(422).send({
               error: 'submissionData validation failed',
               details: [{
                 path: `/${outcomeKey}`,
-                message: `must be one of the declared outcomes: ${form.outcomes.map((o) => o.value).join(', ')}`,
+                message: `must be one of the declared outcomes: ${formDef.outcomes.map((o) => o.value).join(', ')}`,
               }],
             });
           }
@@ -559,10 +634,10 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
       // Validate and collect attachment references from the merged submission
       const ATTACHMENT_MAX_BYTES = parseInt(process.env.ATTACHMENT_MAX_BYTES ?? String(25 * 1024 * 1024), 10);
       let attachmentIdsToLink: string[] = [];
-      if (form) {
+      if (schema) {
         const refResult = validateAndCollectReferences(
           mergedSubmission,
-          form.jsonSchema as Record<string, unknown>,
+          schema,
           { globalMaxBytes: ATTACHMENT_MAX_BYTES },
         );
         if (refResult.errors.length > 0) {
@@ -599,10 +674,10 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
 
       // Build a map of fieldKey → payloadScope for linking. We iterate the schema
       // attachment fields and find which keys are referenced in mergedSubmission.
-      const fieldToScope = form
+      const fieldToScope = schema
         ? (() => {
             const fields = new Map<string, string>();
-            const props = (form.jsonSchema.properties ?? {}) as Record<string, Record<string, unknown>>;
+            const props = (schema.properties ?? {}) as Record<string, Record<string, unknown>>;
             for (const [k, v] of Object.entries(props)) {
               if (v['x-flowstile-attachment']) fields.set(k, 'submission');
             }
@@ -612,8 +687,8 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
 
       // Build attachmentId → fieldKey reverse lookup from mergedSubmission
       const attIdToField = new Map<string, string>();
-      if (form) {
-        const props = (form.jsonSchema.properties ?? {}) as Record<string, Record<string, unknown>>;
+      if (schema) {
+        const props = (schema.properties ?? {}) as Record<string, Record<string, unknown>>;
         for (const key of Object.keys(props)) {
           const val = mergedSubmission[key];
           if (val === undefined || val === null) continue;

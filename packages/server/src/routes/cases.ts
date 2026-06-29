@@ -209,7 +209,9 @@ async function filterAttachmentsByVisibility(
   // Load form definitions for all unique (formCode, version) pairs
   const formKeys = new Map<string, { code: string; version: number }>();
   for (const task of tasks) {
-    if (!task.taskDefinition) continue;
+    // Ad-hoc tasks (inline form, no locked version) have no field-visibility
+    // rules to apply, so skip them — their attachments are unfiltered.
+    if (!task.taskDefinition || task.formDefinitionVersion === null) continue;
     const key = `${task.taskDefinition.formDefinitionCode}@${task.formDefinitionVersion}`;
     formKeys.set(key, {
       code: task.taskDefinition.formDefinitionCode,

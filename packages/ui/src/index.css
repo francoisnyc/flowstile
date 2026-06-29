@@ -251,6 +251,7 @@ label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color:
 .status-badge.claimed { color: var(--accent-hover); border-color: var(--accent); }
 .status-badge.completed { color: var(--success); border-color: var(--success); }
 .status-badge.cancelled { color: var(--danger); border-color: var(--danger); }
+.status-badge.adhoc { color: var(--accent-hover); border-color: var(--accent); text-transform: uppercase; letter-spacing: 0.04em; }
 
 .form-container { flex: 1; overflow-y: auto; padding-right: 4px; }
 

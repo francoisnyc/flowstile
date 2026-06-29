@@ -117,19 +117,24 @@ export const attachmentRoutes: FastifyPluginAsyncZod = async (app) => {
       const hasManage = user.roles.some((r) => r.permissions.includes(Permissions.TASKS_MANAGE));
 
       if (att.status === AttachmentStatus.LINKED && att.fieldKey) {
-        const form = await app.db.getRepository(FormDefinition).findOne({
-          where: {
-            code: task.taskDefinition.formDefinitionCode,
-            version: task.formDefinitionVersion,
-          },
-        });
-        if (form) {
-          const { jsonSchema } = filterFormSchemas(form, userRoleNames, userGroupNames);
-          const visibleFields = new Set(
-            Object.keys((jsonSchema.properties ?? {}) as Record<string, unknown>),
-          );
-          if (!visibleFields.has(att.fieldKey)) {
-            return reply.code(403).send({ error: 'Access denied' });
+        // Field visibility only applies to published forms. An ad-hoc task's
+        // inline form has no visibility rules, so its attachments are visible to
+        // anyone who can see the task.
+        if (task.taskDefinition && task.formDefinitionVersion !== null) {
+          const form = await app.db.getRepository(FormDefinition).findOne({
+            where: {
+              code: task.taskDefinition.formDefinitionCode,
+              version: task.formDefinitionVersion,
+            },
+          });
+          if (form) {
+            const { jsonSchema } = filterFormSchemas(form, userRoleNames, userGroupNames);
+            const visibleFields = new Set(
+              Object.keys((jsonSchema.properties ?? {}) as Record<string, unknown>),
+            );
+            if (!visibleFields.has(att.fieldKey)) {
+              return reply.code(403).send({ error: 'Access denied' });
+            }
           }
         }
       } else if (att.status === AttachmentStatus.PENDING) {

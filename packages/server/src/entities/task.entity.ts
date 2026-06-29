@@ -20,15 +20,33 @@ export class Task {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @ManyToOne(() => TaskDefinition)
+  // Nullable: an ad-hoc task carries its own inline form (inlineFormSchema) and
+  // has no task definition. A definition-backed task still sets both.
+  @ManyToOne(() => TaskDefinition, { nullable: true })
   @JoinColumn({ name: 'task_definition_id' })
-  taskDefinition: TaskDefinition;
+  taskDefinition: TaskDefinition | null;
 
-  @Column({ type: 'uuid', name: 'task_definition_id' })
-  taskDefinitionId: string;
+  @Column({ type: 'uuid', name: 'task_definition_id', nullable: true })
+  taskDefinitionId: string | null;
 
-  @Column({ type: 'int' })
-  formDefinitionVersion: number;
+  // Null whenever the task uses an inline form (the inline schema *is* the form,
+  // so there is no published version to lock).
+  @Column({ type: 'int', nullable: true })
+  formDefinitionVersion: number | null;
+
+  // Human-facing label for an ad-hoc task (a definition-backed task takes its
+  // title from the definition's code). Optional, only meaningful with an inline form.
+  @Column({ type: 'varchar', nullable: true })
+  name: string | null;
+
+  // Inline (ad-hoc) form. When set, the task is validated against this schema at
+  // completion instead of a published form version — opt-in and ungoverned
+  // (no version locking, field visibility, outcomes, or draft/publish).
+  @Column({ type: 'jsonb', nullable: true })
+  inlineFormSchema: Record<string, unknown> | null;
+
+  @Column({ type: 'jsonb', nullable: true })
+  inlineUiSchema: Record<string, unknown> | null;
 
   @Column({ type: 'varchar' })
   workflowId: string;

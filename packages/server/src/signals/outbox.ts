@@ -48,7 +48,7 @@ export async function enqueueSignal(
 export async function reenqueueForTask(
   manager: EntityManager,
   task: { id: string; workflowId: string; status: TaskStatus; submissionData: Record<string, unknown>;
-    completedAt: Date | null; formDefinitionVersion: number;
+    completedAt: Date | null; formDefinitionVersion: number | null;
     assignee?: { id: string; email: string; displayName: string } | null },
 ): Promise<SignalOutbox> {
   const repo = manager.getRepository(SignalOutbox);
@@ -80,7 +80,7 @@ export async function reenqueueForTask(
 export function buildCompletedPayload(task: {
   submissionData: Record<string, unknown>;
   completedAt: Date | null;
-  formDefinitionVersion: number;
+  formDefinitionVersion: number | null;
   assignee?: { id: string; email: string; displayName: string } | null;
 }) {
   return {

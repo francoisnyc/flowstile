@@ -23,7 +23,9 @@ export default function TaskCard({ task, selected, onClick }: Props) {
     <div className={`task-card ${selected ? 'selected' : ''}`} onClick={onClick}>
       <div className="task-card-header">
         <span className="task-name">
-          {task.taskDefinition?.code ?? task.taskDefinitionId.slice(0, 8)}
+          {task.name ??
+            task.taskDefinition?.code ??
+            (task.taskDefinitionId ? task.taskDefinitionId.slice(0, 8) : 'Ad-hoc task')}
         </span>
         <span className="priority-badge" style={{ color: PRIORITY_COLOR[task.priority] }}>
           {task.priority}

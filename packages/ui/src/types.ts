@@ -60,8 +60,9 @@ export interface FormOutcome {
 }
 
 export interface TaskForm {
-  code: string;
-  version: number;
+  // null for an ad-hoc task's inline form (no published form code/version).
+  code: string | null;
+  version: number | null;
   jsonSchema: Record<string, unknown>;
   uiSchema: Record<string, unknown>;
   formMessages: Record<string, unknown>;
@@ -71,9 +72,11 @@ export interface TaskForm {
 
 export interface Task {
   id: string;
-  taskDefinitionId: string;
+  // null for an ad-hoc task with no task definition.
+  taskDefinitionId: string | null;
+  name?: string | null;
   taskDefinition?: TaskDefinitionRef;
-  formDefinitionVersion: number;
+  formDefinitionVersion: number | null;
   workflowId: string;
   processInstanceId: string | null;
   status: TaskStatus;

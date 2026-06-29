@@ -5,8 +5,9 @@ export type TaskStatus = 'created' | 'claimed' | 'completed' | 'cancelled';
 
 export interface Task {
   id: string;
-  taskDefinitionId: string;
-  formDefinitionVersion: number;
+  taskDefinitionId: string | null;
+  name?: string | null;
+  formDefinitionVersion: number | null;
   workflowId: string;
   processInstanceId: string | null;
   status: TaskStatus;
@@ -25,6 +26,15 @@ export interface Task {
 export interface CreateTaskInput {
   taskDefinitionId?: string;
   taskDefinitionCode?: string;
+  /** Inline (ad-hoc) form JSON Schema. Supply instead of — or alongside — a task
+   *  definition; the task is validated against this schema at completion and has
+   *  no locked published-form version. Ungoverned: no version locking, field
+   *  visibility, outcomes, or draft/publish. */
+  formSchema?: Record<string, unknown>;
+  /** Optional UI Schema paired with an inline `formSchema`. */
+  uiSchema?: Record<string, unknown>;
+  /** Optional human-facing title for an ad-hoc task. */
+  name?: string;
   workflowId: string;
   processInstanceId?: string;
   priority?: Priority;
@@ -40,6 +50,14 @@ export interface CreateTaskInput {
 export interface CreateTaskAndWaitInput {
   taskDefinitionId?: string;
   taskDefinitionCode?: string;
+  /** Inline (ad-hoc) form JSON Schema. Supply for a runtime-emergent task with
+   *  no pre-published form (optionally alongside a task definition for default
+   *  candidates/priority). See docs/ad-hoc-tasks.md. */
+  formSchema?: Record<string, unknown>;
+  /** Optional UI Schema paired with an inline `formSchema`. */
+  uiSchema?: Record<string, unknown>;
+  /** Optional human-facing title for an ad-hoc task. */
+  name?: string;
   processInstanceId?: string;
   priority?: Priority;
   dueDate?: string;
@@ -71,7 +89,8 @@ export interface TaskResult<
   data: TOutput;
   completedBy: { id: string; email: string; displayName: string };
   completedAt: string;
-  formVersion: number;
+  /** The locked published-form version, or `null` for an ad-hoc inline-form task. */
+  formVersion: number | null;
 }
 
 export interface FlowstileClientOptions {
@@ -195,7 +214,7 @@ export interface TaskCompletedSignalPayload {
   data: Record<string, unknown>;
   completedBy: { id: string; email: string; displayName: string };
   completedAt: string; // ISO 8601
-  formVersion: number;
+  formVersion: number | null;
 }
 
 // Signal name convention: flowstile:task:completed:<taskId>

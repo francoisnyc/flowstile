@@ -86,8 +86,14 @@ export default function TaskDetail({ task, onTaskUpdated }: Props) {
     <div className="task-detail">
       <div className="task-detail-header">
         <div>
-          <h2>{task.taskDefinition?.code ?? task.taskDefinitionId.slice(0, 8)}</h2>
+          <h2>
+            {task.name ??
+              task.taskDefinition?.code ??
+              (task.taskDefinitionId ? task.taskDefinitionId.slice(0, 8) : 'Ad-hoc task')}
+          </h2>
           <div className="task-meta" style={{ display: 'flex', gap: 12, marginTop: 4 }}>
+            {/* An inline form has no published code — flag the task as ad-hoc. */}
+            {task.form && !task.form.code && <span className="status-badge adhoc">Ad-hoc</span>}
             {task.processInstanceId && <span>Ref: {task.processInstanceId}</span>}
             <span>Created {new Date(task.createdAt).toLocaleString()}</span>
             <span className={`status-badge ${task.status}`}>{task.status}</span>

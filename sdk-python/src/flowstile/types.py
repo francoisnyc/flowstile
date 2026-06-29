@@ -46,6 +46,7 @@ class Task(_Model):
     # optional and unknown fields are ignored (extra="ignore").
     id: str
     status: Optional[TaskStatus] = None
+    name: Optional[str] = None
     task_definition_id: Optional[str] = Field(default=None, alias="taskDefinitionId")
     workflow_id: Optional[str] = Field(default=None, alias="workflowId")
     process_instance_id: Optional[str] = Field(default=None, alias="processInstanceId")
@@ -68,7 +69,8 @@ class TaskCompletedSignalPayload(_Model):
     data: dict[str, Any] = Field(default_factory=dict)
     completed_by: CompletedBy = Field(alias="completedBy")
     completed_at: str = Field(alias="completedAt")
-    form_version: int = Field(alias="formVersion")
+    # None for an ad-hoc inline-form task (no locked published-form version).
+    form_version: Optional[int] = Field(default=None, alias="formVersion")
 
 
 @dataclass
@@ -84,7 +86,7 @@ class TaskResult(Generic[TData]):
     data: TData
     completed_by: CompletedBy
     completed_at: str
-    form_version: int
+    form_version: Optional[int]
 
 
 # A pydantic form-output model bound to a task by a FlowstileTask descriptor.
