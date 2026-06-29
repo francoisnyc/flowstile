@@ -974,6 +974,19 @@ paths:
                 taskDefinitionCode:
                   type: string
                   minLength: 1
+                formSchema:
+                  type: object
+                  propertyNames:
+                    type: string
+                  additionalProperties: {}
+                uiSchema:
+                  type: object
+                  propertyNames:
+                    type: string
+                  additionalProperties: {}
+                name:
+                  type: string
+                  minLength: 1
                 workflowId:
                   type: string
                   minLength: 1
