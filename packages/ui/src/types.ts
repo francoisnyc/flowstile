@@ -163,6 +163,7 @@ export interface CaseSummary {
 
 export interface CaseTask {
   id: string;
+  name?: string | null;
   status: TaskStatus;
   priority: Priority;
   dueDate: string | null;
@@ -185,6 +186,20 @@ export interface CaseAttachment extends AttachmentRef {
 
 export type MilestoneState = 'pending' | 'active' | 'achieved' | 'skipped';
 
+export type CaseEventActor = 'human' | 'system' | 'agent';
+
+// A display-only entry on the case timeline (the case-event log). Records
+// automated/agent work a human reviewing the case should see — never read back
+// to drive workflow logic.
+export interface CaseEvent {
+  id: string;
+  actor: CaseEventActor;
+  label: string;
+  payload: Record<string, unknown> | null;
+  phase: string | null;
+  recordedAt: string;
+}
+
 export interface CaseMilestone {
   code: string;
   name: string;
@@ -204,6 +219,8 @@ export interface CaseDetail {
   // The case plan rendered as a stepper; null when the process declares no plan.
   milestones: CaseMilestone[] | null;
   tasks: CaseTask[];
+  // The additive case-event log (agent/system/human events), display-only.
+  events: CaseEvent[];
   attachments: CaseAttachment[];
   commentCount: number;
 }

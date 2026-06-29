@@ -62,6 +62,7 @@ const RecordEventBody = z.object({
 function serializeCaseTask(task: Task) {
   return {
     id: task.id,
+    name: task.name ?? null,
     status: task.status,
     priority: task.priority,
     dueDate: task.dueDate ?? null,

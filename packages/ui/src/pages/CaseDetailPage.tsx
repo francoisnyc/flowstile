@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getCase, getAttachmentUrl, listCaseComments, createCaseComment } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.js';
-import type { CaseDetail, CaseComment, CaseTask, CaseMilestone } from '../types.js';
+import type { CaseDetail, CaseComment, CaseTask, CaseMilestone, CaseEvent } from '../types.js';
 
 function caseLabel(c: CaseDetail): string {
   return c.title || c.processDefinitionName || c.processInstanceId;
@@ -61,51 +61,97 @@ function MilestoneStepper({ milestones }: { milestones: CaseMilestone[] }) {
   );
 }
 
-function TaskTimeline({ tasks, navigate }: { tasks: CaseTask[]; navigate: (path: string) => void }) {
+// A unified timeline of human tasks and the additive case-event log (agent /
+// system / human events), interleaved in chronological order. Tasks anchor on
+// when they entered the case; events on when they were recorded.
+type TimelineItem =
+  | { kind: 'task'; time: number; task: CaseTask }
+  | { kind: 'event'; time: number; event: CaseEvent };
+
+function TaskEntry({ task, isLast, navigate }: { task: CaseTask; isLast: boolean; navigate: (path: string) => void }) {
+  const statusClass = task.status === 'completed' ? 'completed'
+    : task.status === 'claimed' ? 'active'
+    : task.status === 'cancelled' ? 'cancelled'
+    : 'waiting';
+
+  return (
+    <div className="timeline-entry">
+      <div className="timeline-track">
+        <div className={`timeline-dot ${statusClass}`} />
+        {!isLast && <div className="timeline-line" />}
+      </div>
+      <div className="timeline-content">
+        <div className="timeline-header">
+          <span className={`timeline-task-name ${task.status === 'cancelled' ? 'struck' : ''}`}>
+            {task.taskDefinition?.code ?? task.name ?? 'Task'}
+          </span>
+          <span className={`timeline-status ${statusClass}`}>{task.status}</span>
+        </div>
+        <div className="timeline-actor">{taskActorLine(task)}</div>
+        {(task.status === 'claimed' || task.status === 'created') && (
+          <button
+            className={`timeline-card ${statusClass}`}
+            onClick={() => navigate(`/inbox?task=${task.id}`)}
+          >
+            <span>{task.status === 'claimed' ? 'In progress' : 'Awaiting action'}</span>
+            <span className="timeline-card-link">Open →</span>
+          </button>
+        )}
+        {task.status === 'completed' && (
+          <button
+            className="timeline-card completed"
+            onClick={() => navigate(`/inbox?task=${task.id}`)}
+          >
+            <span>Completed</span>
+            <span className="timeline-card-link">View →</span>
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function EventEntry({ event, isLast }: { event: CaseEvent; isLast: boolean }) {
+  const payloadEntries = event.payload ? Object.entries(event.payload) : [];
+  return (
+    <div className="timeline-entry" data-testid="case-event">
+      <div className="timeline-track">
+        <div className={`timeline-dot event ${event.actor}`} />
+        {!isLast && <div className="timeline-line" />}
+      </div>
+      <div className="timeline-content">
+        <div className="timeline-header">
+          <span className="timeline-task-name">{event.label}</span>
+          <span className={`event-actor-badge ${event.actor}`}>{event.actor}</span>
+        </div>
+        <div className="timeline-actor">
+          {event.phase ? `${event.phase} · ` : ''}{relativeTime(event.recordedAt)}
+        </div>
+        {payloadEntries.length > 0 && (
+          <div className="timeline-event-payload">
+            {payloadEntries.map(([k, v]) => (
+              <span key={k} className="event-kv"><b>{k}</b> {String(v)}</span>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CaseTimeline({ tasks, events, navigate }: { tasks: CaseTask[]; events: CaseEvent[]; navigate: (path: string) => void }) {
+  const items: TimelineItem[] = [
+    ...tasks.map((task): TimelineItem => ({ kind: 'task', time: new Date(task.createdAt).getTime(), task })),
+    ...events.map((event): TimelineItem => ({ kind: 'event', time: new Date(event.recordedAt).getTime(), event })),
+  ].sort((a, b) => a.time - b.time);
+
   return (
     <div className="case-timeline">
-      {tasks.map((task, i) => {
-        const isLast = i === tasks.length - 1;
-        const statusClass = task.status === 'completed' ? 'completed'
-          : task.status === 'claimed' ? 'active'
-          : task.status === 'cancelled' ? 'cancelled'
-          : 'waiting';
-
-        return (
-          <div key={task.id} className="timeline-entry">
-            <div className="timeline-track">
-              <div className={`timeline-dot ${statusClass}`} />
-              {!isLast && <div className="timeline-line" />}
-            </div>
-            <div className="timeline-content">
-              <div className="timeline-header">
-                <span className={`timeline-task-name ${task.status === 'cancelled' ? 'struck' : ''}`}>
-                  {task.taskDefinition?.code ?? 'Task'}
-                </span>
-                <span className={`timeline-status ${statusClass}`}>{task.status}</span>
-              </div>
-              <div className="timeline-actor">{taskActorLine(task)}</div>
-              {(task.status === 'claimed' || task.status === 'created') && (
-                <button
-                  className={`timeline-card ${statusClass}`}
-                  onClick={() => navigate(`/inbox?task=${task.id}`)}
-                >
-                  <span>{task.status === 'claimed' ? 'In progress' : 'Awaiting action'}</span>
-                  <span className="timeline-card-link">Open →</span>
-                </button>
-              )}
-              {task.status === 'completed' && (
-                <button
-                  className="timeline-card completed"
-                  onClick={() => navigate(`/inbox?task=${task.id}`)}
-                >
-                  <span>Completed</span>
-                  <span className="timeline-card-link">View →</span>
-                </button>
-              )}
-            </div>
-          </div>
-        );
+      {items.map((item, i) => {
+        const isLast = i === items.length - 1;
+        return item.kind === 'task'
+          ? <TaskEntry key={`t-${item.task.id}`} task={item.task} isLast={isLast} navigate={navigate} />
+          : <EventEntry key={`e-${item.event.id}`} event={item.event} isLast={isLast} />;
       })}
     </div>
   );
@@ -264,10 +310,10 @@ export default function CaseDetailPage() {
         {/* Left: Task Timeline */}
         <div className="case-detail-main">
           <h2 className="section-label">Timeline</h2>
-          {caseDetail.tasks.length === 0 ? (
-            <p className="empty">No tasks yet</p>
+          {caseDetail.tasks.length === 0 && caseDetail.events.length === 0 ? (
+            <p className="empty">No activity yet</p>
           ) : (
-            <TaskTimeline tasks={caseDetail.tasks} navigate={navigate} />
+            <CaseTimeline tasks={caseDetail.tasks} events={caseDetail.events} navigate={navigate} />
           )}
         </div>
 
