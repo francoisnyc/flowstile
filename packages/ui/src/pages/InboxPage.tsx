@@ -58,6 +58,16 @@ export default function InboxPage() {
     }
   };
 
+  // Refresh only the selected task (e.g. a chat agent patched the draft), without
+  // reloading — and flickering — the whole task list.
+  const handleDraftRefresh = async (taskId: string) => {
+    try {
+      setSelected(await getTask(taskId));
+    } catch {
+      // transient — the next poll retries
+    }
+  };
+
   return (
     <div className="inbox">
       <TaskList
@@ -68,7 +78,7 @@ export default function InboxPage() {
         selectedId={selected?.id}
         onSelect={handleSelect}
       />
-      <TaskDetail task={selected} onTaskUpdated={handleTaskUpdated} />
+      <TaskDetail task={selected} onTaskUpdated={handleTaskUpdated} onDraftRefresh={handleDraftRefresh} />
     </div>
   );
 }

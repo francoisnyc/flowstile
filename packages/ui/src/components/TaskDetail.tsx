@@ -11,9 +11,11 @@ import ChatPanel from './ChatPanel.js';
 interface Props {
   task: Task | null;
   onTaskUpdated: (id: string) => void;
+  // Lightweight refresh of just this task (chat draft updates) — no list reload.
+  onDraftRefresh?: (id: string) => void;
 }
 
-export default function TaskDetail({ task, onTaskUpdated }: Props) {
+export default function TaskDetail({ task, onTaskUpdated, onDraftRefresh }: Props) {
   const { user } = useAuth();
   const [formData, setFormData] = useState<Record<string, unknown>>({});
   const [busy, setBusy] = useState(false);
@@ -142,11 +144,18 @@ export default function TaskDetail({ task, onTaskUpdated }: Props) {
       {error && <div className="error-banner">{error}</div>}
 
       {(() => {
+        // An empty uiSchema ({}) is not a valid JsonForms UI element ("No
+        // applicable renderer found") — pass undefined so it auto-generates from
+        // the JSON Schema. Applies to chat/ad-hoc tasks created without a uiSchema.
+        const uischema =
+          task.form && task.form.uiSchema && Object.keys(task.form.uiSchema).length > 0
+            ? (task.form.uiSchema as unknown as UISchemaElement)
+            : undefined;
         const formBlock = task.form ? (
           <div className="form-container">
             <JsonForms
               schema={task.form.jsonSchema}
-              uischema={task.form.uiSchema as unknown as UISchemaElement}
+              uischema={uischema}
               data={formData}
               renderers={vanillaRenderers}
               cells={vanillaCells}
@@ -182,7 +191,7 @@ export default function TaskDetail({ task, onTaskUpdated }: Props) {
             <div className="chat-layout">
               <ChatPanel
                 task={task}
-                onAgentReplied={() => onTaskUpdated(task.id)}
+                onAgentReplied={() => (onDraftRefresh ?? onTaskUpdated)(task.id)}
                 disabled={!isEditable}
               />
               <div className="chat-draft">

@@ -5,9 +5,11 @@ description: Fill a human task by conversation instead of a form — an agent ga
 
 # Chat Tasks (Conversational Forms)
 
-> **Status: design direction, pass 1 — not built yet.** This is rung 4 of the
-> [runtime-emergent ladder](./design-decisions.md#runtime-emergent-human-tasks-inline-forms-and-chat-proposed).
-> It builds on [ad-hoc inline forms](./ad-hoc-tasks.md) (rung 3). Rung 5 (the agent
+> **Status: built (rung 4).** Server + Python SDK + UI are shipped and validated
+> (server integration tests, a Python agent-runner unit suite, and a hermetic
+> Playwright e2e). This is rung 4 of the
+> [runtime-emergent ladder](./design-decisions.md#runtime-emergent-human-tasks-inline-forms-and-chat-proposed),
+> building on [ad-hoc inline forms](./ad-hoc-tasks.md) (rung 3). Rung 5 (the agent
 > renders mini-forms *inside* the chat) is the next increment, sketched at the end.
 
 A normal task shows a form; the human types into fields and submits. A **chat
