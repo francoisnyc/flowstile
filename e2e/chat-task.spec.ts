@@ -54,9 +54,10 @@ test('chat task: agent gathers by conversation, human commits', async ({ page })
   await expect(page.locator('[data-testid=chat-panel]')).toBeVisible({ timeout: 8000 });
   await expect(page.locator('.chat-bubble.agent')).toContainText('What is happening?');
 
-  // 3) Claim to engage + eventually complete.
+  // 3) Claim to engage + eventually complete. Target the status badge by its
+  // status class — a chat task also has a ".status-badge.chat" badge.
   await page.locator('button:has-text("Claim")').click();
-  await expect(page.locator('.task-detail .status-badge')).toContainText('claimed', { timeout: 8000 });
+  await expect(page.locator('.task-detail .status-badge.claimed')).toBeVisible({ timeout: 8000 });
 
   // 4) Turn one: human answers, agent responds (played via API); UI polls it in.
   await page.locator('[data-testid=chat-textarea]').fill('high');
@@ -76,7 +77,7 @@ test('chat task: agent gathers by conversation, human commits', async ({ page })
   // 6) Human commits. Completion merges the agent-patched draft server-side, so
   // the result carries the conversation-derived data.
   await page.locator('button:has-text("Complete")').click();
-  await expect(page.locator('.task-detail .status-badge')).toContainText('completed', { timeout: 8000 });
+  await expect(page.locator('.task-detail .status-badge.completed')).toBeVisible({ timeout: 8000 });
 
   const final = await (await api.get(`/tasks/${taskId}`)).json();
   expect(final.status).toBe('completed');
