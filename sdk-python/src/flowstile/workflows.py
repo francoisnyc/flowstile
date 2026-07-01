@@ -40,7 +40,7 @@ from temporalio.common import RawValue, RetryPolicy
 
 from .errors import TaskCancelledError, TaskTimeoutError
 from .mapping import build_persist_patch, project_context
-from .types import CompletedBy, FlowstileTask, TaskResult, VariableMapping
+from .types import Chat, CompletedBy, FlowstileTask, TaskResult, VariableMapping
 
 # An optional pydantic model the caller passes to type the task's submission data.
 TModel = TypeVar("TModel", bound=BaseModel)
@@ -111,6 +111,7 @@ class FlowstileWorkflowBase:
         form_schema: Optional[dict[str, Any]] = ...,
         ui_schema: Optional[dict[str, Any]] = ...,
         name: Optional[str] = ...,
+        chat: Optional[Chat] = ...,
         process_instance_id: Optional[str] = ...,
         input_data: Optional[dict[str, Any]] = ...,
         context_data: Optional[dict[str, Any]] = ...,
@@ -134,6 +135,7 @@ class FlowstileWorkflowBase:
         form_schema: Optional[dict[str, Any]] = ...,
         ui_schema: Optional[dict[str, Any]] = ...,
         name: Optional[str] = ...,
+        chat: Optional[Chat] = ...,
         process_instance_id: Optional[str] = ...,
         input_data: Optional[dict[str, Any]] = ...,
         context_data: Optional[dict[str, Any]] = ...,
@@ -157,6 +159,7 @@ class FlowstileWorkflowBase:
         form_schema: Optional[dict[str, Any]] = None,
         ui_schema: Optional[dict[str, Any]] = None,
         name: Optional[str] = None,
+        chat: Optional[Chat] = None,
         process_instance_id: Optional[str] = None,
         input_data: Optional[dict[str, Any]] = None,
         context_data: Optional[dict[str, Any]] = None,
@@ -204,6 +207,7 @@ class FlowstileWorkflowBase:
             form_schema=form_schema,
             ui_schema=ui_schema,
             name=name,
+            chat=chat,
             process_instance_id=process_instance_id,
             input_data=input_data,
             context_data=merged_context,
@@ -302,6 +306,16 @@ class FlowstileWorkflowBase:
             pass
 
 
+def _chat_body(chat: Optional[Chat]) -> Optional[dict[str, Any]]:
+    """Serialize a Chat config to the wire shape, omitting an unset greeting."""
+    if chat is None:
+        return None
+    body: dict[str, Any] = {"agent": chat.agent, "goal": chat.goal}
+    if chat.greeting is not None:
+        body["greeting"] = chat.greeting
+    return body
+
+
 def _create_body(
     *,
     task_definition_id: Optional[str],
@@ -309,6 +323,7 @@ def _create_body(
     form_schema: Optional[dict[str, Any]],
     ui_schema: Optional[dict[str, Any]],
     name: Optional[str],
+    chat: Optional[Chat],
     process_instance_id: Optional[str],
     input_data: Optional[dict[str, Any]],
     context_data: Optional[dict[str, Any]],
@@ -327,6 +342,7 @@ def _create_body(
         "formSchema": form_schema,
         "uiSchema": ui_schema,
         "name": name,
+        "chat": _chat_body(chat),
         "processInstanceId": process_instance_id,
         "inputData": input_data,
         "contextData": context_data,

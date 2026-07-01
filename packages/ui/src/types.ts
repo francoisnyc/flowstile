@@ -70,11 +70,26 @@ export interface TaskForm {
   outcomeKey?: string | null;
 }
 
+export interface TaskChat {
+  agent: string;
+  goal: string;
+  greeting?: string;
+}
+
+export interface TaskMessage {
+  id: string;
+  role: 'human' | 'agent';
+  content: string;
+  createdAt: string;
+}
+
 export interface Task {
   id: string;
   // null for an ad-hoc task with no task definition.
   taskDefinitionId: string | null;
   name?: string | null;
+  // Present when the task is filled by conversation instead of a blank form.
+  chat?: TaskChat | null;
   taskDefinition?: TaskDefinitionRef;
   formDefinitionVersion: number | null;
   workflowId: string;

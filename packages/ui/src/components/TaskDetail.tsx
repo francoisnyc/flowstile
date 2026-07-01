@@ -6,6 +6,7 @@ import type { Task, AttachmentRef, AttachmentFieldConfig } from '../types.js';
 import { claimTask, unclaimTask, completeTask } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.js';
 import FileField from './FileField.js';
+import ChatPanel from './ChatPanel.js';
 
 interface Props {
   task: Task | null;
@@ -18,6 +19,10 @@ export default function TaskDetail({ task, onTaskUpdated }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // For a chat task the agent fills the draft (submissionData) as the
+  // conversation proceeds, so re-sync the form whenever it changes. For a normal
+  // task, only re-sync on task switch so we never clobber the human's typing.
+  const submissionKey = task?.chat ? JSON.stringify(task?.submissionData ?? {}) : '';
   useEffect(() => {
     setFormData({
       ...(task?.contextData ?? {}),
@@ -25,7 +30,8 @@ export default function TaskDetail({ task, onTaskUpdated }: Props) {
       ...(task?.submissionData ?? {}),
     });
     setError(null);
-  }, [task?.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [task?.id, submissionKey]);
 
   if (!task) {
     return (
@@ -93,7 +99,8 @@ export default function TaskDetail({ task, onTaskUpdated }: Props) {
           </h2>
           <div className="task-meta" style={{ display: 'flex', gap: 12, marginTop: 4 }}>
             {/* An inline form has no published code — flag the task as ad-hoc. */}
-            {task.form && !task.form.code && <span className="status-badge adhoc">Ad-hoc</span>}
+            {task.form && !task.form.code && !task.chat && <span className="status-badge adhoc">Ad-hoc</span>}
+            {task.chat && <span className="status-badge chat">Chat</span>}
             {task.processInstanceId && <span>Ref: {task.processInstanceId}</span>}
             <span>Created {new Date(task.createdAt).toLocaleString()}</span>
             <span className={`status-badge ${task.status}`}>{task.status}</span>
@@ -134,38 +141,59 @@ export default function TaskDetail({ task, onTaskUpdated }: Props) {
 
       {error && <div className="error-banner">{error}</div>}
 
-      {task.form ? (
-        <div className="form-container">
-          <JsonForms
-            schema={task.form.jsonSchema}
-            uischema={task.form.uiSchema as unknown as UISchemaElement}
-            data={formData}
-            renderers={vanillaRenderers}
-            cells={vanillaCells}
-            onChange={({ data }) => setFormData(data as Record<string, unknown>)}
-            readonly={!isEditable}
-          />
-          {attachmentFields.size > 0 && (
-            <div className="attachment-fields" style={{ marginTop: 16 }}>
-              {[...attachmentFields.entries()].map(([key, cfg]) => (
-                <div key={key} style={{ marginBottom: 12 }}>
-                  <label style={{ display: 'block', marginBottom: 4, fontWeight: 500 }}>{key}</label>
-                  <FileField
-                    taskId={task.id}
-                    fieldKey={key}
-                    config={cfg}
-                    value={formData[key] as AttachmentRef | AttachmentRef[] | null}
-                    readOnly={!isEditable}
-                    onChange={(next) => setFormData((prev) => ({ ...prev, [key]: next }))}
-                  />
-                </div>
-              ))}
+      {(() => {
+        const formBlock = task.form ? (
+          <div className="form-container">
+            <JsonForms
+              schema={task.form.jsonSchema}
+              uischema={task.form.uiSchema as unknown as UISchemaElement}
+              data={formData}
+              renderers={vanillaRenderers}
+              cells={vanillaCells}
+              onChange={({ data }) => setFormData(data as Record<string, unknown>)}
+              readonly={!isEditable}
+            />
+            {attachmentFields.size > 0 && (
+              <div className="attachment-fields" style={{ marginTop: 16 }}>
+                {[...attachmentFields.entries()].map(([key, cfg]) => (
+                  <div key={key} style={{ marginBottom: 12 }}>
+                    <label style={{ display: 'block', marginBottom: 4, fontWeight: 500 }}>{key}</label>
+                    <FileField
+                      taskId={task.id}
+                      fieldKey={key}
+                      config={cfg}
+                      value={formData[key] as AttachmentRef | AttachmentRef[] | null}
+                      readOnly={!isEditable}
+                      onChange={(next) => setFormData((prev) => ({ ...prev, [key]: next }))}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <p className="empty">No form attached to this task</p>
+        );
+
+        // A chat task shows the conversation next to the draft form, which fills
+        // in as the agent extracts structure. Otherwise, just the form.
+        if (task.chat) {
+          return (
+            <div className="chat-layout">
+              <ChatPanel
+                task={task}
+                onAgentReplied={() => onTaskUpdated(task.id)}
+                disabled={!isEditable}
+              />
+              <div className="chat-draft">
+                <div className="chat-draft-label">Draft — review before completing</div>
+                {formBlock}
+              </div>
             </div>
-          )}
-        </div>
-      ) : (
-        <p className="empty">No form attached to this task</p>
-      )}
+          );
+        }
+        return formBlock;
+      })()}
     </div>
   );
 }

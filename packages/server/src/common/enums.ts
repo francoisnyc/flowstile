@@ -59,4 +59,11 @@ export enum CaseEventActor {
   AGENT  = 'agent',
 }
 
+// Author of a chat-task message. A human types via the UI; the agent handler
+// (a bring-your-own service credential) posts on behalf of the model.
+export enum TaskMessageRole {
+  HUMAN = 'human',
+  AGENT = 'agent',
+}
+
 export type PayloadScope = 'input' | 'context' | 'submission';

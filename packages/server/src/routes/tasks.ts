@@ -2,10 +2,11 @@ import { z } from 'zod';
 import type { Repository, SelectQueryBuilder } from 'typeorm';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { Task } from '../entities/task.entity.js';
+import { TaskMessage } from '../entities/task-message.entity.js';
 import { TaskDefinition } from '../entities/task-definition.entity.js';
 import { ProcessDefinition } from '../entities/process-definition.entity.js';
 import { FormDefinition, DEFAULT_OUTCOME_KEY } from '../entities/form-definition.entity.js';
-import { TaskStatus, FormDefinitionStatus, Priority, SignalStatus } from '../common/enums.js';
+import { TaskStatus, FormDefinitionStatus, Priority, SignalStatus, TaskMessageRole } from '../common/enums.js';
 import { TaskStateMachine, InvalidTransitionError } from '../common/task-state-machine.js';
 import { filterFormSchemas, filterSubmissionData, getWritableFields } from '../common/visibility.js';
 import { requirePermission, requireUser } from '../plugins/auth.js';
@@ -31,6 +32,7 @@ function serializeTask(task: Task) {
   return {
     id: task.id,
     name: task.name ?? null,
+    chat: task.chat ?? null,
     formDefinitionVersion: task.formDefinitionVersion,
     workflowId: task.workflowId,
     processInstanceId: task.processInstanceId ?? null,
@@ -87,6 +89,14 @@ const CreateTaskBody = z.object({
   // Human-facing title for an ad-hoc task (definition-backed tasks use the
   // definition's code). Only meaningful alongside formSchema.
   name: z.string().min(1).optional(),
+  // Chat (conversational) task: fill the form by an agent-driven conversation
+  // instead of a blank form. `agent` names the caller's handler; `greeting` (if
+  // given) seeds the first agent message. The target schema is unchanged.
+  chat: z.object({
+    agent: z.string().min(1),
+    goal: z.string().min(1),
+    greeting: z.string().min(1).optional(),
+  }).optional(),
   workflowId: z.string().min(1),
   processInstanceId: z.string().min(1).optional(),
   // Per-instance candidate overrides. When omitted, the task inherits the task
@@ -255,6 +265,7 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
       formSchema,
       uiSchema,
       name,
+      chat,
       workflowId,
       processInstanceId,
       candidateGroups,
@@ -325,6 +336,7 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
       name: name ?? null,
       inlineFormSchema: formSchema ?? null,
       inlineUiSchema: uiSchema ?? null,
+      chat: chat ?? null,
       status: TaskStatus.CREATED,
       priority: priority ?? td?.defaultPriority ?? Priority.NORMAL,
       dueDate: dueDate ?? null,
@@ -333,6 +345,15 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
       contextData: contextData ?? {},
       submissionData: submissionData ?? {},
     });
+
+    // Seed the opening agent message so a chat task greets the human immediately.
+    if (chat?.greeting) {
+      await app.db.getRepository(TaskMessage).save({
+        taskId: task.id,
+        role: TaskMessageRole.AGENT,
+        content: chat.greeting,
+      });
+    }
 
     // Lazily upsert a Case row the first time a task is created for a workflow instance.
     // If two tasks race on the same processInstanceId the unique constraint causes one
@@ -820,6 +841,79 @@ export const taskRoutes: FastifyPluginAsyncZod = async (app) => {
       task.signalStatus = SignalStatus.PENDING;
       task.signalFailedAt = null;
 
+      return serializeTask(task);
+    },
+  );
+
+  // ── Chat tasks: conversation transcript + draft submission ─────────────────
+  const PostMessageBody = z.object({ content: z.string().min(1) });
+  const PatchSubmissionBody = z.object({ data: z.record(z.string(), z.unknown()) });
+
+  const serializeMessage = (m: TaskMessage) => ({
+    id: m.id,
+    role: m.role,
+    content: m.content,
+    createdAt: m.createdAt,
+  });
+
+  // The verbatim transcript. Visible to anyone who can see the task (same
+  // need-to-know rule; 404 when hidden, never 403).
+  app.get(
+    '/tasks/:id/messages',
+    { ...read, schema: { params: UuidParam, tags: ['Tasks'] } },
+    async (request, reply) => {
+      const { id } = request.params;
+      const task = await repo().findOne({ where: { id } });
+      if (!task) return reply.code(404).send({ error: 'Task not found' });
+      if (!canSeeTask(task, request.principal!)) return reply.code(404).send({ error: 'Task not found' });
+
+      const messages = await app.db.getRepository(TaskMessage).find({
+        where: { taskId: id },
+        order: { createdAt: 'ASC' },
+      });
+      return { items: messages.map(serializeMessage) };
+    },
+  );
+
+  // Append a message. A service credential posts on the agent's behalf; a human
+  // user posts as themselves. Completion is never done here.
+  app.post(
+    '/tasks/:id/messages',
+    { ...write, schema: { params: UuidParam, body: PostMessageBody, tags: ['Tasks'] } },
+    async (request, reply) => {
+      const { id } = request.params;
+      const { content } = request.body;
+      const actor = request.principal!;
+
+      const task = await repo().findOne({ where: { id } });
+      if (!task) return reply.code(404).send({ error: 'Task not found' });
+      if (!canSeeTask(task, actor)) return reply.code(404).send({ error: 'Task not found' });
+
+      const role = actor.kind === 'service' ? TaskMessageRole.AGENT : TaskMessageRole.HUMAN;
+      const message = await app.db.getRepository(TaskMessage).save({ taskId: id, role, content });
+      return reply.code(201).send(serializeMessage(message));
+    },
+  );
+
+  // The agent updates the draft submission as it extracts structure from the
+  // conversation. Merge-only — the draft may be partial; validation happens at
+  // completion, unchanged.
+  app.patch(
+    '/tasks/:id/submission',
+    { ...write, schema: { params: UuidParam, body: PatchSubmissionBody, tags: ['Tasks'] } },
+    async (request, reply) => {
+      const { id } = request.params;
+      const { data } = request.body;
+
+      const task = await repo().findOne({ where: { id } });
+      if (!task) return reply.code(404).send({ error: 'Task not found' });
+      if (!canSeeTask(task, request.principal!)) return reply.code(404).send({ error: 'Task not found' });
+      if (task.status === TaskStatus.COMPLETED || task.status === TaskStatus.CANCELLED) {
+        return reply.code(409).send({ error: `Cannot update the draft of a ${task.status} task` });
+      }
+
+      task.submissionData = { ...task.submissionData, ...data };
+      await repo().save(task);
       return serializeTask(task);
     },
   );

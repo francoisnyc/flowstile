@@ -100,6 +100,25 @@ class FlowstileClient:
     async def cancel_task(self, task_id: str) -> Task:
         return Task.model_validate(await self.request("POST", f"/tasks/{task_id}/cancel"))
 
+    # ── Chat tasks ─────────────────────────────────────────────────────────────
+
+    async def list_messages(self, task_id: str) -> list[dict[str, Any]]:
+        """The chat transcript, oldest first: [{id, role, content, createdAt}]."""
+        result = await self.request("GET", f"/tasks/{task_id}/messages")
+        return result.get("items", []) if result else []
+
+    async def post_message(self, task_id: str, content: str) -> dict[str, Any]:
+        """Append a message. Role is inferred from the credential (agent for a
+        service key, human for a user)."""
+        return await self.request("POST", f"/tasks/{task_id}/messages", json={"content": content})
+
+    async def patch_submission(self, task_id: str, data: dict[str, Any]) -> Task:
+        """Merge into the draft submissionData (partial, unvalidated). Validation
+        happens at completion."""
+        return Task.model_validate(
+            await self.request("PATCH", f"/tasks/{task_id}/submission", json={"data": data})
+        )
+
     # ── Case entity ──────────────────────────────────────────────────────────
 
     def _entity_path(self, process_instance_id: str) -> str:

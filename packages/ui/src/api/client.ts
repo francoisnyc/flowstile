@@ -1,4 +1,4 @@
-import type { Task, User, Group, RoleRef, FormSummary, FormDefinition, Page, AttachmentRef, CaseSummary, CaseDetail, CaseComment, ProcessSummary, StartCaseResult } from '../types.js';
+import type { Task, TaskMessage, User, Group, RoleRef, FormSummary, FormDefinition, Page, AttachmentRef, CaseSummary, CaseDetail, CaseComment, ProcessSummary, StartCaseResult } from '../types.js';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers: Record<string, string> = { ...init?.headers as Record<string, string> };
@@ -34,6 +34,12 @@ export const unclaimTask = (id: string) =>
   request<Task>(`/tasks/${id}/unclaim`, { method: 'POST' });
 export const completeTask = (id: string, data: Record<string, unknown>) =>
   request<Task>(`/tasks/${id}/complete`, { method: 'POST', body: JSON.stringify({ data }) });
+
+// Chat tasks
+export const listMessages = (id: string) =>
+  request<{ items: TaskMessage[] }>(`/tasks/${id}/messages`);
+export const postMessage = (id: string, content: string) =>
+  request<TaskMessage>(`/tasks/${id}/messages`, { method: 'POST', body: JSON.stringify({ content }) });
 
 // Cases
 export const listCases = (params?: Record<string, string>) => {

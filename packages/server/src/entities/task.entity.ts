@@ -48,6 +48,13 @@ export class Task {
   @Column({ type: 'jsonb', nullable: true })
   inlineUiSchema: Record<string, unknown> | null;
 
+  // Chat (conversational) task config. When set, the task is filled by an
+  // agent-driven conversation instead of a blank form: { agent, goal, greeting? }.
+  // The target schema (published or inline) is unchanged — chat only changes how
+  // submissionData gets filled, and the human still completes.
+  @Column({ type: 'jsonb', nullable: true })
+  chat: { agent: string; goal: string; greeting?: string } | null;
+
   @Column({ type: 'varchar' })
   workflowId: string;
 

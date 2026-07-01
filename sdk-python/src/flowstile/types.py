@@ -74,6 +74,22 @@ class TaskCompletedSignalPayload(_Model):
 
 
 @dataclass
+class Chat:
+    """Config for a chat (conversational) task.
+
+    Fill a task by an agent-driven conversation instead of a blank form. ``agent``
+    names the handler (your code) that produces replies; ``goal`` is the system
+    instruction; ``greeting`` (optional) seeds the first agent message. The target
+    schema (published or inline) is unchanged — chat only changes how the fields
+    get filled, and the human still completes.
+    """
+
+    agent: str
+    goal: str
+    greeting: Optional[str] = None
+
+
+@dataclass
 class TaskResult(Generic[TData]):
     """The result of a completed human task.
 
