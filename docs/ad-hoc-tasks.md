@@ -45,6 +45,40 @@ What you still get with an ad-hoc task — unchanged from any other task:
 - **Typed results.** Pass an output model and `result.data` is validated and
   typed, just like a published-form task.
 
+## Reach for this first: gate a *published* form
+
+Before supplying an inline schema, ask whether the form is *really* emergent.
+Often an agent doesn't need to invent a form — it only needs to decide *whether*
+and *when* to route to a human, using a form you already authored. That is the
+**governed default**, and it needs no new capability: an agent step (a Temporal
+activity) computes a confidence/policy decision, and the workflow conditionally
+raises a normal **published** task — versioned, visibility-aware, with outcomes.
+
+```python
+plan = await workflow.execute_activity(
+    assess_incident, incident, start_to_close_timeout=timedelta(minutes=2),
+)
+
+# The agent decides *whether* a human is needed; the form itself is the
+# pre-authored, governed INCIDENT_REVIEW form — no inline schema.
+if plan["confidence"] < 0.8:
+    await self.record_case_event(
+        incident["id"], actor="agent", label="Escalated for review",
+        payload={"confidence": plan["confidence"]},
+    )
+    result = await self.create_task_and_wait(
+        task_definition_code="INCIDENT_REVIEW",
+        process_instance_id=incident["id"],
+        context_data={"summary": plan["summary"], "recommendation": plan["recommendation"]},
+        candidate_groups=["incident-responders"],
+    )
+```
+
+Here the *emergent* part is the routing decision (a plain `if`), not the form.
+This keeps versioning, field visibility, and outcomes — everything an inline form
+gives up. **Only when there is genuinely no published form to point at** — the
+question itself took shape at runtime — drop to the inline `formSchema` below.
+
 ## Python
 
 `create_task_and_wait` gains a `form_schema` (and optional `ui_schema`, `name`)
@@ -169,7 +203,11 @@ behaves identically to a normal task — claim, fill, complete. The only visible
 difference is an **"Ad-hoc"** badge (there is no form code/version to show) and
 the `name` you gave it as the task title.
 
-![An ad-hoc task open in the inbox, rendering its inline form](images/adhoc-task.png)
+![An ad-hoc task in the inbox of the candidate it was routed to, rendering its inline form](images/adhoc-task.png)
+
+The inbox above is Carol's — a plain responder, not an admin. She sees this task
+**only because `candidateUsers` routed it to her**; nothing else appears, exactly
+as need-to-know dictates for any task.
 
 On the case timeline, the agent step that generated the form shows up as an
 `agent` event, so the emergent task is auditable end to end — the reasoning and

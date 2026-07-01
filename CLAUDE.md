@@ -115,6 +115,15 @@ pnpm test                                            # unit
 pnpm --filter @flowstile/server test:integration     # integration (requires postgres)
 ```
 
+**e2e (Playwright) is not in that loop — run it in CI, not locally-in-agent.** The
+full stack (Postgres + Temporal + worker + browser) needs *supervised*, long-lived
+services; a web-session sandbox doesn't supervise them (the Docker daemon/Postgres
+get reclaimed mid-run), so `npx playwright test` is flaky there. CI's `e2e` job
+(health-gated service containers, worker-ready poll, `CI ? retries: 2`) is the
+source of truth — push to `master` or open a PR to run it. The config is already
+hardened (`webServer` waits on `/health`); don't paper over sandbox flakiness with
+more retries.
+
 Open a branch + PR only when you specifically want one of:
 - **CI watched/autofixed in-session** — the PR webhook stream is the only way the agent can observe GitHub Actions results from its environment (no `gh`, no network, no Actions MCP tool). Use this when stepping away and you want a red build caught and fixed.
 - **Staging a risky or large change** — somewhere to let CI run and review the full diff in GitHub's UI before merging deliberately.
