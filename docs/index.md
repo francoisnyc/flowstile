@@ -26,6 +26,9 @@ New here? Skim the **Developer Guide**, then run the demo from the
 - [Ad-Hoc Tasks with Inline Forms](./ad-hoc-tasks.md) — raise a one-off human task
   whose form is supplied at runtime, for emergent/agent-driven steps with no
   pre-published form.
+- [Chat Tasks (Conversational Forms)](./chat-tasks.md) — fill a task by
+  conversation: an agent gathers the data, the human reviews and commits it
+  (design direction, not yet built).
 
 ## Reference & Architecture
 
